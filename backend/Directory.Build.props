@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      Lokal bleiben Warnungen Warnungen, damit ein Zwischenstand baubar ist.
+      Die CI baut mit /warnaserror (siehe .github/workflows/ci.yml) - dort
+      muss der Stand sauber sein.
+    -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!--
+      Bewusst false: die App arbeitet mit deutschen Texten und mit
+      IANA-Zeitzonen. Das Alpine-Image installiert dafuer icu-libs und tzdata.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+  </PropertyGroup>
+</Project>

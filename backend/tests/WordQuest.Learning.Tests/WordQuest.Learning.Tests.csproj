@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/WordQuest.Shared.Kernel/WordQuest.Shared.Kernel.csproj" />
+    <ProjectReference Include="../../src/WordQuest.Modules.Content/WordQuest.Modules.Content.csproj" />
+    <ProjectReference Include="../../src/WordQuest.Modules.Learning/WordQuest.Modules.Learning.csproj" />
+    <ProjectReference Include="../../src/WordQuest.Modules.Gamification/WordQuest.Modules.Gamification.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+
+    <!--
+      Achtung auf das Paar xunit / xunit.runner.visualstudio: Die 4er-Reihe
+      des Runners ist auf xunit v3 ausgelegt. Werden keine Tests gefunden
+      (Build laeuft, Testliste bleibt leer), ist das die Ursache - dann auf
+      2.8.2 zuruecksetzen oder xunit auf v3 heben. Beides zusammen, nie nur
+      eins davon.
+    -->
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

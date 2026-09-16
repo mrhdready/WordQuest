@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../WordQuest.Shared.Kernel/WordQuest.Shared.Kernel.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Content/WordQuest.Modules.Content.csproj" />
+  </ItemGroup>
+</Project>

@@ -115,7 +115,8 @@ Schul-Mandanten im UI · LDAP · Moodle/IServ · App-Store-Release · Monetarisi
 ```
 Tenant (type: Family|School)
  ├─ User (role: Owner|Guardian|Learner)
- │   └─ LearnerProfile (avatar, pin_hash, xp, level, coins, streak)
+ │   ├─ LearnerProfile      (Avatar, PIN, Tagesbudget, Spieltempo)
+ │   └─ GamificationProfile (XP, Münzen, Streak, Streak-Retter)
  ├─ Group                      // Familie: 1 pro Kind · Schule: Klasse
  │   └─ GroupMembership
  └─ VocabularySet              // "Unit 3 — At the zoo"
@@ -173,6 +174,7 @@ CREATE TABLE review_state (
   repetitions    int  NOT NULL DEFAULT 0,
   lapses         int  NOT NULL DEFAULT 0,
   due_at         timestamptz NOT NULL DEFAULT now(),
+  first_seen_at  timestamptz NOT NULL DEFAULT now(),  -- Basis des Tagesbudgets
   last_grade     smallint,
   state          text NOT NULL DEFAULT 'New',  -- New|Learning|Review|Relearning
   PRIMARY KEY (learner_id, card_id)
@@ -218,27 +220,32 @@ grade = 0 (Again):
     repetitions = 0
     lapses     += 1
     ease_factor = max(1.3, ease_factor - 0.20)
+    interval_days = 0               // Rampe beginnt von vorn, siehe unten
     state       = Relearning
-    interval    = 10 Minuten        // Wiedervorlage in derselben Session
+    due_at      = jetzt + 10 Minuten    // Wiedervorlage in derselben Session
 
 grade >= 1:
     ease_factor = clamp(1.3, 2.8,
                   ease_factor + (0.1 - (3 - grade) * (0.08 + (3 - grade) * 0.02)))
     repetitions += 1
+    hard_factor = (grade == 1 ? 0.6 : 1.0)
     interval    = repetitions == 1 ? 1                    // 1 Tag
                 : repetitions == 2 ? 3                    // 3 Tage
-                : interval_days * ease_factor * hard_factor
-    hard_factor = (grade == 1 ? 0.6 : 1.0)
+                : max(interval_days, 1) * ease_factor
+    interval    = interval * hard_factor
+    interval    = interval * random(0.95, 1.05)   // Fuzzing gegen Stapelbildung
+    interval    = clamp(interval, 1, 180)         // Deckel bei 6 Monaten
     state       = Review
-
-interval = interval * random(0.95, 1.05)   // Fuzzing gegen Stapelbildung
-interval = min(interval, 180)              // Deckel bei 6 Monaten
-due_at   = today + interval Tage, normalisiert auf 04:00 Ortszeit
+    due_at      = heute + interval Tage, normalisiert auf 04:00 Ortszeit
 ```
 
 Das Fuzzing verhindert, dass alle 40 Vokabeln einer Unit, die am selben Tag gelernt wurden, auch exakt am selben Tag wieder fällig werden — sonst entsteht nach zwei Wochen ein Tag mit 120 fälligen Karten und das Kind gibt auf.
 
 Das Normalisieren auf 04:00 sorgt dafür, dass „morgen" auch morgens früh schon „morgen" ist und nicht erst nach 24 Stunden.
+
+Der Dämpfungsfaktor für mühsame Antworten (`hard_factor`) greift auf allen Stufen, nicht erst ab der dritten: eine Vokabel, die beim zweiten Mal nur mit Mühe kam, in drei Tagen wiederzusehen ist zu spät.
+
+Beim Vergessen fällt das Intervall auf **null** zurück, nicht nur die Zähler. Die Karte durchläuft anschließend wieder 1 Tag → 3 Tage → Rampe. Wer hier das alte Intervall stehen lässt, terminiert eine gerade vergessene Karte nach drei richtigen Antworten wieder auf ein halbes Jahr — und genau das macht den Unterschied zwischen „hat es gelernt" und „hat es an diesem Tag geraten".
 
 ### 6.3 Session-Zusammenstellung
 
@@ -405,7 +412,7 @@ Ansichten: Wochenübersicht (Minuten pro Tag, Antworten, Trefferquote) · Set-Fo
 │     ▼       ▼                                                                    │
 │  ┌──────┐ ┌──────────────────┐     ┌────────────┐                                │
 │  │ web  │ │  api             │────►│ postgres   │                                │
-│  │nginx │ │  ASP.NET Core 9  │     │  17        │                                │
+│  │nginx │ │ ASP.NET Core 10  │     │  17        │                                │
 │  │ PWA  │ │                  │     └────────────┘                                │
 │  └──────┘ │  ┌────────────┐  │     ┌────────────┐                                │
 │           │  │ Learning   │  │────►│ backup     │ (pg_dump, täglich, 14 Tage)    │
@@ -446,7 +453,7 @@ Module kommunizieren über In-Process-Domain-Events (`CardReviewed` → Gamifica
 
 **ADR-002 — React/TypeScript PWA statt Flutter.** Entscheidend ist Selbsthostbarkeit: Eine PWA wird über eine URL aufgerufen und per „Zum Homescreen" installiert. Eine Flutter-App müsste signiert, verteilt und aktualisiert werden — bei iOS faktisch nur über den App Store oder TestFlight, was dem Selfhosting-Ziel widerspricht. Die PWA ist außerdem konsistent mit der bestehenden Doku. Preis: etwas geringere Animationsperformance und keine echte Push-Notification auf iOS. Beides ist für den Anwendungsfall verschmerzbar.
 
-**ADR-003 — ASP.NET Core statt Node.** Folgt der bestehenden Doku und deinem beruflichen Umfeld. EF Core, Minimal APIs und das eingebaute Identity-Modell decken den Bedarf ab; ein einzelnes Image bleibt unter 120 MB. Gegenargument (ein TypeScript-Sprachraum für Frontend und Backend) ist real, wiegt aber Vertrautheit mit der Plattform nicht auf.
+**ADR-003 — ASP.NET Core 10 (LTS) statt Node.** Folgt der bestehenden Doku und deinem beruflichen Umfeld. Zielframework ist `net10.0`: .NET 8 und 9 erreichen am 10.11.2026 ihr End of Support, .NET 10 läuft bis November 2028. EF Core, Minimal APIs und das eingebaute Identity-Modell decken den Bedarf ab; ein einzelnes Image bleibt unter 120 MB. Gegenargument (ein TypeScript-Sprachraum für Frontend und Backend) ist real, wiegt aber Vertrautheit mit der Plattform nicht auf.
 
 **ADR-004 — PostgreSQL, kein SQLite.** SQLite wäre für eine Einzelfamilie ausreichend und einfacher zu sichern. Aber: gleichzeitige Schreibzugriffe von drei Kindern auf Tablets, und der spätere Schulpfad wäre versperrt. Postgres im Compose-Stack kostet ~150 MB RAM. Akzeptabel.
 
@@ -639,6 +646,8 @@ secrets:
 | **2.0** Schule | Mandanten-UI, Gruppen, Lehrer-Rolle, Bulk-Anlage, LDAP | offen |
 
 \* Nebenberuflich, ca. 8–10 Stunden pro Woche.
+
+**Zu den Migrationen in 0.1:** Das Datenmodell steht im Code, aber eine EF-Core-Migration besteht aus generiertem C# **plus** einem Model-Snapshot, den nur `dotnet ef` korrekt schreiben kann. Die erste Migration wird deshalb einmal lokal erzeugt (`dotnet ef migrations add Initial`) und eingecheckt; danach wendet die API sie beim Start selbst an. Ohne diesen Schritt startet der Container nicht.
 
 **Realistische Einordnung:** 12–14 Wochen bis zum MVP sind bei diesem Umfang nebenberuflich ambitioniert, aber machbar — vorausgesetzt, die Reihenfolge wird eingehalten. Der häufigste Fehlschlag bei solchen Projekten ist, in Woche 2 mit den Minispielen anzufangen, weil sie am meisten Spaß machen, und die Lernengine nie fertigzustellen. Die Engine ist der Teil, der den tatsächlichen Nutzen erzeugt; die Spiele sind die Verpackung.
 

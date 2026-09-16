@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "22"
+
+jobs:
+  backend:
+    name: Backend (build & test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore backend/WordQuest.sln
+
+      - name: Build
+        run: dotnet build backend/WordQuest.sln --no-restore -c Release /warnaserror
+
+      - name: Test
+        run: >
+          dotnet test backend/WordQuest.sln --no-build -c Release
+          --logger "trx;LogFileName=test-results.trx"
+          --collect:"XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: "**/TestResults/**"
+
+  frontend:
+    name: Frontend (lint & build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  images:
+    name: Container images
+    # Images nur vom Hauptbranch und von Tags bauen - nicht aus Pull Requests
+    # fremder Forks, die sonst Schreibrechte auf die Registry bekaemen.
+    if: github.event_name == 'push'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: backend/Dockerfile
+          - name: web
+            dockerfile: frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # arm64 fuer Raspberry Pi 5 / ARM-NAS, siehe Konzept §14.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

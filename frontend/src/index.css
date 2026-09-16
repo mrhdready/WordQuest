@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+/*
+  Zwei Bereiche, zwei Tonlagen:
+  - Kinderbereich: warm, kontrastreich, grosse Flaechen.
+  - Elternbereich: ruhig, sachlich, dicht.
+  Die Tokens hier sind der gemeinsame Nenner.
+*/
+@theme {
+  --color-ink: oklch(0.22 0.03 265);
+  --color-ink-soft: oklch(0.48 0.02 265);
+
+  --color-surface: oklch(0.99 0.004 265);
+  --color-surface-raised: oklch(1 0 0);
+  --color-border-subtle: oklch(0.91 0.008 265);
+
+  --color-brand: oklch(0.58 0.17 265);
+  --color-brand-strong: oklch(0.47 0.18 265);
+  --color-brand-soft: oklch(0.95 0.03 265);
+
+  --color-success: oklch(0.62 0.16 150);
+  --color-success-soft: oklch(0.95 0.05 150);
+  --color-warn: oklch(0.75 0.15 85);
+  --color-warn-soft: oklch(0.96 0.06 85);
+  --color-danger: oklch(0.6 0.18 25);
+  --color-danger-soft: oklch(0.96 0.04 25);
+
+  --color-coin: oklch(0.78 0.15 85);
+
+  --radius-card: 1.25rem;
+  --radius-pill: 999px;
+
+  --font-sans:
+    ui-rounded, 'SF Pro Rounded', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system,
+    sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Overscroll abschalten: ein Kind, das beim Antippen die Seite
+       nach unten zieht, verliert mitten im Spiel den Kontext. */
+    overscroll-behavior: none;
+  }
+
+  /* Randbereiche des Geraets respektieren (Notch, Home-Indicator). */
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  button,
+  [role='button'] {
+    touch-action: manipulation;
+  }
+
+  /* Alle Tippziele mindestens 48 px - Leitplanke 3 des Konzepts. */
+  .touch-target {
+    min-height: 3rem;
+    min-width: 3rem;
+  }
+}
+
+@layer utilities {
+  @keyframes wq-pop {
+    0% {
+      transform: scale(0.94);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.03);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes wq-nudge {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-4px);
+    }
+    75% {
+      transform: translateX(4px);
+    }
+  }
+
+  .animate-pop {
+    animation: wq-pop 220ms ease-out;
+  }
+
+  /* Bewusst ein sanftes Wackeln statt eines harten Shakes:
+     eine falsche Antwort soll nicht wie ein Fehler aussehen. */
+  .animate-nudge {
+    animation: wq-nudge 260ms ease-in-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pop,
+    .animate-nudge {
+      animation: none;
+    }
+  }
+}

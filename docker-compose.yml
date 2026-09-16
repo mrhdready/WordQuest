@@ -1,0 +1,129 @@
+name: wordquest
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wordquest
+      POSTGRES_USER: wordquest
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    secrets:
+      - db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wordquest -d wordquest"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: wordquest-api:${WQ_VERSION:-dev}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      WQ_DB_HOST: db
+      WQ_DB_NAME: wordquest
+      WQ_DB_USER: wordquest
+      WQ_DB_PASSWORD_FILE: /run/secrets/db_password
+      WQ_JWT_SIGNING_KEY_FILE: /run/secrets/jwt_key
+      WQ_PUBLIC_URL: ${WQ_PUBLIC_URL:-https://wordquest.local}
+      WQ_AI_PROVIDER: none
+      # Seed-Daten beim ersten Start (Demo-Elternkonto + Kind + Vokabelset).
+      # Nach der Ersteinrichtung auf "false" setzen.
+      WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    secrets:
+      - db_password
+      - jwt_key
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wq-api.rule=Host(`${WQ_HOST:-wordquest.local}`) && PathPrefix(`/api`)
+      - traefik.http.routers.wq-api.entrypoints=websecure
+      - traefik.http.routers.wq-api.tls.certresolver=le
+      - traefik.http.services.wq-api.loadbalancer.server.port=8080
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: wordquest-web:${WQ_VERSION:-dev}
+    depends_on:
+      - api
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wq-web.rule=Host(`${WQ_HOST:-wordquest.local}`)
+      - traefik.http.routers.wq-web.entrypoints=websecure
+      - traefik.http.routers.wq-web.tls.certresolver=le
+      - traefik.http.services.wq-web.loadbalancer.server.port=8080
+
+  proxy:
+    image: traefik:v3
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${WQ_ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      # DNS-Challenge, damit auch eine nur intern aufgeloeste Domain ein
+      # gueltiges Zertifikat bekommt. Provider und Credentials in .env setzen.
+      - --certificatesresolvers.le.acme.dnschallenge=true
+      - --certificatesresolvers.le.acme.dnschallenge.provider=${WQ_ACME_DNS_PROVIDER:-manual}
+    environment:
+      # Provider-spezifische Variablen, z. B. CF_DNS_API_TOKEN fuer Cloudflare.
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    restart: unless-stopped
+
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: wordquest
+      POSTGRES_USER: wordquest
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 14
+      BACKUP_KEEP_WEEKS: 8
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    secrets:
+      - db_password
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  letsencrypt:
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_key:
+    file: ./secrets/jwt_key.txt

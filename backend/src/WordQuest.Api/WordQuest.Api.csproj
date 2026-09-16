@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../WordQuest.Shared.Kernel/WordQuest.Shared.Kernel.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Identity/WordQuest.Modules.Identity.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Content/WordQuest.Modules.Content.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Learning/WordQuest.Modules.Learning.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Gamification/WordQuest.Modules.Gamification.csproj" />
+    <ProjectReference Include="../WordQuest.Infrastructure/WordQuest.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+
+    <!--
+      Hier nur, damit "dotnet ef" das Startprojekt findet. Der Code der API
+      benutzt nichts daraus, deshalb ist PrivateAssets an dieser Stelle
+      richtig - anders als in WordQuest.Infrastructure.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

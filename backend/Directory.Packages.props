@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    Zentrale Paketverwaltung ist bewusst ABGESCHALTET.
+
+    Sie verbietet Version-Attribute an PackageReference und erwartet alle
+    Versionen hier. Der NuGet-Dialog von Visual Studio schreibt Versionen
+    aber weiterhin direkt in die .csproj — jedes "Paket aktualisieren"
+    ueber die Oberflaeche bricht den Build dann mit NU1008.
+
+    Fuer ein Projekt mit drei paketfuehrenden Projekten ist das kein guter
+    Tausch. Die Versionen stehen jetzt in den .csproj-Dateien, dort wo
+    Visual Studio sie ohnehin hinschreibt.
+
+    Diese Datei kann geloescht werden; sie steht nur noch hier, damit ein
+    zurueckgelassener CPM-Rest nicht wieder zuschlaegt.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

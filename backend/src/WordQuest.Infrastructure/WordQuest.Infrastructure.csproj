@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../WordQuest.Shared.Kernel/WordQuest.Shared.Kernel.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Identity/WordQuest.Modules.Identity.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Content/WordQuest.Modules.Content.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Learning/WordQuest.Modules.Learning.csproj" />
+    <ProjectReference Include="../WordQuest.Modules.Gamification/WordQuest.Modules.Gamification.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+
+    <!--
+      Fuer IDesignTimeDbContextFactory in DesignTimeDbContextFactory.cs.
+      WICHTIG: ohne PrivateAssets/IncludeAssets. Die von Visual Studio
+      vorgeschlagene Variante schliesst die "compile"-Assets aus - dann
+      fehlt die Schnittstelle beim Kompilieren und die Datei bricht.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+  </ItemGroup>
+</Project>

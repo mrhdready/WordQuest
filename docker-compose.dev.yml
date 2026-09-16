@@ -1,0 +1,26 @@
+# Entwicklungs-Stack: nur PostgreSQL im Container.
+# API und Frontend laufen lokal (dotnet run / npm run dev).
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+name: wordquest-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wordquest
+      POSTGRES_USER: wordquest
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wordquest -d wordquest"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata_dev:

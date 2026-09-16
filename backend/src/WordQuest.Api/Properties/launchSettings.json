@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "WordQuest.Api": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WQ_JWT_SIGNING_KEY": "entwicklungsschluessel-bitte-nur-lokal-verwenden-32+"
+      }
+    }
+  }
+}

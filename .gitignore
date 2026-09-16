@@ -1,0 +1,31 @@
+# --- .NET ---
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# --- Secrets & lokale Konfiguration ---
+# NIEMALS committen. setup.sh erzeugt diese Dateien lokal.
+secrets/
+.env
+*.pem
+*.key
+
+# --- Betriebsdaten ---
+backups/
+pgdata/
+
+# --- IDE / OS ---
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

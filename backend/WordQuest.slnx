@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WordQuest.Shared.Kernel/WordQuest.Shared.Kernel.csproj" />
+    <Project Path="src/WordQuest.Modules.Identity/WordQuest.Modules.Identity.csproj" />
+    <Project Path="src/WordQuest.Modules.Content/WordQuest.Modules.Content.csproj" />
+    <Project Path="src/WordQuest.Modules.Learning/WordQuest.Modules.Learning.csproj" />
+    <Project Path="src/WordQuest.Modules.Gamification/WordQuest.Modules.Gamification.csproj" />
+    <Project Path="src/WordQuest.Infrastructure/WordQuest.Infrastructure.csproj" />
+    <Project Path="src/WordQuest.Api/WordQuest.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WordQuest.Learning.Tests/WordQuest.Learning.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,13 @@
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.git
+**/.github
+**/.vs
+**/.idea
+secrets/
+backups/
+pgdata/
+Documentation/
+*.md
