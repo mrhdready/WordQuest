@@ -30,7 +30,7 @@ jobs:
 
       - name: Test
         run: >
-          dotnet test backend/WordQuest.sln --no-build -c Release
+          dotnet test backend/WordQuest.slnx --no-build -c Release
           --logger "trx;LogFileName=test-results.trx"
           --collect:"XPlat Code Coverage"
 
