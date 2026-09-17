@@ -23,10 +23,10 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        run: dotnet restore backend/WordQuest.sln
+        run: dotnet restore backend/WordQuest.slnx
 
       - name: Build
-        run: dotnet build backend/WordQuest.sln --no-restore -c Release /warnaserror
+        run: dotnet build backend/WordQuest.slnx --no-restore -c Release /warnaserror
 
       - name: Test
         run: >
