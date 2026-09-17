@@ -14,54 +14,132 @@ Memory) und der Offline-Betrieb stehen noch aus.
 
 ---
 
-## Schnellstart
+## Installation
 
-### Produktion (Docker)
+Die CI baut bei jedem Push auf `master` zwei Container-Images und legt sie auf
+der GitHub Container Registry ab:
+
+| Image | Inhalt |
+|---|---|
+| `ghcr.io/<account>/wordquest-api` | ASP.NET-Core-Backend, wendet Migrationen beim Start selbst an |
+| `ghcr.io/<account>/wordquest-web` | nginx mit der gebauten PWA, leitet `/api` ans Backend weiter |
+
+Beide sind für `linux/amd64` und `linux/arm64` gebaut — es läuft also auch auf
+einem Raspberry Pi 5 oder einem ARM-NAS.
+
+> **Einmalig nötig:** Die Pakete stehen nach dem ersten CI-Lauf auf *privat*.
+> Unter **GitHub → dein Profil → Packages → wordquest-api → Package settings →
+> Change visibility → Public** umstellen, für `-web` genauso. Ohne diesen
+> Schritt braucht jeder Zielhost eine Anmeldung mit Token.
+
+### Variante A — Schnelltest, zwei Minuten
+
+Zum Ausprobieren auf irgendeinem Docker-Host. Eine Datei, kein Zertifikat,
+keine Konfiguration.
 
 ```bash
-git clone <dieses-repo> wordquest
-cd wordquest
-./setup.sh
+curl -O https://raw.githubusercontent.com/<account>/WordQuest/master/docker-compose.quick.yml
+
+WQ_IMAGE_PREFIX=ghcr.io/<account>/wordquest \
+  docker compose -f docker-compose.quick.yml up -d
 ```
 
-`setup.sh` erzeugt Secrets und `.env`, fragt nach dem Hostnamen und fährt den
-Stack hoch. Danach ist WordQuest unter `https://<dein-host>` erreichbar.
-
-Demo-Zugang, solange `WQ_SEED_DEMO_DATA=true` steht:
+Fertig. Die App läuft auf **http://<host>:8080**.
 
 | | |
 |---|---|
 | Eltern | `demo@wordquest.local` / `demo1234` |
 | Kind | Profil „Max", PIN `1234` |
 
-> **Nach der Ersteinrichtung** eigenes Elternkonto anlegen, das Demo-Passwort
-> ändern und `WQ_SEED_DEMO_DATA=false` in `.env` setzen.
+Ein anderer Port geht mit `WQ_PORT=9000` vor dem Befehl.
 
-#### Zu TLS
+**Was hier fehlt:** Ohne HTTPS lässt sich die App nicht als PWA aufs Tablet
+legen — Service Worker verlangen eine sichere Herkunft (außer auf
+`localhost`). Im Browser funktioniert alles, aber ohne Installation und ohne
+Offlinebetrieb. Außerdem stehen die Passwörter im Klartext in der Compose-Datei.
+Für den Dauerbetrieb also Variante B.
 
-Eine PWA lässt sich nur über HTTPS installieren (Ausnahme: `localhost`). Im
-Heimnetz ist das die häufigste Stolperstelle. Empfohlen: eine echte Subdomain
-mit Let's-Encrypt-DNS-Challenge, per lokalem DNS auf die interne IP aufgelöst —
-dann sieht das Kind keine Zertifikatswarnung. Die nötigen Variablen stehen in
-`.env.example`.
+Aufräumen: `docker compose -f docker-compose.quick.yml down -v`
 
-### Entwicklung
+### Variante B — Dauerbetrieb mit TLS
+
+Das ist die Variante für den Rechner, auf dem es wirklich laufen soll.
+
+```bash
+git clone https://github.com/<account>/WordQuest.git wordquest
+cd wordquest
+./setup.sh
+```
+
+`setup.sh` erzeugt Secrets, fragt Hostname, ACME-Mail und Image-Präfix ab,
+zieht die Images und startet den Stack. Danach ist WordQuest unter
+`https://<dein-host>` erreichbar.
+
+Was dabei entsteht und **nicht** ins Repository gehört (steht in `.gitignore`):
+
+```
+secrets/db_password.txt    48 Zeichen Zufall
+secrets/jwt_key.txt        48 Zeichen Zufall, signiert die Tokens
+.env                       Hostname, Image-Präfix, ACME-Einstellungen
+backups/                   tägliche pg_dumps
+```
+
+#### Zu TLS — die häufigste Stolperstelle
+
+Eine PWA lässt sich nur über HTTPS installieren. Im Heimnetz führt der
+bequemste Weg über eine **echte Subdomain mit DNS-Challenge**: Der Hostname
+zeigt per lokalem DNS auf die interne IP, das Zertifikat kommt trotzdem von
+Let's Encrypt, weil die Prüfung über einen DNS-Eintrag läuft und nicht über
+eine von außen erreichbare Adresse.
+
+Dafür in `.env`:
+
+```
+WQ_HOST=wordquest.deine-domain.de
+WQ_ACME_DNS_PROVIDER=cloudflare
+CF_DNS_API_TOKEN=<Token mit Zone:DNS:Edit>
+```
+
+Andere Anbieter brauchen andere Variablen — die
+[Traefik-Providerliste](https://doc.traefik.io/traefik/https/acme/#providers)
+nennt sie je Anbieter; die Variable gehört dann in den `environment`-Block des
+`proxy`-Dienstes.
+
+Der Umweg über ein selbstsigniertes Zertifikat ist möglich, aber schlecht: Ein
+Kind, das erst eine Sicherheitswarnung wegklicken muss, um zu lernen, ist kein
+guter Ausgangspunkt — und iOS installiert eine PWA mit ungültigem Zertifikat
+gar nicht erst.
+
+#### Nach der Ersteinrichtung
+
+1. Eigenes Elternkonto anlegen, Demo-Passwort ändern.
+2. In `.env` `WQ_SEED_DEMO_DATA=false` setzen.
+3. `docker compose up -d` — die Demo-Daten bleiben, werden aber nicht neu angelegt.
+
+#### Aktualisieren
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Neue Migrationen wendet die API beim Start selbst an. Ein Backup vorher
+schadet trotzdem nicht.
+
+Für einen festen Stand statt des jeweils letzten Builds ein Git-Tag setzen
+(`git tag v0.1.0 && git push --tags`) und in `.env` `WQ_VERSION=0.1.0`
+eintragen.
+
+### Variante C — Entwicklung
 
 ```bash
 # 1. Nur die Datenbank im Container
 docker compose -f docker-compose.dev.yml up -d
 
-# 2. Migrationen erzeugen (einmalig, siehe unten)
+# 2. Backend
 cd backend
-dotnet tool install --global dotnet-ef
-dotnet ef migrations add Initial \
-  --project src/WordQuest.Infrastructure \
-  --startup-project src/WordQuest.Api
-
-# 3. Backend
 dotnet run --project src/WordQuest.Api        # http://localhost:5080
 
-# 4. Frontend
+# 3. Frontend
 cd ../frontend
 npm install
 npm run dev                                    # http://localhost:5173
@@ -69,12 +147,29 @@ npm run dev                                    # http://localhost:5173
 
 Der Vite-Dev-Server leitet `/api` an `localhost:5080` weiter.
 
-> **Die erste Migration muss einmal von Hand erzeugt werden.** Das Datenmodell
-> steht vollständig im Code, aber eine EF-Core-Migration besteht aus generiertem
-> C# plus einem Model-Snapshot, den nur das Werkzeug korrekt schreiben kann.
-> Ohne diesen Schritt startet die API nicht — `Database.MigrateAsync()` beim
-> Start findet dann nichts anzuwenden. Die erzeugten Dateien gehören ins
-> Repository.
+Images lokal bauen statt ziehen:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+#### Migrationen
+
+Das Datenmodell steht im Code, aber eine EF-Core-Migration besteht aus
+generiertem C# plus einem Model-Snapshot, den nur das Werkzeug korrekt
+schreiben kann. Nach jeder Änderung an einer Entität:
+
+```bash
+dotnet tool install --global dotnet-ef        # einmalig
+cd backend
+dotnet ef migrations add <Name> \
+  --project src/WordQuest.Infrastructure \
+  --startup-project src/WordQuest.Api
+```
+
+Die erzeugten Dateien gehören ins Repository. Fehlen sie, bricht die CI mit
+einer entsprechenden Meldung ab — der Container würde sonst erst beim Start
+scheitern.
 
 ---
 
@@ -125,11 +220,16 @@ cd backend
 dotnet test
 ```
 
-Zwei Deckelungen tragen das ganze System:
+Drei Bremsen tragen das ganze System:
 
 1. **Höchstens 5 neue Karten pro Tag und Kind** (`LearnerProfile.DailyNewLimit`).
    Wer hier 40 einstellt, erzeugt in den Folgetagen eine Wiederholungslawine.
-2. **Höchstens 10 fällige Wiederholungen pro Session** (`SchedulerOptions.MaxDuePerSession`).
+2. **Keine neuen Karten, solange Rückstand besteht** (`SchedulerOptions.NewCardBacklogLimit`).
+   Das Tagesbudget begrenzt den Zufluss, nicht das Verhältnis von Zufluss zu
+   Abfluss. Ohne diese Bremse wächst der Berg über Monate — die Simulation
+   landet dann bei über 250 fälligen Karten und einem Median-Intervall von acht
+   Tagen, also: nichts festigt sich mehr.
+3. **Höchstens 10 fällige Wiederholungen pro Session** (`SchedulerOptions.MaxDuePerSession`).
    Eine Session endet, bevor das Kind müde wird.
 
 ---
@@ -140,6 +240,7 @@ Zwei Deckelungen tragen das ganze System:
 |---|---|
 | Ein Vokabelpaar = **zwei** Lernkarten | „dog → Hund" sitzt viel früher als „Hund → dog". Gemeinsam terminiert, wird die schwere Richtung zu selten und die leichte zu oft geübt. |
 | Bewertung **serverseitig** | Läge die Lösung im Client, stünde sie im Netzwerk-Tab. Bei einem Spiel mit Belohnungen finden Kinder solche Lücken. |
+| **Damerau**-Levenshtein, nicht Levenshtein | Der häufigste Tippfehler ist der Dreher zweier Buchstaben. Levenshtein zählt `becuase` ↔ `because` als zwei Fehler und würde die Antwort verwerfen — ausgerechnet den Fall, für den die Toleranz gedacht war. |
 | Ein Tippfehler zählt als richtig | Wer `becuase` tippt, kennt die Vokabel. Als „falsch" zu werten verletzt das Konzept und verfälscht die Terminierung. |
 | Falsche Antwort kostet **0 XP** | Nie bestrafen. Die einzige Folge ist, dass das Wort früher wiederkommt. |
 | `tenant_id` von Tag 1 an, per Global Query Filter | Mandantenfähigkeit nachzurüsten kostet Wochen und produziert Datenlecks. Der Filter sitzt im `DbContext`, nicht in einzelnen Queries. |

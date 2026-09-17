@@ -47,11 +47,16 @@ else
   host="${host:-wordquest.local}"
   read -rp "E-Mail-Adresse fuer Let's Encrypt? [admin@example.com] " acme
   acme="${acme:-admin@example.com}"
+  read -rp "Image-Praefix (ghcr.io/<account>/wordquest): " prefix
+  while [[ -z "$prefix" ]]; do
+    warn "Ohne Image-Praefix weiss docker compose nicht, was es ziehen soll."
+    read -rp "Image-Praefix (ghcr.io/<account>/wordquest): " prefix
+  done
 
   # BSD/GNU sed kompatibel: temporaere Datei statt -i.
   sed -e "s|^WQ_HOST=.*|WQ_HOST=${host}|" \
-      -e "s|^WQ_PUBLIC_URL=.*|WQ_PUBLIC_URL=https://${host}|" \
       -e "s|^WQ_ACME_EMAIL=.*|WQ_ACME_EMAIL=${acme}|" \
+      -e "s|^WQ_IMAGE_PREFIX=.*|WQ_IMAGE_PREFIX=${prefix}|" \
       .env > .env.tmp && mv .env.tmp .env
   say "✓ .env angelegt fuer ${host}."
   warn "  TLS: Ohne gueltiges Zertifikat ist die App NICHT als PWA installierbar."
@@ -60,8 +65,13 @@ fi
 
 # --- Start -------------------------------------------------------------------
 say ""
-say "Baue Images und starte den Stack …"
-docker compose up -d --build
+say "Hole Images …"
+if ! docker compose pull; then
+  die "Images konnten nicht geladen werden. Stimmt WQ_IMAGE_PREFIX in .env, und sind die Pakete oeffentlich?"
+fi
+
+say "Starte den Stack …"
+docker compose up -d
 
 say ""
 say "Warte auf die API …"

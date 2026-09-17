@@ -28,3 +28,15 @@ dotnet_diagnostic.CA2007.severity = none
 
 [*.csproj]
 indent_size = 2
+
+# --- Generierter Code ---
+# EF-Core-Migrationen werden von `dotnet ef` geschrieben, nicht von Hand.
+# Sie benutzen block-scoped Namespaces und halten sich auch sonst nicht an
+# die Regeln oben. Da wir sie nicht beeinflussen koennen und nicht nachtraeglich
+# umformatieren wollen (die naechste Migration saehe wieder anders aus), sind
+# die Stilregeln hier abgeschaltet. Die Dateien gehoeren trotzdem ins
+# Repository und werden ganz normal kompiliert.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.category-Style.severity = none
+dotnet_diagnostic.IDE0161.severity = none

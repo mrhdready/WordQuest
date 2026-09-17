@@ -1,3 +1,11 @@
+# WordQuest — Dauerbetrieb mit TLS.
+#
+# Zieht fertige Images von ghcr.io. Zum Bauen aus dem Quellcode zusaetzlich
+# docker-compose.build.yml dazunehmen:
+#     docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# Zum schnellen Ausprobieren ohne Domain und Zertifikat: docker-compose.quick.yml
+
 name: wordquest
 
 services:
@@ -20,10 +28,7 @@ services:
     restart: unless-stopped
 
   api:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    image: wordquest-api:${WQ_VERSION:-dev}
+    image: ${WQ_IMAGE_PREFIX:-ghcr.io/example/wordquest}-api:${WQ_VERSION:-master}
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
@@ -32,9 +37,10 @@ services:
       WQ_DB_USER: wordquest
       WQ_DB_PASSWORD_FILE: /run/secrets/db_password
       WQ_JWT_SIGNING_KEY_FILE: /run/secrets/jwt_key
-      WQ_PUBLIC_URL: ${WQ_PUBLIC_URL:-https://wordquest.local}
+      WQ_PUBLIC_URL: https://${WQ_HOST:-wordquest.local}
+      WQ_TIMEZONE: ${WQ_TIMEZONE:-Europe/Berlin}
       WQ_AI_PROVIDER: none
-      # Seed-Daten beim ersten Start (Demo-Elternkonto + Kind + Vokabelset).
+      # Seed-Daten beim ersten Start (Demo-Elternkonto, Kind, Beispielset).
       # Nach der Ersteinrichtung auf "false" setzen.
       WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-true}
     depends_on:
@@ -50,27 +56,18 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.wq-api.rule=Host(`${WQ_HOST:-wordquest.local}`) && PathPrefix(`/api`)
-      - traefik.http.routers.wq-api.entrypoints=websecure
-      - traefik.http.routers.wq-api.tls.certresolver=le
-      - traefik.http.services.wq-api.loadbalancer.server.port=8080
 
   web:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    image: wordquest-web:${WQ_VERSION:-dev}
+    image: ${WQ_IMAGE_PREFIX:-ghcr.io/example/wordquest}-web:${WQ_VERSION:-master}
     depends_on:
       - api
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.wq-web.rule=Host(`${WQ_HOST:-wordquest.local}`)
-      - traefik.http.routers.wq-web.entrypoints=websecure
-      - traefik.http.routers.wq-web.tls.certresolver=le
-      - traefik.http.services.wq-web.loadbalancer.server.port=8080
+      - traefik.http.routers.wq.rule=Host(`${WQ_HOST:-wordquest.local}`)
+      - traefik.http.routers.wq.entrypoints=websecure
+      - traefik.http.routers.wq.tls.certresolver=le
+      - traefik.http.services.wq.loadbalancer.server.port=8080
 
   proxy:
     image: traefik:v3

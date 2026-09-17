@@ -1,0 +1,72 @@
+# WordQuest — Schnelltest auf einem beliebigen Docker-Host.
+#
+#   curl -O https://raw.githubusercontent.com/<account>/WordQuest/master/docker-compose.quick.yml
+#   WQ_IMAGE_PREFIX=ghcr.io/<account>/wordquest docker compose -f docker-compose.quick.yml up -d
+#
+# Danach: http://<host>:8080
+#
+# Diese Datei ist ABSICHTLICH anspruchslos: kein Traefik, kein Zertifikat,
+# keine Secret-Dateien. Sie ist zum Ausprobieren gedacht, nicht zum Betrieb.
+#
+# Was damit NICHT geht:
+#   - Die App laesst sich nicht als PWA aufs Tablet legen. Service Worker
+#     brauchen HTTPS (Ausnahme: localhost). Im Browser laeuft alles, aber
+#     ohne Installation und ohne Offlinebetrieb.
+#   - Die Passwoerter stehen im Klartext in dieser Datei.
+# Fuer den echten Einsatz: docker-compose.yml plus setup.sh.
+
+name: wordquest-quick
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wordquest
+      POSTGRES_USER: wordquest
+      POSTGRES_PASSWORD: ${WQ_DB_PASSWORD:-wordquest}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wordquest -d wordquest"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    image: ${WQ_IMAGE_PREFIX:-ghcr.io/example/wordquest}-api:${WQ_VERSION:-master}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      WQ_DB_HOST: db
+      WQ_DB_NAME: wordquest
+      WQ_DB_USER: wordquest
+      WQ_DB_PASSWORD: ${WQ_DB_PASSWORD:-wordquest}
+      # Mindestens 32 Zeichen. Fuer einen Testlauf genuegt dieser Wert;
+      # im Echtbetrieb kommt er als Datei aus ./secrets (docker-compose.yml).
+      WQ_JWT_SIGNING_KEY: ${WQ_JWT_SIGNING_KEY:-nur-zum-ausprobieren-bitte-nicht-im-echtbetrieb-verwenden}
+      WQ_TIMEZONE: ${WQ_TIMEZONE:-Europe/Berlin}
+      WQ_AI_PROVIDER: none
+      WQ_SEED_DEMO_DATA: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    image: ${WQ_IMAGE_PREFIX:-ghcr.io/example/wordquest}-web:${WQ_VERSION:-master}
+    ports:
+      - "${WQ_PORT:-8080}:8080"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
