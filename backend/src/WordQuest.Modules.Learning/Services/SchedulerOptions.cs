@@ -54,6 +54,23 @@ public sealed class SchedulerOptions
     public int MaxDuePerSession { get; init; } = 10;
 
     /// <summary>
+    /// Ab diesem Rueckstand an faelligen Karten werden keine neuen mehr
+    /// eingefuehrt — auch wenn das Tagesbudget noch offen waere.
+    ///
+    /// Diese Bremse ist der Unterschied zwischen einem funktionierenden und
+    /// einem ueberlaufenden System. Ohne sie fuehrt die Engine stur fuenf neue
+    /// Karten pro Tag ein, waehrend der Berg faelliger Wiederholungen waechst;
+    /// die Simulation ueber ein Schuljahr landet dann bei ueber 250 faelligen
+    /// Karten an einem Morgen, und der Median der Intervalle bleibt bei acht
+    /// Tagen — es festigt sich nichts mehr, weil alles zu spaet wiederholt und
+    /// dadurch vergessen wird.
+    ///
+    /// Der Wert entspricht bewusst <see cref="SessionSize"/>: neue Woerter gibt
+    /// es nur, solange der Rueckstand in eine einzige Session passt.
+    /// </summary>
+    public int NewCardBacklogLimit { get; init; } = 15;
+
+    /// <summary>
     /// Antwortzeit, unterhalb derer eine richtige Antwort als
     /// <see cref="Shared.Kernel.Grade.Easy"/> gilt.
     /// </summary>

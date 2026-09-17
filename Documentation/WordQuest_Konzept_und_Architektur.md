@@ -257,6 +257,25 @@ Eine Quest enthält maximal 15 Items, zusammengestellt in dieser Reihenfolge:
 
 Die Deckelung bei 5 neuen Karten pro Tag ist der wichtigste Parameter des ganzen Systems. Wer 40 neue Vokabeln an einem Abend einspeist, erzeugt in den Folgetagen eine Wiederholungslawine, die das Kind sicher zum Abbruch bringt. Der Wert ist pro Lernendem konfigurierbar (`daily_new_limit`, Default 5, Bereich 3–15) und wird im Eltern-Dashboard erklärt, nicht nur als Zahl angeboten.
 
+**Rückstandsbremse.** Das Tagesbudget allein genügt nicht. Es begrenzt den Zufluss, aber nicht das Verhältnis von Zufluss zu Abfluss: Wer nur eine Einheit am Tag schafft, bekommt trotzdem jeden Tag fünf neue Wörter dazu, und der Berg fälliger Wiederholungen wächst über Monate. Deshalb gilt zusätzlich:
+
+> Neue Karten werden nur eingeführt, solange der Rückstand an fälligen Karten in **eine Session** passt (≤ 15).
+
+Das ist keine Feinabstimmung, sondern die Bedingung dafür, dass das System überhaupt funktioniert. Die Simulation über ein Schuljahr (600 Karten, realistisches Antwortverhalten) zeigt den Unterschied:
+
+| Einheiten/Tag | | Spitzenlast | Rückstand am Ende | Median-Intervall |
+|---|---|---|---|---|
+| 1 | ohne Bremse | 159 | 135 | 8 Tage |
+| 1 | **mit Bremse** | **37** | **21** | **40 Tage** |
+| 2 | ohne Bremse | 328 | 293 | 7 Tage |
+| 2 | **mit Bremse** | **46** | **29** | **51 Tage** |
+| 4 | ohne Bremse | 278 | 143 | 47 Tage |
+| 4 | **mit Bremse** | **74** | **49** | **54 Tage** |
+
+Die aussagekräftigste Spalte ist die letzte. Ohne Bremse bleibt das Median-Intervall bei sieben bis acht Tagen — das heißt: Nach einem Jahr Lernen ist keine einzige Vokabel wirklich gefestigt, weil jede zu spät drankommt und deshalb wieder vergessen wird. Das Kind arbeitet täglich und kommt nicht voran. Mit Bremse lernt es weniger Wörter (rund 280 statt 535 bei zwei Einheiten täglich), aber die sitzen.
+
+Das ist die pädagogisch richtige Abwägung: Lieber 280 Wörter, die halten, als 535, die nicht halten.
+
 **Klassenarbeit-Modus (Version 1.0):** Vor einer Vokabelarbeit gibt es einen Extramodus, der die Terminierung ignoriert und gezielt alle Karten eines Sets nach Schwierigkeit übt. Diese Durchläufe werden mit `game_key='cram'` geloggt und beeinflussen `review_state` **nicht** — sonst zerstört das Pauken vor der Arbeit die langfristige Terminierung.
 
 ### 6.4 Antwortbewertung
@@ -269,13 +288,15 @@ Serverseitig, nicht im Client (der Client kennt die Antwort nicht — sonst ist 
 2. Artikel/Partikel optional: führendes "to " (to go),
    "a "/"an "/"the " sowie deutsches "der/die/das " werden entfernt
 3. Exakter Vergleich gegen target_text und alle target_alts → Good/Easy
-4. Levenshtein-Distanz ≤ 1 bei Wortlänge ≥ 5, bzw. = 0 bei kürzeren Wörtern
-   → als richtig werten, aber Grade auf Hard deckeln und Hinweis zeigen:
+4. Damerau-Levenshtein-Distanz ≤ 1 bei Wortlänge ≥ 5, bzw. = 0 bei kürzeren
+   Wörtern → als richtig werten, aber Grade auf Hard deckeln und Hinweis zeigen:
      "Richtig — achte auf die Schreibweise: beautiful"
 5. Sonst falsch.
 ```
 
 Der Tippfehler-Fall ist wichtig: Ein Kind, das `becuase` tippt, kennt die Vokabel — es tippt nur auf einem Tablet. Es hier als „falsch" zu werten, verletzt Leitplanke 2 und verfälscht zusätzlich die Terminierung.
+
+**Damerau, nicht Levenshtein** — und zwar wegen genau dieses Beispiels. Der häufigste Tippfehler auf einer Tastatur ist der Dreher zweier benachbarter Buchstaben. Die einfache Levenshtein-Distanz bewertet `becuase` ↔ `because` als **zwei** Operationen und würde die Antwort verwerfen; Damerau zählt den Dreher als eine. Der Unterschied betrifft ausgerechnet den Fall, für den die Toleranz gedacht war.
 
 ---
 

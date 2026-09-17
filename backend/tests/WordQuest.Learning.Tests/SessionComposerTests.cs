@@ -14,12 +14,52 @@ public sealed class SessionComposerTests
             new SessionCandidate(Guid.NewGuid(), state, Now.AddMinutes(-minutesOverdue - i)))];
 
     [Fact]
-    public void FillsUpToTheSessionSize()
+    public void FillsUpWithNewCardsWhenNothingIsOverdue()
     {
+        IReadOnlyList<SessionCandidate> session = _composer.Compose(
+            [], Candidates(8, ReviewCardState.Review, 60), Candidates(40, ReviewCardState.New), 5, Now);
+
+        Assert.Equal(13, session.Count);   // 8 faellige + 5 neue
+    }
+
+    [Fact]
+    public void StopsIntroducingNewCardsWhenTheLearnerIsBehind()
+    {
+        // 40 faellige Karten sind mehr als eine Session fassen kann. Wer so
+        // weit hinterherhaengt, bekommt keine neuen Woerter obendrauf - sonst
+        // waechst der Berg ueber Monate, bis sich nichts mehr festigt.
         IReadOnlyList<SessionCandidate> session = _composer.Compose(
             [], Candidates(40, ReviewCardState.Review, 60), Candidates(40, ReviewCardState.New), 5, Now);
 
-        Assert.Equal(15, session.Count);
+        Assert.Equal(10, session.Count);
+        Assert.All(session, c => Assert.Equal(ReviewCardState.Review, c.State));
+    }
+
+    [Fact]
+    public void RelearningCardsCountTowardsTheBacklog()
+    {
+        // Zwoelf faellige plus fuenf Wiedervorlagen sind siebzehn - knapp
+        // ueber der Grenze. Fehler aus der laufenden Session sind Rueckstand
+        // wie jeder andere.
+        IReadOnlyList<SessionCandidate> session = _composer.Compose(
+            Candidates(5, ReviewCardState.Relearning, 5),
+            Candidates(12, ReviewCardState.Review, 60),
+            Candidates(10, ReviewCardState.New),
+            newCardsAllowedToday: 5,
+            Now);
+
+        Assert.DoesNotContain(session, c => c.State == ReviewCardState.New);
+    }
+
+    [Fact]
+    public void TheBacklogBrakeIsAdjustable()
+    {
+        var generous = new SessionComposer(new SchedulerOptions { NewCardBacklogLimit = 100 });
+
+        IReadOnlyList<SessionCandidate> session = generous.Compose(
+            [], Candidates(40, ReviewCardState.Review, 60), Candidates(40, ReviewCardState.New), 5, Now);
+
+        Assert.Equal(15, session.Count);   // 10 faellige + 5 neue
     }
 
     [Fact]

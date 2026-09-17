@@ -36,6 +36,21 @@ public sealed class SessionComposer(SchedulerOptions? options = null)
         var selected = new List<SessionCandidate>(capacity);
         var taken = new HashSet<Guid>();
 
+        List<SessionCandidate> dueNow =
+        [
+            .. due.Where(c => c.State != ReviewCardState.Suspended && c.DueAt <= now)
+        ];
+
+        List<SessionCandidate> relearnNow = [.. relearning.Where(c => c.DueAt <= now)];
+
+        // Rueckstandsbremse: Wer hinterherhaengt, bekommt keine neuen Woerter
+        // dazu. Das Tagesbudget allein reicht nicht — es begrenzt den Zufluss,
+        // aber nicht das Verhaeltnis von Zufluss zu Abfluss. Ohne diese Bremse
+        // waechst der Berg faelliger Karten ueber Monate, bis nichts mehr
+        // gefestigt wird (siehe SchedulerOptions.NewCardBacklogLimit).
+        int backlog = dueNow.Count + relearnNow.Count;
+        bool acceptNewCards = backlog <= _options.NewCardBacklogLimit;
+
         void Take(SessionCandidate candidate)
         {
             if (selected.Count < capacity && taken.Add(candidate.CardId))
@@ -46,27 +61,22 @@ public sealed class SessionComposer(SchedulerOptions? options = null)
 
         // 1. Fehler aus dieser Session zuerst — die Wiedervorlage ist der
         //    eigentliche Lerneffekt einer falschen Antwort.
-        foreach (SessionCandidate candidate in relearning
-                     .Where(c => c.DueAt <= now)
-                     .OrderBy(c => c.DueAt))
+        foreach (SessionCandidate candidate in relearnNow.OrderBy(c => c.DueAt))
         {
             Take(candidate);
         }
 
         // 2. Faellige Wiederholungen, aelteste zuerst, gedeckelt.
-        foreach (SessionCandidate candidate in due
-                     .Where(c => c.State != ReviewCardState.Suspended && c.DueAt <= now)
+        foreach (SessionCandidate candidate in dueNow
                      .OrderBy(c => c.DueAt)
                      .Take(_options.MaxDuePerSession))
         {
             Take(candidate);
         }
 
-        // 3. Auffuellen mit neuen Karten — nur im Rahmen des Tagesbudgets.
-        //    Dies ist die wichtigste Deckelung des ganzen Systems: Wer hier
-        //    40 neue Vokabeln an einem Abend einspeist, erzeugt in den
-        //    Folgetagen eine Wiederholungslawine.
-        int newBudget = Math.Max(0, newCardsAllowedToday);
+        // 3. Auffuellen mit neuen Karten — nur im Rahmen des Tagesbudgets und
+        //    nur, wenn kein Rueckstand besteht.
+        int newBudget = acceptNewCards ? Math.Max(0, newCardsAllowedToday) : 0;
         foreach (SessionCandidate candidate in fresh)
         {
             if (newBudget == 0 || selected.Count >= capacity)
