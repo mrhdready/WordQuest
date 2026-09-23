@@ -1,0 +1,1 @@
+{"content":"vite-plugin-pwa registerType autoUpdate forces skipWaiting+clientsClaim; page reload only happens if app imports virtual:pwa-register; docs warn users can lose form data; prompt mode recommended for form-heavy apps.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-09-23T22:55:44.567Z","ttl":86400000,"kind":"docs"}

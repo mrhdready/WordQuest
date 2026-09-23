@@ -1,0 +1,1 @@
+{"content":"Health checks: tag checks (e.g. 'ready'), MapHealthChecks live with Predicate = _ => false, ready with tag predicate. AddDbContextCheck has overload with tags.","source":"web","provider":"webfetch","confidence":"LOW","fetched_at":"2026-09-23T22:53:32.334Z","ttl":86400000,"kind":"docs"}

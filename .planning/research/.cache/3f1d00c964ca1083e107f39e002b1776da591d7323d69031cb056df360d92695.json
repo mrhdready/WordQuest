@@ -1,0 +1,1 @@
+{"content":"postgres:18 image changed PGDATA to /var/lib/postgresql/18/docker and VOLUME to /var/lib/postgresql; old mounts at /var/lib/postgresql/data get silently ignored -> fresh initdb; major upgrade needs dump/restore or pg_upgrade.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-09-23T22:55:44.457Z","ttl":86400000,"kind":"web"}

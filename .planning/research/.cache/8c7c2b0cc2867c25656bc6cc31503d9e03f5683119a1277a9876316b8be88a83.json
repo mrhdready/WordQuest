@@ -1,0 +1,1 @@
+{"content":"Npgsql EF Core: map uint property with [Timestamp] or .IsRowVersion() -> PostgreSQL xmin system column as optimistic concurrency token; no real column is created.","source":"web","provider":"webfetch","confidence":"LOW","fetched_at":"2026-09-23T22:54:08.769Z","ttl":86400000,"kind":"docs"}
