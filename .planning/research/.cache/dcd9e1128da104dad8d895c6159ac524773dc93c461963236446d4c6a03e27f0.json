@@ -1,1 +1,0 @@
-{"content":"Playwright: context.route does not intercept requests handled by a service worker; recommended serviceWorkers: 'block' when mocking network.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-09-23T22:55:44.677Z","ttl":86400000,"kind":"docs"}

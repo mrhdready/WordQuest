@@ -29,3 +29,13 @@ pgdata/
 .DS_Store
 Thumbs.db
 *.swp
+
+# --- Caches, Test- und Tool-Ausgaben ---
+.cache/
+coverage/
+TestResults/
+test-results/
+playwright-report/
+*.tsbuildinfo
+.eslintcache
+npm-debug.log*

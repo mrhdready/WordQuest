@@ -1,1 +1,0 @@
-{"content":"Npgsql EF Core: map a uint property with [Timestamp] or .IsRowVersion() to use PostgreSQL xmin system column as optimistic concurrency token.","source":"web","provider":"webfetch","confidence":"LOW","fetched_at":"2026-09-23T22:53:31.871Z","ttl":86400000,"kind":"docs"}

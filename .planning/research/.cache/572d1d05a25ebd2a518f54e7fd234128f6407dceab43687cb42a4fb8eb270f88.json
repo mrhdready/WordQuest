@@ -1,1 +1,0 @@
-{"content":"Docker Engine 29 (Nov 2025) raised min API to 1.44; Traefik docker provider using API 1.24 broke; fixed in Traefik 3.6.1 with API version negotiation.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-09-23T22:55:44.235Z","ttl":86400000,"kind":"web"}

@@ -1,1 +1,0 @@
-{"content":"Portainer allows unauthenticated initial admin creation only within 5 minutes of start, then locks until restart, to prevent takeover of fresh installs; --admin-password-file preconfigures.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-09-23T22:55:44.345Z","ttl":86400000,"kind":"web"}
