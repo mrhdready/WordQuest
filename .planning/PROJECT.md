@@ -69,6 +69,7 @@ See `.planning/REQUIREMENTS.md` (21 v1 requirements):
 | Parent account created by `setup.sh` instead of a browser wizard | Home network only; no setup takeover window, same mechanism as CLI reset | — Pending |
 | Mastery threshold ease ≥ 2.1, one constant | Concept doc contradicts itself (2.0 vs 2.1); 2.1 matches current code | — Pending |
 | Offline learning, new game modes, reporting deferred to v2 | Not needed for a working base | — Pending |
+| Every code change gets a subagent review before "done" (rules in `AGENTS.md` → Review) | Operator's explicit choice; deviates from the harness default (review only on structural signal) | — Pending |
 | Deletion framed as good practice, not GDPR compliance promise | A family hosting for itself likely falls under the household exemption; no legal review | — Pending |
 
 ## Evolution
