@@ -2,11 +2,11 @@
 
 ## What This Is
 
-WordQuest is a self-hosted vocabulary learning PWA for families: a guardian manages vocabulary sets (manual or CSV import) and child profiles, children log in via profile picker + PIN and learn with SM-2 spaced repetition, XP, streaks and levels. It runs as a Docker Compose stack (Traefik, nginx/React, ASP.NET Core, PostgreSQL) on a home server such as a Raspberry Pi 5 or NAS. This cycle turns it into a v1.0 release that other families can install and run on their own hardware.
+WordQuest is a simple vocabulary learning app for children that parents without special know-how can set up in their home network. A parent manages vocabulary sets (manual or CSV import) and child profiles; children log in via profile picker + PIN and learn with SM-2 spaced repetition, XP, streaks and levels. It runs as a Docker Compose stack on a home server such as a Raspberry Pi 5 or NAS. This cycle delivers a working, safe base (v1.0) that other families can install from one install page.
 
 ## Core Value
 
-A family that is not the author can install WordQuest on their own hardware and run it securely: no default credentials, sane defaults, working backups, stable operation.
+Parents without special know-how can set up WordQuest in their home network and their children can learn with it safely and reliably.
 
 ## Requirements
 
@@ -21,104 +21,55 @@ A family that is not the author can install WordQuest on their own hardware and 
 - ✓ Learning sessions: composition of relearning/due/new cards, server-side grading (normalization + Damerau-Levenshtein), SM-2 scheduling — existing
 - ✓ Gamification: XP per answer, completion bonus, streaks, level curve — existing
 - ✓ Parent views: learner overview and traffic-light mastery per set — existing
-- ✓ PWA with Workbox runtime cache; server-side `/sessions/sync` endpoint (frontend never calls it — no real offline learning) — existing
-- ✓ Docker Compose deployment with Traefik/Let's Encrypt, daily DB backups, multi-arch images, `setup.sh` for secrets — existing
+- ✓ Docker Compose variants: `docker-compose.quick.yml` (HTTP :8080, trial only today) and `docker-compose.yml` (Traefik + Let's Encrypt DNS-01, daily backups, `setup.sh` for secrets) — existing
 - ✓ CI: build with `/warnaserror`, backend unit tests, frontend lint/typecheck/build, migration presence check — existing
 
 ### Active
 
-**Accounts (current self-hosting practice):**
-- [ ] First-run setup wizard creates owner + tenant when none exists; no default credentials
-- [ ] Demo data seeding is opt-in only (off in production compose)
-- [ ] Guardian can change own password in settings
-- [ ] Password reset via CLI command inside the container (no SMTP dependency)
-- [ ] Owner can invite a second guardian
-- [ ] Guardian can edit a learner (name, PIN reset, daily limit)
-
-**Content:**
-- [ ] Guardian can rename sets and correct entries without losing progress
-- [ ] Guardian can assign sets to individual learners
-
-**Hardening (from `.planning/codebase/CONCERNS.md`):**
-- [ ] Rate limiting per real client IP behind Traefik/nginx (forwarded headers); refresh not sharing the login budget
-- [ ] Invalid session/item IDs return 4xx instead of 500; sync skips-and-reports bad answers
-- [ ] Concurrent answer submissions are safe (concurrency token, 409 instead of 500/lost update)
-- [ ] Secrets fail fast outside Development (no silent `devpassword` fallback)
-- [ ] PIN format validated server-side; payload size/count limits on import and sync
-- [ ] No PII (email) in failed-login logs
-- [ ] Separate liveness/readiness health checks; health not exposed via nginx
-- [ ] Mastery rule in one place in the Learning module (no duplication in endpoints)
-- [ ] Pinned image versions (semver releases, infra images pinned); placeholder image prefix replaced
-- [ ] Off-host backup option and a documented, tested restore procedure
-
-**Privacy (children's data, GDPR good practice):**
-- [ ] Guardian can delete a learner including all learning history
-- [ ] Guardian can export all family data as JSON
-- [ ] Owner can delete the entire tenant/account
-
-**Parent reporting (in-app only):**
-- [ ] History over time (learning time / cards per day and week, streak history)
-- [ ] Problem words (cards with many errors/lapses)
-- [ ] Pre-test view: readiness of a set before a test date
-- [ ] In-app notices (weekly summary, "has not practiced") on the parent dashboard
-
-**Game modes:**
-- [ ] Additional game modes in the frontend. Backend `GameCatalog` already defines `classic`, `wordcatcher`, `memory` and `cram`, but the frontend only uses `classic`. Which modes to ship is open, and research should propose options.
-
-**Quality:**
-- [ ] API integration tests (auth, refresh rotation, tenant + sibling isolation, `MayActFor`) via `WebApplicationFactory`
-- [ ] Frontend test runner + tests for login forms and session flow (edge-case matrix per house rules)
-- [ ] CI checks for pending model changes and applies migrations to Postgres
-- [ ] WCAG 2.2 AA check on touched pages
-
-**Release:**
-- [ ] v1.0 tagged, images published on GHCR, installation/upgrade/backup documentation, and a fresh install by a third party works without help
+See `.planning/REQUIREMENTS.md` (21 v1 requirements):
+- [ ] Setup & accounts: HTTP home-network mode as full operating mode, no demo credentials, parent account created by `setup.sh`, password change, CLI reset, fail-fast secrets
+- [ ] Parent basics: edit child (PIN reset), PIN validation, delete child, edit set/entry
+- [ ] Bug fixes: rate-limit lockout, orphaned learning data, stuck `New` cards, 500s on bad IDs/double taps, stale streak, single mastery rule
+- [ ] Quality: API integration tests on real Postgres; form tests + axe for new forms
+- [ ] Release: `upgrade.sh` with pre-backup, `restore.sh`, one install page, versioned images
 
 ### Out of Scope
 
-- Multiple families on one instance (real multi-tenant SaaS) — the target is one family per self-hosted instance
-- Schools / classes — much stricter GDPR requirements, and not the target audience
-- Passkeys / WebAuthn — deferred, basic auth is sufficient for v1.0
-- OIDC / SSO (Authentik, Authelia, Keycloak) — deferred to after v1.0
-- Email (SMTP) and Web Push notifications — notices are in-app only, which avoids mail server setup for hosters
-- In-app registration for arbitrary users — only first-run owner setup + guardian invite
-- Offline learning (IndexedDB outbox) — deferred to v2; v1.0 requires connectivity
-- PWA install path with domain + DNS-01 as tested v1.0 path — v1.0 documents LAN + self-signed (browser only), PWA path deferred
+- Multiple families per instance — one family per home installation
+- Schools / classes — different audience, much stricter requirements
+- Email / push notifications — no mail infrastructure for non-expert hosters
+- Passkeys / OIDC — not needed for a home-network family app
+- Tracking, leaderboards, streak penalties — pressure on children
+- Deferred to v2 (see REQUIREMENTS.md): set assignment per child, export / delete family, parent reporting, second parent, browser setup wizard, new game modes, offline outbox, domain/PWA path, off-host backups and deeper hardening
 
 ## Context
 
 - Brownfield: modular monolith backend (.NET 10, EF Core 10, Minimal APIs), React 19 + Vite + Tailwind 4 PWA frontend, PostgreSQL 17. Codebase map in `.planning/codebase/` (mapped at `4ce32da`).
-- Concept doc `Documentation/WordQuest_Konzept_und_Architektur.md`, deviations listed in `.planning/codebase/ARCHITECTURE.md` (no Reporting module, no domain events, no frontend game registry, no IndexedDB outbox).
-- Deployment targets: Raspberry Pi 5 / ARM NAS, HTTPS required for PWA install.
+- Concept doc `Documentation/WordQuest_Konzept_und_Architektur.md`; deviations listed in `.planning/codebase/ARCHITECTURE.md`.
+- Research in `.planning/research/` covers a much larger scope (53 requirements); it was cut back deliberately. Its findings stay valid input for v2.
+- `docker-compose.quick.yml` today ships known defaults (`WQ_JWT_SIGNING_KEY` fallback, DB password `wordquest`, `WQ_SEED_DEMO_DATA: "true"`) and no backups. It is labelled as trial only.
+- Frontend never calls `/sessions/sync`, so there is no real offline learning. Without HTTPS the service worker does not register, so the app runs as a plain browser app.
 - Known gaps: the only test project is `backend/tests/WordQuest.Learning.Tests/` (pure domain), and the frontend has no test runner.
-- Current branch `production-readiness`.
 
 ## Constraints
 
-- **Tech stack**: keep .NET 10 / EF Core / React / PostgreSQL / Docker Compose — existing working stack
-- **Architecture**: domain modules stay dependency-free (no NuGet refs), endpoints stay thin, and business logic goes into services/modules (house rule)
-- **Hosting**: must run on ARM64 home hardware with a single API replica, because the startup migration and in-memory rate limiter assume one instance
-- **Security**: tokens stay in localStorage (documented offline trade-off), so the CSP stays strict
-- **Operations**: an operator without developer background must be able to install, upgrade, back up and restore using documentation only
+- **Simplicity**: every addition must keep install/operation doable for parents without special know-how; when in doubt, leave it out
+- **Tech stack**: keep .NET 10 / EF Core / React / PostgreSQL / Docker Compose
+- **Architecture**: domain modules stay dependency-free, endpoints stay thin, business logic in services/modules (house rule)
+- **Hosting**: ARM64 home hardware, single API replica
 - **Accessibility**: WCAG 2.2 AA minimum on all UI changes
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Audience: other families self-hosting, one tenant per instance | Matches existing single-tenant profile picker, no SaaS ops burden | — Pending |
-| Auth scope "basic": setup wizard, password change, CLI reset, guardian invite | Current practice of self-hosted apps (Immich, Jellyfin, Paperless) without mandatory SMTP | — Pending |
-| Notifications in-app only | No mail/push infrastructure for hosters | — Pending |
-| Delete + export in v1.0 | Children's data; a family hosting for itself likely falls under the GDPR household exemption (Art. 2(2)(c)), so framed as good practice, not a compliance promise (no legal review) | — Pending |
-| Documented install path: LAN only, self-signed cert, browser without PWA | Operator's choice; service worker needs a trusted cert, so the app must work fully without SW | — Pending |
-| Offline learning out of v1.0 | Frontend never used `/sessions/sync`; an outbox is substantial extra work | — Pending |
+| Scope cut to a working base (21 requirements, from 53) | The larger scope contradicted the goal of a simple app for non-expert parents | — Pending |
+| Primary operating mode: home network over plain HTTP, no domain | Simplest for non-experts, no certificate warnings; no PWA install (service worker needs HTTPS) | — Pending |
+| Domain + Let's Encrypt compose stays as-is for advanced users | Already exists, not extended in v1.0 | — Pending |
+| Parent account created by `setup.sh` instead of a browser wizard | Home network only; no setup takeover window, same mechanism as CLI reset | — Pending |
 | Mastery threshold ease ≥ 2.1, one constant | Concept doc contradicts itself (2.0 vs 2.1); 2.1 matches current code | — Pending |
-| Sets assigned per learner | Siblings otherwise see and mix each other's vocabulary in reports | — Pending |
-| Setup token generated by `setup.sh`, re-arm via CLI | Prevents setup takeover after CT-log discovery | — Pending |
-| Cram with daily XP cap | Prevents XP farming | — Pending |
-| Which additional game modes ship is decided in the game-mode phase discussion | Operator deferred the choice | — Pending |
-| Core value: secure self-hostability wins trade-offs | v1.0 is a release for third parties | — Pending |
-| Done = v1.0 release a third party can install unaided | Observable release criterion | — Pending |
+| Offline learning, new game modes, reporting deferred to v2 | Not needed for a working base | — Pending |
+| Deletion framed as good practice, not GDPR compliance promise | A family hosting for itself likely falls under the household exemption; no legal review | — Pending |
 
 ## Evolution
 
@@ -138,4 +89,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-24 after requirements definition*
+*Last updated: 2026-09-24 after scope reduction to a working base*
