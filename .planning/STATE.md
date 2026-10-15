@@ -4,10 +4,10 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: planning
-stopped_at: Phase 1 UI-SPEC approved
-last_updated: "2026-10-05T15:42:29.018Z"
-last_activity: 2026-09-24
-last_activity_desc: Roadmap created (3 phases, 21/21 v1 requirements mapped)
+stopped_at: Quick 261006-r7l — FIX-07 umgesetzt und über HTTP belegt; axe-Lauf offen
+last_updated: "2026-10-15T17:00:00Z"
+last_activity: 2026-10-15
+last_activity_desc: Quick 261006-r7l: FIX-07 plus Mandanten-, Retry- und Healthcheck-Defekt behoben, Gate grün
 state_head: 04ac6c492aa5771107e1e4af73b049ea6e8bbe68
 progress:
   total_phases: 3
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 Phase: 1 of 3 (Safe Home-Network Install)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-09-24 — Roadmap created (3 phases, 21/21 v1 requirements mapped)
+Last activity: 2026-10-15 — Quick 261006-r7l: FIX-07 umgesetzt und über HTTP belegt; axe-Lauf offen
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -66,7 +66,13 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- Quick 261006-r7l: axe auf `/lernen` nachholen (Werkzeug-Freigabe nötig), danach Commit nach Freigabe.
+
+### Quick Tasks
+
+| ID | Aufgabe | Stand | Nachweis |
+|----|---------|-------|----------|
+| 261006-r7l | Installer, Container-Secrets und HTTP-Lernen | Umgesetzt; axe-Lauf offen | [Zusammenfassung](quick/261006-r7l-installer-rechte-lesbare-docker-secrets-/261006-r7l-SUMMARY.md) |
 
 ### Blockers/Concerns
 
@@ -83,6 +89,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-05T15:42:29.005Z
-Stopped at: Phase 1 UI-SPEC approved
-Resume file: .planning/phases/01-safe-home-network-install/01-UI-SPEC.md
+Last session: 2026-10-06T17:52:32Z
+Stopped at: Quick 261006-r7l — FIX-07 umgesetzt; axe-Lauf offen
+Resume file: .planning/quick/261006-r7l-installer-rechte-lesbare-docker-secrets-/261006-r7l-SUMMARY.md

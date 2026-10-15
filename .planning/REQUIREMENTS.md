@@ -12,6 +12,7 @@
 - [ ] **SETUP-03**: Parent can change their password in the app
 - [ ] **SETUP-04**: Operator can reset a parent's password with one CLI command inside the container
 - [ ] **SETUP-05**: Outside Development the API refuses to start with missing or default secrets (no `devpassword` / known JWT key fallback)
+- [x] **SETUP-06**: `setup.sh` ist direkt ausführbar; neue und bestehende Secrets bleiben unverändert und sind über read-only Dateimounts für den Non-Root-API-Container lesbar, während das Hostverzeichnis `0700` behält
 
 ### Parent Basics
 
@@ -28,6 +29,7 @@
 - [ ] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
 - [ ] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
 - [ ] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
+- [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart
 
 ### Quality
 
@@ -84,6 +86,7 @@
 | SETUP-03 | Phase 1 | Pending |
 | SETUP-04 | Phase 1 | Pending |
 | SETUP-05 | Phase 1 | Pending |
+| SETUP-06 | Phase 1 / Quick 261006-r7l | Complete |
 | PAR-01 | Phase 1 | Pending |
 | PAR-02 | Phase 1 | Pending |
 | PAR-03 | Phase 2 | Pending |
@@ -94,6 +97,7 @@
 | FIX-04 | Phase 2 | Pending |
 | FIX-05 | Phase 2 | Pending |
 | FIX-06 | Phase 2 | Pending |
+| FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
 | QUAL-01 | Phase 2 | Pending |
 | QUAL-02 | Phase 1 | Pending |
 | REL-01 | Phase 3 | Pending |
@@ -102,10 +106,10 @@
 | REL-04 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 21 total
-- Mapped to phases: 21
+- v1 requirements: 23 total
+- Mapped to phases: 23
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-09-24 after roadmap creation*
+*Last updated: 2026-10-15 — FIX-07 umgesetzt und im Teststack über HTTP belegt; SETUP-01 bleibt offen.*

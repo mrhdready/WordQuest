@@ -606,7 +606,7 @@ Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen 
 
 **Offline-Ablauf:** Session wird aus den lokal vorgehaltenen Karten zusammengestellt. Bewertung erfolgt lokal nach denselben Regeln (die Normalisierungs- und Levenshtein-Logik liegt als geteiltes TypeScript-Modul auch im Client vor — die *Terminierung* jedoch nicht). Antworten gehen in die Outbox. Beim nächsten Online-Kontakt: `POST /sessions/sync`, der Server rechnet `review_state` autoritativ neu, XP und Münzen werden serverseitig vergeben und im Client überschrieben.
 
-**Konfliktregel:** Der Server gewinnt immer bei `review_state`. Bei XP gilt „höherer Wert gewinnt" — ein Kind, das offline gespielt hat, verliert nie Punkte. Doppelte Antworten werden idempotent verworfen (Antworten tragen eine clientseitig erzeugte UUID). Serverseitig bereits umgesetzt: eindeutiger Index auf `session_item.client_answer_id`; ein schon beantwortetes Item liefert das gespeicherte Ergebnis ohne erneute Wertung.
+**Konfliktregel:** Der Server gewinnt immer bei `review_state`. Bei XP gilt „höherer Wert gewinnt" — ein Kind, das offline gespielt hat, verliert nie Punkte. Doppelte Antworten werden idempotent verworfen (der Client schickt als `clientAnswerId` die Id des Session-Items; jede Retry-Karte ist ein eigenes Item mit eigener Id, und `crypto.randomUUID` wird nicht gebraucht, das über reines Heimnetz-HTTP fehlt). Serverseitig bereits umgesetzt: eindeutiger Index auf `session_item.client_answer_id`; ein schon beantwortetes Item liefert das gespeicherte Ergebnis ohne erneute Wertung.
 
 ---
 

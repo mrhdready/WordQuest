@@ -66,7 +66,10 @@ export function SessionPage() {
           itemId: payload.itemId,
           givenAnswer: payload.givenAnswer,
           answerMs: Date.now() - shownAt.current,
-          clientAnswerId: crypto.randomUUID(),
+          // Die Item-ID ist pro Aufgabe eindeutig und stabil: Wiederholtes
+          // Senden wird nicht doppelt gewertet, und crypto.randomUUID fehlt
+          // ueber reines Heimnetz-HTTP.
+          clientAnswerId: payload.itemId,
           hintUsed: false,
         },
       }),

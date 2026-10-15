@@ -60,6 +60,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             Microsoft.Extensions.Options.Options.Create(new AuthOptions { SigningKey = signingKey }),
             TimeProvider.System);
         options.TokenValidationParameters = tokenService.ValidationParameters;
+        // Claims unveraendert lassen: Die Standard-Zuordnung benennt "tid"
+        // in einen langen Claim-Typ um, HttpTenantContext findet den
+        // Mandanten dann nicht und jede Abfrage liefert leere Ergebnisse.
+        options.MapInboundClaims = false;
     });
 
 builder.Services.AddAuthorizationBuilder()

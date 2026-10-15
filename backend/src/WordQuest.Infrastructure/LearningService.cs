@@ -235,7 +235,10 @@ public sealed class LearningService(
                 Position = session.Items.Count == 0 ? 0 : session.Items.Max(i => i.Position) + 1,
                 IsRetry = true,
             };
-            session.Items.Add(retry);
+            // Ausdruecklich als neu registrieren: Die Id ist schon gesetzt,
+            // ueber die Navigation allein haelt EF die Zeile fuer bestehend
+            // und schickt ein UPDATE statt eines INSERT.
+            db.SessionItems.Add(retry);
 
             retryView = BuildItemView(retry, card, game, await BuildChoicesAsync(card, game, ct));
         }

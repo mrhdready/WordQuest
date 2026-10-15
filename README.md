@@ -75,6 +75,10 @@ cd wordquest
 zieht die Images und startet den Stack. Danach ist WordQuest unter
 `https://<dein-host>` erreichbar.
 
+Der Installer schützt das Verzeichnis `secrets/` mit `0700`. Die einzelnen
+Secret-Dateien erhalten `0644`, damit die Container sie als Non-Root-Benutzer
+über ihre read-only Dateimounts lesen können. Vorhandene Inhalte bleiben erhalten.
+
 Was dabei entsteht und **nicht** ins Repository gehört (steht in `.gitignore`):
 
 ```

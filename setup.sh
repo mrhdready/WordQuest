@@ -33,9 +33,11 @@ for name in db_password jwt_key; do
     say "✓ secrets/${name}.txt existiert bereits — unveraendert."
   else
     printf '%s' "$(gen_secret)" > "$f"
-    chmod 600 "$f"
     say "✓ secrets/${name}.txt erzeugt."
   fi
+  # Einzelne read-only Dateimounts muessen fuer den Non-Root-Container lesbar sein.
+  # Das Hostverzeichnis bleibt mit 0700 vor anderen Benutzern geschuetzt.
+  chmod 644 "$f"
 done
 
 # --- .env --------------------------------------------------------------------
