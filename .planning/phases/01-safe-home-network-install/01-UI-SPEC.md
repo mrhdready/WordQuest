@@ -15,9 +15,9 @@ created: "2026-10-01"
 
 **Geltungsbereich (Anforderungen):** SETUP-02 (Login ohne Demo-Konto), SETUP-03 (Passwort ändern), PAR-01 (Kind bearbeiten), PAR-02 (PIN 4–6 Ziffern), QUAL-02 (Formulartests plus axe). Dazu die Terminal-Texte von SETUP-02/-04/-05, weil sie für Laien die erste "Oberfläche" sind.
 
-**Verhältnis zu `DESIGN.md`:** Dieses UI-SPEC ersetzt `DESIGN.md` nicht. Es existiert noch keine `DESIGN.md` (geprüft: `ls DESIGN.md` im Repo-Root, nicht vorhanden). Token-Namen unten (`colors.brand` usw.) sind vorläufig aus `frontend/src/index.css:9-36` abgeleitet. Nach Anlegen der `DESIGN.md` gilt dort der Wert; Abweichungen werden hier nachgezogen. Es gibt keine Hex-Werte im JSX, keine Inline-Styles, keine Einzelfall-`px` (AGENTS.md, Abschnitt Design).
+**Verhältnis zu `DESIGN.md`:** Dieses UI-SPEC ersetzt `DESIGN.md` nicht. `DESIGN.md` existiert seit 2026-10-15 im Repo-Root; dort gilt der Wert. Token-Namen unten (`colors.brand` usw.) stammen aus `frontend/src/index.css:9-36` und gelten bis zum Export; die Zuordnung zu den neuen Namen steht in `DESIGN.md`, Abschnitt "Abweichungen vom Bestand" (A1–A11). Es gibt keine Hex-Werte im JSX, keine Inline-Styles, keine Einzelfall-`px` (AGENTS.md, Abschnitt Design).
 
-**Designrichtung (Entscheidung Projektinhaber, GitHub-Issue #3, 2026-10-01):** Variante A, Grundhaltung der Apple Human Interface Guidelines (Clarity, Deference, Depth; Hierarchy, Harmony, Consistency). Systemschrift, viel Weißraum, runde Ecken, Inhalt im Mittelpunkt, Tippflächen mindestens 44 px. **Liquid Glass ist ausgeschlossen**, auch als Akzent (im Bestand nicht vorhanden: `grep backdrop|blur|glass frontend/src` ohne Treffer). **Offen:** ob der Stil vom Bestand abweichen soll, siehe "Offene Fragen" Q1. Bis zur Antwort gilt der Bestand als Ausgangspunkt.
+**Designrichtung (Entscheidung Projektinhaber, GitHub-Issue #3, 2026-10-01):** Variante A, Grundhaltung der Apple Human Interface Guidelines (Clarity, Deference, Depth; Hierarchy, Harmony, Consistency). Systemschrift, viel Weißraum, runde Ecken, Inhalt im Mittelpunkt, Tippflächen mindestens 44 px. **Liquid Glass ist ausgeschlossen**, auch als Akzent (im Bestand nicht vorhanden: `grep backdrop|blur|glass frontend/src` ohne Treffer). Stil darf vom Bestand abweichen (Issue #3); Abweichungen stehen in `DESIGN.md` (A2–A11).
 
 ---
 
@@ -104,6 +104,8 @@ Genau 4 Größen, genau 2 Gewichte. Alles in `rem` (Tailwind), keine festen `px`
 
 Gewichte nur 400 und 600. Abweichung vom Bestand siehe "Gegenüberstellung Bestand ↔ Contract", D3 und D4.
 
+**Überholt 2026-10-15:** Maßgeblich sind die Schriftstufen in `DESIGN.md` (`typography`) mit den Gewichten 400/600/700/800 (Q1). Die Tabelle oben ist beim nächsten UI-Check daran anzugleichen.
+
 ---
 
 ## Color
@@ -114,9 +116,9 @@ Aufteilung 60/30/10. Hex aus den oklch-Werten berechnet (Rundung ±1). Token-Nam
 |------|-------|-------|
 | Dominant (60%) | `colors.surface` oklch(0.99 0.004 265) = #fafcff, Text `colors.ink` #141a29 (16,9:1) | Seitenhintergrund |
 | Secondary (30%) | `colors.surface-raised` #ffffff, `colors.brand-soft` #e5efff, Kartenrand `colors.border-subtle` #dfe1e7 | Karten, Tab-Leiste inaktiv, Hover-Flächen. Nebentext `colors.ink-soft` #585e69 (6,4:1 auf surface) |
-| Accent (10%) | `colors.brand`, **Soll** oklch(0.53 0.17 265) ≈ #3a63cd (weiß darauf 5,45:1). Bestand oklch(0.58 …) = #4873de, weiß darauf 4,41:1, siehe Q2 | Siehe Liste unten |
-| Destructive | `colors.danger`, **Soll** oklch(0.50 0.18 25) ≈ #b32228 (5,63:1 auf `danger-soft`, 6,59:1 auf weiß). Bestand oklch(0.60 …) = #d74745, 3,68:1 auf `danger-soft` | Fehlertext in `ErrorNote` und `Field`; in Phase 1 keine zerstörerische Aktion (Löschen kommt in Phase 2) |
-| Control border (neu) | `colors.border-control` oklch(0.64 0.01 265) ≈ #898c92 (3,36:1 auf weiß, 3,27:1 auf surface) | Rand von `Input`/`Textarea`. Bestand nutzt `border-subtle`, 1,31:1 (`input.tsx:11`) und verfehlt WCAG 1.4.11 (3:1) |
+| Accent (10%) | `colors.primary` (DESIGN.md) = oklch(0.47 0.18 265) ≈ #274fbe, bisher `brand-strong` (Entscheidung A5, 2026-10-15; ersetzt Soll 0.53). Bestand `brand` oklch(0.58 …) = #4873de, weiß darauf 4,41:1 | Siehe Liste unten |
+| Destructive | `colors.danger-text` (DESIGN.md) = oklch(0.48 0.18 25) ≈ #ac1922 auf `surface-error` (Entscheidung A6; ersetzt Soll 0.50). Bestand oklch(0.60 …) = #d74745, 3,68:1 auf `danger-soft` | Fehlertext in `ErrorNote` und `Field`; in Phase 1 keine zerstörerische Aktion (Löschen kommt in Phase 2) |
+| Control border (neu) | `colors.border-control` (DESIGN.md) = oklch(0.55 0.03 265), 4,86:1 auf weiß (Entscheidung A11; ersetzt 0.64 mit 3,36:1) | Rand von `Input`/`Textarea`. Bestand nutzt `border-subtle`, 1,31:1 (`input.tsx:11`) und verfehlt WCAG 1.4.11 (3:1) |
 
 Accent reserved for:
 1. der eine `primary`-Button je Formular ("Passwort ändern", "Änderungen speichern", "Anmelden", "Los geht’s")
@@ -165,8 +167,8 @@ Passwort ändern (Seite `/verwalten/konto`, `CardTitle` "Passwort ändern"):
 |--------------|--------------|-----------|-----------|------------|
 | Aktuelles Passwort | `current-password` | – | leer | Bitte gib dein aktuelles Passwort ein. |
 | | | | falsch (Server) | Das aktuelle Passwort stimmt nicht. |
-| Neues Passwort | `new-password` | Mindestens 10 Zeichen. | leer | Bitte gib ein neues Passwort ein. |
-| | | | zu kurz | Das neue Passwort muss mindestens 10 Zeichen lang sein. |
+| Neues Passwort | `new-password` | Mindestens 8 Zeichen. | leer | Bitte gib ein neues Passwort ein. |
+| | | | zu kurz | Das neue Passwort muss mindestens 8 Zeichen lang sein. |
 | Neues Passwort wiederholen | `new-password` | – | leer | Bitte wiederhole das neue Passwort. |
 | | | | weicht ab | Die beiden neuen Passwörter stimmen nicht überein. |
 
@@ -192,8 +194,8 @@ Kinderliste (`/verwalten/kinder`): `CardTitle` "Kinder". Zeile: Avatar (`aria-hi
 |--------|------|
 | Frage E-Mail | E-Mail-Adresse für dein Elternkonto: |
 | E-Mail ungültig | Das sieht nicht nach einer E-Mail-Adresse aus. Bitte noch einmal. |
-| Frage Passwort (Eingabe unsichtbar, `read -s`) | Passwort für dein Elternkonto (mindestens 10 Zeichen, die Eingabe bleibt unsichtbar): |
-| Passwort zu kurz | Das Passwort muss mindestens 10 Zeichen lang sein. |
+| Frage Passwort (Eingabe unsichtbar, `read -s`) | Passwort für dein Elternkonto (mindestens 8 Zeichen, die Eingabe bleibt unsichtbar): |
+| Passwort zu kurz | Das Passwort muss mindestens 8 Zeichen lang sein. |
 | Wiederholung | Passwort wiederholen: |
 | Weicht ab | Die beiden Passwörter stimmen nicht überein. Bitte noch einmal. |
 | Abschluss Heimnetz | Fertig. WordQuest läuft unter: http://{host}:8080 — Melde dich dort mit {E-Mail} und deinem Passwort an. Tägliche Sicherungen liegen in: {Sicherungsordner}. (Der Demo-Zugang-Block aus `setup.sh:90-95` entfällt.) |
@@ -201,7 +203,7 @@ Kinderliste (`/verwalten/kinder`): `CardTitle` "Kinder". Zeile: Avatar (`aria-hi
 | Reset-Befehl, Erfolg | Das Passwort für {E-Mail} wurde geändert. Melde dich damit an und ändere es unter "Konto". |
 | Reset-Befehl, Konto unbekannt | Es gibt kein Elternkonto mit dieser E-Mail-Adresse. |
 
-Die Mindestlänge steht an **einer** Stelle (Server) und wird von App, `setup.sh` und Reset-Befehl gleich genannt. Die Zahl 10 ist ein Vorschlag, siehe Q4. `{Sicherungsordner}` und die Frage, ob der Reset-Befehl fragt oder ein Passwort erzeugt, sind `UNBEKANNT`, siehe Q5.
+Die Mindestlänge steht an **einer** Stelle (Server) und wird von App, `setup.sh` und Reset-Befehl gleich genannt. Die Zahl 8 ist entschieden (Q4, 2026-10-15). `{Sicherungsordner}` und die Frage, ob der Reset-Befehl fragt oder ein Passwort erzeugt, sind `UNBEKANNT`, siehe Q5.
 
 ---
 
@@ -295,12 +297,12 @@ Nichts wird still überschrieben (AGENTS.md). Jede Abweichung steht hier mit Fun
 
 | # | Bestand (Datei:Zeile) | Contract | Grund | Freigabe |
 |---|-----------------------|----------|-------|----------|
-| D1 | `--color-brand: oklch(0.58 0.17 265)` (`index.css:17`) | oklch(0.53 0.17 265) | weiß auf brand 4,41 → 5,45:1 (axe `color-contrast`) | Q2 |
-| D2 | `--color-danger: oklch(0.6 0.18 25)` (`index.css:25`) | oklch(0.50 0.18 25) | `ErrorNote` 3,68 → 5,63:1; `Button danger` 4,31 → 6,59:1 | Q2 |
-| D3 | `CardTitle` `text-lg font-bold` (`card.tsx:21`), Seitenüberschrift `text-xl font-bold` (`ManageLayout.tsx:19`) | 20 px, Gewicht 600 | Typografie: genau 4 Größen und 2 Gewichte (18 px fällt weg, bold wird semibold) | Q1 |
-| D4 | `ErrorNote` `font-medium` (`misc.tsx:67`), `Label` `font-semibold` (`misc.tsx:8`) | `ErrorNote` 600, Label 600 | nur Gewichte 400/600 | Q1 |
-| D5 | `Input` Rand `border-border-subtle` (`input.tsx:8`) | `border-border-control` (neues Token) | 1,31 → 3,36:1 (WCAG 1.4.11) | Q2 |
-| D6 | `Input` `focus:outline-none` + `focus:border-brand` (`input.tsx:11`) | globaler `:focus-visible`-Ring | gleiches, deutliches Fokusbild für alle Bedienelemente | Q2 |
+| D1 | `--color-brand: oklch(0.58 0.17 265)` (`index.css:17`) | `primary` oklch(0.47 0.18 265) | weiß auf brand 4,41:1 → deutlich über 4,5:1 (axe `color-contrast`) | Q2 ✓ (A5) |
+| D2 | `--color-danger: oklch(0.6 0.18 25)` (`index.css:25`) | `danger-text` oklch(0.48 0.18 25) auf `surface-error` | `ErrorNote` 3,68:1 → über 4,5:1 (Lint ohne Kontrast-Warnung) | Q2 ✓ (A6) |
+| D3 | `CardTitle` `text-lg font-bold` (`card.tsx:21`), Seitenüberschrift `text-xl font-bold` (`ManageLayout.tsx:19`) | ~~20 px, Gewicht 600~~ überholt: Stufen und Gewichte laut `DESIGN.md` | Typografie: genau 4 Größen und 2 Gewichte (18 px fällt weg, bold wird semibold) | Q1 |
+| D4 | `ErrorNote` `font-medium` (`misc.tsx:67`), `Label` `font-semibold` (`misc.tsx:8`) | `ErrorNote` 600, Label 600 | ~~nur Gewichte 400/600~~ überholt: 400/600/700/800 laut `DESIGN.md` | Q1 ✓ |
+| D5 | `Input` Rand `border-border-subtle` (`input.tsx:8`) | 1 px `border-control` (0.55) | 1,31:1 → ≥ 3:1 (WCAG 1.4.11), im Rendering zu belegen | Q2 ✓ (A11) |
+| D6 | `Input` `focus:outline-none` + `focus:border-brand` (`input.tsx:11`) | globaler `:focus-visible`-Ring, 3 px `primary` | gleiches, deutliches Fokusbild für alle Bedienelemente | Q2 ✓ (A10) |
 | D7 | Viewport `maximum-scale=1.0, user-scalable=no` (`index.html:8`) | entfernt | WCAG 1.4.4, 200 % Zoom | keine (Pflicht) |
 | D8 | Tab-Leiste ohne Umbruch (`ManageLayout.tsx:27`), `Outlet` in `div` (`:48`) | `flex-wrap`, `<main>`, `aria-label` | 4 Tabs bei 320 px; Landmarken | keine (Pflicht) |
 | D9 | Auto-Absenden bei 4 Ziffern (`ProfilePickerPage.tsx:12,51-54`) | Taste "Los geht’s", 4–6 Ziffern | PAR-02 | keine (folgt aus PAR-02) |
@@ -314,7 +316,7 @@ Nichts wird still überschrieben (AGENTS.md). Jede Abweichung steht hier mit Fun
 | Randstärke | `border-2` an Input und Outline-Button (`input.tsx:8`, `button.tsx:16`) | 1 px, Fläche statt Rahmen | alle Eingaben und Buttons wirken leichter; Kontrastziel 3:1 bleibt Pflicht |
 | Schwere Gewichte | `font-black` für Kennzahlen (`ProgressPage.tsx:138`), `font-bold` allgemein | nur 400/600 | betrifft Seiten außerhalb von Phase 1 |
 
-Kein Liquid Glass, kein Blur, keine Transparenz-Effekte als Akzent.
+Kein Liquid Glass, kein Blur, keine Transparenz-Effekte als Akzent. Entschieden 2026-10-15 (`DESIGN.md`): Schrift `-apple-system` zuerst (A9), 1 px `border-control` an Feldern (A11). Gewichte 400/600/700/800 (Q1).
 
 ---
 
@@ -322,14 +324,14 @@ Kein Liquid Glass, kein Blur, keine Transparenz-Effekte als Akzent.
 
 | # | Frage | Default im Contract | Wirkung |
 |---|-------|---------------------|---------|
-| Q1 | Soll der Stil von Variante A vom Bestand abweichen (Schrift, Randstärke, Gewichte)? Offen laut Issue #3. | Bestand bleibt; nur D3/D4 (Gewichte und Größen auf den Phase-1-Seiten) | Ohne Antwort bleibt alles Weitere unberührt |
-| Q2 | Dürfen die Tokens zentral geändert werden (brand, danger, neues `border-control`, globaler Fokusring)? Ohne das sind 0 axe-Verstöße auf den Phase-1-Seiten nicht erreichbar. | ja, über `DESIGN.md` und `npx @google/design.md export --format css-tailwind` | Wirkt auf alle Seiten, auch Lernbereich (brand wird dunkler) |
-| Q3 | Wie entsteht auf einer frischen Installation das erste Kind? Ohne Demo-Konto gibt es keines, und im Frontend existiert keine Anlegen-Funktion (`POST /api/v1/learners` hat keine Oberfläche). Keine v1-Anforderung deckt das ab. | Empfehlung: Kind anlegen im selben Formular (gleiche Felder, Modus "Anlegen", PIN Pflicht), Button "Kind anlegen". Sonst kann kein Elternteil das Erfolgskriterium 4 erreichen. | Scope-Erweiterung, braucht Freigabe (AGENTS.md) |
-| Q4 | Passwort-Mindestlänge: im Backend nicht geregelt (`grep` in `backend/src` ohne Treffer). | 10 Zeichen | gilt für App, `setup.sh`, Reset-Befehl |
-| Q5 | Reset-Befehl: fragt er nach dem neuen Passwort, oder erzeugt er eines und druckt es? `UNBEKANNT` in ROADMAP/REQUIREMENTS ("logs in with the result"). | Empfehlung: erzeugt ein Passwort und druckt es einmal (kein Tippen im Container-Terminal); Text oben ist dafür geschrieben | Copy der Terminal-Zeile |
-| Q6 | Terminal-Texte mit echten Umlauten? `setup.sh` schreibt bisher "fuer", "laeuft" (Bestand), druckt aber schon `✓` und `…` (UTF-8 wird vorausgesetzt). | echte Umlauten in neuen Zeilen | Mischung im Skript, oder einmal alles angleichen |
-| Q7 | `warn` und `success` als Textfarbe verfehlen 4,5:1 (1,98:1 auf `warn-soft`, 2,99:1 auf `success-soft`; `index.css:21,23`), kommen in Phase 1 nicht vor, aber `DESIGN.md`-Lint meldet Kontrast als blockierend. | nicht in Phase 1 ändern, in `DESIGN.md` als bekannte Lücke eintragen | betrifft Lernbereich (`LearnHomePage.tsx:55`, `SessionPage.tsx:222`) |
-| Q8 | Sollen die Abstandsstufen 12 px und 20 px auf die Scale 4/8/16/24/32/48/64 umgestellt werden? Beide Fundstellen: **Bestand** `*-3` (12 px) und `*-5` (20 px), Dateien und Zeilen in "Spacing Scale", Benannte Ausnahmen (25 und 22 Treffer, `card.tsx:17,29,33`, `button.tsx:24`, `ManageLayout.tsx:16`, `misc.tsx:67` u. a.). **Vorschlag** dieses Specs: 12 → 8 oder 16 und 20 → 16 oder 24. Konkret würde `Card` von 20 auf 16 oder 24 px Innenabstand wechseln und jeder Seitenrand mit. Nicht standardisiert und hier nicht deklariert sind außerdem 28 px (`button.tsx:25`) und 40 px (`ProfilePickerPage.tsx:94`, `SessionPage.tsx:151,248`). | Bestand bleibt (Ausgangspunkt laut Issue #3); Scale bleibt rein, 12/20 sind benannte Ausnahmen | Umstellung wirkt auf alle Seiten inkl. Lernbereich, braucht Freigabe und läuft zentral über `DESIGN.md` |
+| Q1 | Soll der Stil von Variante A vom Bestand abweichen (Schrift, Randstärke, Gewichte)? **Teilweise beantwortet 2026-10-15:** Schrift und Ränder ja (`DESIGN.md` A9, A11), Gewichte 400/600/700/800 laut `DESIGN.md`. | Bestand bleibt; nur D3/D4 (Gewichte und Größen auf den Phase-1-Seiten) | Ohne Antwort bleibt alles Weitere unberührt |
+| Q2 | Dürfen die Tokens zentral geändert werden (brand, danger, neues `border-control`, globaler Fokusring)? Ohne das sind 0 axe-Verstöße auf den Phase-1-Seiten nicht erreichbar. **Beantwortet 2026-10-15: ja** (`DESIGN.md` A5, A6, A10, A11). | ja, über `DESIGN.md` und `npx @google/design.md export --format css-tailwind` | Wirkt auf alle Seiten, auch Lernbereich (brand wird dunkler) |
+| Q3 | Wie entsteht auf einer frischen Installation das erste Kind? Ohne Demo-Konto gibt es keines, und im Frontend existiert keine Anlegen-Funktion (`POST /api/v1/learners` hat keine Oberfläche). Keine v1-Anforderung deckt das ab. **Beantwortet 2026-10-15: eigene v1-Anforderung** (wie in Issue #3 angehakt; Eintrag in `REQUIREMENTS.md` steht noch aus). | Empfehlung: Kind anlegen im selben Formular (gleiche Felder, Modus "Anlegen", PIN Pflicht), Button "Kind anlegen". Sonst kann kein Elternteil das Erfolgskriterium 4 erreichen. | Scope-Erweiterung, braucht Freigabe (AGENTS.md) |
+| Q4 | Passwort-Mindestlänge: im Backend nicht geregelt (`grep` in `backend/src` ohne Treffer). **Beantwortet 2026-10-15: 8 Zeichen.** | 8 Zeichen | gilt für App, `setup.sh`, Reset-Befehl |
+| Q5 | Reset-Befehl: fragt er nach dem neuen Passwort, oder erzeugt er eines und druckt es? `UNBEKANNT` in ROADMAP/REQUIREMENTS ("logs in with the result"). **Beantwortet 2026-10-15: erzeugt und druckt einmal.** | Empfehlung: erzeugt ein Passwort und druckt es einmal (kein Tippen im Container-Terminal); Text oben ist dafür geschrieben | Copy der Terminal-Zeile |
+| Q6 | Terminal-Texte mit echten Umlauten? `setup.sh` schreibt bisher "fuer", "laeuft" (Bestand), druckt aber schon `✓` und `…` (UTF-8 wird vorausgesetzt). **Beantwortet 2026-10-15: echte Umlaute, bestehende Zeilen einmal angleichen.** | echte Umlauten in neuen Zeilen | Mischung im Skript, oder einmal alles angleichen |
+| Q7 | `warn` und `success` als Textfarbe verfehlen 4,5:1 (1,98:1 auf `warn-soft`, 2,99:1 auf `success-soft`; `index.css:21,23`), kommen in Phase 1 nicht vor, aber `DESIGN.md`-Lint meldet Kontrast als blockierend. **Beantwortet 2026-10-15:** dunkle `*-text`-Töne (`DESIGN.md` A6), Lint ohne Kontrast-Warnung. | nicht in Phase 1 ändern, in `DESIGN.md` als bekannte Lücke eintragen | betrifft Lernbereich (`LearnHomePage.tsx:55`, `SessionPage.tsx:222`) |
+| Q8 | Sollen die Abstandsstufen 12 px und 20 px auf die Scale 4/8/16/24/32/48/64 umgestellt werden? **Beantwortet 2026-10-15: umstellen** (Issue #3; `DESIGN.md` A12). Beide Fundstellen: **Bestand** `*-3` (12 px) und `*-5` (20 px), Dateien und Zeilen in "Spacing Scale", Benannte Ausnahmen (25 und 22 Treffer, `card.tsx:17,29,33`, `button.tsx:24`, `ManageLayout.tsx:16`, `misc.tsx:67` u. a.). **Vorschlag** dieses Specs: 12 → 8 oder 16 und 20 → 16 oder 24. Konkret würde `Card` von 20 auf 16 oder 24 px Innenabstand wechseln und jeder Seitenrand mit. Nicht standardisiert und hier nicht deklariert sind außerdem 28 px (`button.tsx:25`) und 40 px (`ProfilePickerPage.tsx:94`, `SessionPage.tsx:151,248`). | Bestand bleibt (Ausgangspunkt laut Issue #3); Scale bleibt rein, 12/20 sind benannte Ausnahmen | Umstellung wirkt auf alle Seiten inkl. Lernbereich, braucht Freigabe und läuft zentral über `DESIGN.md` |
 
 ---
 
@@ -367,4 +369,4 @@ Apple Human Interface Guidelines (laut Entscheidung Issue #3). Die Seiten wurden
 - [x] Dimension 6 Registry Safety: PASS
 - [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** Checker VERIFIED 2026-10-01 nach Revision 1. Offene Fragen Q1 bis Q8 sind vor der Planung zu klären; Q2 und Q3 liegen beim Owner (Issue #3).
+**Approval:** Checker VERIFIED 2026-10-01 nach Revision 1. Revision 2026-10-15 (Antworten Q1–Q8, `DESIGN.md`) ist noch nicht geprüft; UI-Checker vor der Planung neu laufen lassen. Offene Fragen Q1 bis Q8 sind vor der Planung zu klären; Q2 und Q3 liegen beim Owner (Issue #3).
