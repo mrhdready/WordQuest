@@ -18,6 +18,7 @@
 
 - [ ] **PAR-01**: Parent can edit a child (name, reset PIN, daily new-card limit)
 - [ ] **PAR-02**: PIN must be 4–6 digits (validated server-side)
+- [ ] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
 - [ ] **PAR-03**: Parent can delete a child including all learning history
 - [ ] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
 
@@ -28,8 +29,14 @@
 - [ ] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
 - [ ] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
 - [ ] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
+- [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace, Enter), not only by tapping
+- [ ] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
 - [ ] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
 - [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart
+
+### Design
+
+- [ ] **DESIGN-01**: The frontend follows `DESIGN.md` (Liquid Glass with opaque fallback): Tailwind theme exported from `DESIGN.md`, UI components and pages use only its tokens, axe 0 WCAG 2.2 AA violations on every page
 
 ### Quality
 
@@ -89,6 +96,8 @@
 | SETUP-06 | Phase 1 / Quick 261006-r7l | Complete |
 | PAR-01 | Phase 1 | Pending |
 | PAR-02 | Phase 1 | Pending |
+| PAR-05 | Phase 1 | Pending |
+| DESIGN-01 | Phase 1 | Pending |
 | PAR-03 | Phase 2 | Pending |
 | PAR-04 | Phase 2 | Pending |
 | FIX-01 | Phase 2 | Pending |
@@ -97,6 +106,8 @@
 | FIX-04 | Phase 2 | Pending |
 | FIX-05 | Phase 2 | Pending |
 | FIX-06 | Phase 2 | Pending |
+| FIX-08 | Phase 2 | Pending |
+| FIX-09 | Phase 2 | Pending |
 | FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
 | QUAL-01 | Phase 2 | Pending |
 | QUAL-02 | Phase 1 | Pending |
@@ -106,10 +117,10 @@
 | REL-04 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 23 total
-- Mapped to phases: 23
+- v1 requirements: 27 total
+- Mapped to phases: 27
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-15 — FIX-07 umgesetzt und im Teststack über HTTP belegt; SETUP-01 bleibt offen.*
+*Last updated: 2026-10-15 — PAR-05 (UI-SPEC Q3), DESIGN-01 (Liquid Glass), FIX-08 und FIX-09 auf Freigabe von Dennis ergänzt.*

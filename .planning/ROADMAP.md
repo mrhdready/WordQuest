@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Goal**: A parent installs WordQuest in the home network over plain HTTP with their own account, generated secrets and daily backups, and can recover their own password and a child's forgotten PIN without help
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
-**Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05, SETUP-06, FIX-07, PAR-01, PAR-02, QUAL-02
+**Requirements**: DESIGN-01, SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05, SETUP-06, FIX-07, PAR-01, PAR-02, PAR-05, QUAL-02
 **Success Criteria** (what must be TRUE):
   1. On a fresh host, `setup.sh` in home-network mode asks for the parent's email and password and generates DB password and JWT key; after start the parent logs in at `http://<host>:8080` with exactly that account, and no demo account exists
   2. The home-network stack writes a daily database dump to the backup directory, and outside Development the API refuses to start (clear error naming the secret) when the DB password or JWT key is missing or a known default
@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Goal**: Children learn without lockouts, crashes, stuck cards or wrong numbers, and a parent can delete a child or correct sets and entries without orphaned data or lost progress, proven by integration tests against real PostgreSQL
 **Mode:** mvp
 **Depends on**: Phase 1
-**Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06, PAR-03, PAR-04, QUAL-01
+**Requirements**: FIX-01, FIX-02, FIX-03, FIX-04, FIX-05, FIX-06, FIX-08, FIX-09, PAR-03, PAR-04, QUAL-01
 **Success Criteria** (what must be TRUE):
   1. When one family member mistypes their login repeatedly, the others can still log in from their own devices, and token refresh during normal learning never counts against the login limit
   2. A card that was shown but not answered comes back in a later session instead of staying `New`; a double tap on an answer or an invalid session/item ID yields a clean 4xx/409 response and a readable message, never a 500
