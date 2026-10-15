@@ -17,7 +17,7 @@ created: "2026-10-01"
 
 **Verhältnis zu `DESIGN.md`:** Dieses UI-SPEC ersetzt `DESIGN.md` nicht. `DESIGN.md` existiert seit 2026-10-15 im Repo-Root; dort gilt der Wert. Token-Namen unten (`colors.brand` usw.) stammen aus `frontend/src/index.css:9-36` und gelten bis zum Export; die Zuordnung zu den neuen Namen steht in `DESIGN.md`, Abschnitt "Abweichungen vom Bestand" (A1–A11). Es gibt keine Hex-Werte im JSX, keine Inline-Styles, keine Einzelfall-`px` (AGENTS.md, Abschnitt Design).
 
-**Designrichtung (Entscheidung Projektinhaber, GitHub-Issue #3, 2026-10-01):** Variante A, Grundhaltung der Apple Human Interface Guidelines (Clarity, Deference, Depth; Hierarchy, Harmony, Consistency). Systemschrift, viel Weißraum, runde Ecken, Inhalt im Mittelpunkt, Tippflächen mindestens 44 px. **Liquid Glass ist ausgeschlossen**, auch als Akzent (im Bestand nicht vorhanden: `grep backdrop|blur|glass frontend/src` ohne Treffer). Stil darf vom Bestand abweichen (Issue #3); Abweichungen stehen in `DESIGN.md` (A2–A11).
+**Designrichtung (Entscheidung Projektinhaber, GitHub-Issue #3, 2026-10-01):** Variante A, Grundhaltung der Apple Human Interface Guidelines (Clarity, Deference, Depth; Hierarchy, Harmony, Consistency). Systemschrift, viel Weißraum, runde Ecken, Inhalt im Mittelpunkt, Tippflächen mindestens 44 px. **Liquid Glass für alles**, mit deckendem Fallback bei `prefers-reduced-transparency` und ohne `backdrop-filter` (Rücksprache mit Owner @mrhdready, 2026-10-15; ersetzt den Ausschluss aus Issue #3; im Bestand noch nicht vorhanden: `grep backdrop|blur|glass frontend/src` ohne Treffer). Stil darf vom Bestand abweichen (Issue #3); Abweichungen stehen in `DESIGN.md` (A1–A12).
 
 ---
 
@@ -118,7 +118,7 @@ Aufteilung 60/30/10. Hex aus den oklch-Werten berechnet (Rundung ±1). Token-Nam
 | Secondary (30%) | `colors.surface-raised` #ffffff, `colors.brand-soft` #e5efff, Kartenrand `colors.border-subtle` #dfe1e7 | Karten, Tab-Leiste inaktiv, Hover-Flächen. Nebentext `colors.ink-soft` #585e69 (6,4:1 auf surface) |
 | Accent (10%) | `colors.primary` (DESIGN.md) = oklch(0.47 0.18 265) ≈ #274fbe, bisher `brand-strong` (Entscheidung A5, 2026-10-15; ersetzt Soll 0.53). Bestand `brand` oklch(0.58 …) = #4873de, weiß darauf 4,41:1 | Siehe Liste unten |
 | Destructive | `colors.danger-text` (DESIGN.md) = oklch(0.48 0.18 25) ≈ #ac1922 auf `surface-error` (Entscheidung A6; ersetzt Soll 0.50). Bestand oklch(0.60 …) = #d74745, 3,68:1 auf `danger-soft` | Fehlertext in `ErrorNote` und `Field`; in Phase 1 keine zerstörerische Aktion (Löschen kommt in Phase 2) |
-| Control border (neu) | `colors.border-control` (DESIGN.md) = oklch(0.55 0.03 265), 4,86:1 auf weiß (Entscheidung A11; ersetzt 0.64 mit 3,36:1) | Rand von `Input`/`Textarea`. Bestand nutzt `border-subtle`, 1,31:1 (`input.tsx:11`) und verfehlt WCAG 1.4.11 (3:1) |
+| Control border (neu) | `colors.border-control` (DESIGN.md) = oklch(0.55 0.03 265), 4,86:1 auf weiß (Entscheidung A11; ersetzt 0.64 mit 3,36:1, auf Glas unter 3:1); auf Glas im Rendering zu belegen | Rand von `Input`/`Textarea`. Bestand nutzt `border-subtle`, 1,31:1 (`input.tsx:11`) und verfehlt WCAG 1.4.11 (3:1) |
 
 Accent reserved for:
 1. der eine `primary`-Button je Formular ("Passwort ändern", "Änderungen speichern", "Anmelden", "Los geht’s")
@@ -316,7 +316,7 @@ Nichts wird still überschrieben (AGENTS.md). Jede Abweichung steht hier mit Fun
 | Randstärke | `border-2` an Input und Outline-Button (`input.tsx:8`, `button.tsx:16`) | 1 px, Fläche statt Rahmen | alle Eingaben und Buttons wirken leichter; Kontrastziel 3:1 bleibt Pflicht |
 | Schwere Gewichte | `font-black` für Kennzahlen (`ProgressPage.tsx:138`), `font-bold` allgemein | nur 400/600 | betrifft Seiten außerhalb von Phase 1 |
 
-Kein Liquid Glass, kein Blur, keine Transparenz-Effekte als Akzent. Entschieden 2026-10-15 (`DESIGN.md`): Schrift `-apple-system` zuerst (A9), 1 px `border-control` an Feldern (A11). Gewichte 400/600/700/800 (Q1).
+Liquid Glass für alle Flächen (`DESIGN.md` A1, Elevation & Depth: Blur 28 px, Pflicht-Fallback `glass-opaque`). Text nur auf Glas ab `glass` (50 %) oder deckend; Kontrast im echten Rendering per axe belegen. Entschieden 2026-10-15 (`DESIGN.md`): Schrift `-apple-system` zuerst (A9), 1 px `border-control` an Feldern (A11). Gewichte 400/600/700/800 (Q1).
 
 ---
 
