@@ -106,7 +106,7 @@
 | FIX-04 | Phase 2 | Pending |
 | FIX-05 | Phase 2 | Pending |
 | FIX-06 | Phase 2 | Pending |
-| FIX-08 | Phase 2 | Pending |
+| FIX-08 | Phase 1 | Pending |
 | FIX-09 | Phase 2 | Pending |
 | FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
 | QUAL-01 | Phase 2 | Pending |

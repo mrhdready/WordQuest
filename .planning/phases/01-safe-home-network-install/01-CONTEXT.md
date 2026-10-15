@@ -35,6 +35,15 @@ Ein Elternteil installiert WordQuest im Heimnetz über HTTP mit eigenem Konto, e
 - **D-11:** Formular-Tests mit Edge-Case-Matrix (ein Feld falsch, rotieren; exakte Fehlertexte; Enter-Submit eigener Pfad; Happy Path zuletzt) und axe 0 Verstöße (WCAG 2.2 AA) auf jeder berührten Seite, plus Tastatur-Durchgang und 200 % Zoom.
 - **D-12:** Backend-Tests wie im Bestand: Unit-Tests für Domänenlogik, Integrationstests mit `WebApplicationFactory` gegen echtes PostgreSQL. Gate läuft in Docker (`mcr.microsoft.com/dotnet/sdk:10.0`, `node:22-alpine`), weil der Host kein .NET-SDK hat.
 
+### Nach der Recherche (2026-10-16)
+- **D-13:** Zusätzlich freigegebene Dependencies: `Microsoft.AspNetCore.Mvc.Testing` (neues Integrationstest-Projekt gegen echtes PostgreSQL) und `@testing-library/dom` (Peer von `@testing-library/react`).
+- **D-14:** FIX-08 (Ziffernfeld per Tastatur) wandert nach Phase 1, weil `ProfilePickerPage` für PAR-02/D9 ohnehin umgebaut wird.
+- **D-15:** Kindernamen über 100 Zeichen lehnt der Server mit 400 ab (heute 500): Fehlertext "Der Name darf höchstens 100 Zeichen lang sein." Die UI-SPEC-Aussage "kein Limit" gilt damit nicht mehr.
+- **D-16:** Demo-Seed bleibt als Entwickler-Option (`WQ_SEED_DEMO_DATA`), ist im Heimnetz-Betrieb aus. Kein `--domain`-Schalter in Phase 1 (TLS-Weg ist v2, OPS2-01). `setup.sh` wird per Repo-Klon genutzt.
+- **D-17:** Anzeigename des Elternkontos: `setup.sh` fragt ihn nicht ab; Standard "Eltern".
+- **D-18:** Prüfung neuer Passwörter gegen Listen häufiger Passwörter ist nicht Teil von v1; als bekannte Lücke dokumentieren.
+- **D-19:** Glas-Kontrast wird zusätzlich zum normalen axe-Lauf mit einfarbigem Hintergrund je Backdrop-Farbe geprüft (axe stuft Verläufe als "nicht prüfbar" ein). `primary` als Text auf `glass-clear` ist verboten (3,88:1).
+
 ### Claude's Discretion
 - Schnitt der Pläne nach Plan 1, Reihenfolge der Backend-Arbeiten, Form des Backup-Containers (Rahmen: einfach für Laien, keine neue Infrastruktur über Docker Compose hinaus).
 
