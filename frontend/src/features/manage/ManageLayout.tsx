@@ -23,10 +23,10 @@ export function ManageLayout() {
   return (
     <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-screen-margin pt-screen-top safe-top safe-bottom">
       <header className="mb-6 flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="type-large-title">WordQuest</h1>
           {/* text-ink statt ink-soft: steht direkt auf dem Backdrop (ink-soft auf backdrop-blue unter 4,5:1). */}
-          <p className="type-body-md text-ink">{user?.displayName}</p>
+          <p className="type-body-md break-words text-ink">{user?.displayName}</p>
         </div>
         <Button variant="round" size="icon" aria-label="Abmelden" onClick={() => void logout()}>
           <LogOut className="size-5" aria-hidden />
