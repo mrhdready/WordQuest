@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Response } from '@playwright/test'
+import { checkPage } from './axe'
 
 // Demo-Kind aus DemoDataSeeder (Teststack laeuft mit WQ_SEED_DEMO_DATA).
 const childName = 'Max'
@@ -43,8 +44,10 @@ const dots = (page: Page) => page.getByTestId('ziffern-punkte').locator('span')
 const goButton = (page: Page) => page.getByRole('button', { name: 'Los geht’s' })
 
 // Profil per Tab und Enter, Ziffern ueber die Tastatur, Enter sendet.
-async function loginByKeyboard(page: Page) {
+// withAxe: checkPage auf Profilwahl, Ziffernfeld und Lern-Startseite.
+async function loginByKeyboard(page: Page, withAxe = false) {
   const logins = countLearnerLogins(page)
+  if (withAxe) await checkPage(page)
   for (let step = 0; step < 10; step += 1) {
     await page.keyboard.press('Tab')
     const focused = await page.evaluate(() => document.activeElement?.textContent ?? '')
@@ -52,6 +55,7 @@ async function loginByKeyboard(page: Page) {
   }
   await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: `Hallo, ${childName}!` })).toBeVisible()
+  if (withAxe) await checkPage(page)
 
   for (const digit of demoPin) await page.keyboard.press(digit)
   await expect(status(page)).toHaveText('4 Ziffern eingegeben')
@@ -60,11 +64,12 @@ async function loginByKeyboard(page: Page) {
   await sendLogin(page, () => page.keyboard.press('Enter'))
   await expect(page.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
   expect(logins.count).toBe(1)
+  if (withAxe) await checkPage(page)
 }
 
 test('Anmeldung per Tastatur', async ({ page }) => {
   await openPicker(page)
-  await loginByKeyboard(page)
+  await loginByKeyboard(page, true)
 })
 
 test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
