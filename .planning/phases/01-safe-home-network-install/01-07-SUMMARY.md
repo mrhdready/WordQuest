@@ -191,3 +191,9 @@ completed: 2026-10-16
 
 - Dateien vorhanden: LearnerProfileProblem.cs, LearnerEndpointTests.cs, ChildrenPage.tsx, ChildrenPage.test.tsx, ChildFormPage.tsx, ChildFormPage.test.tsx, children.spec.ts, first-run.spec.ts
 - Commits in HEAD: 8084769, d98cf06, 0081858
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+Urteil FREIGABE mit fünf MINOR-Befunden. Behoben vom Orchestrator in `856f6cd`: veralteter PIN-Kommentar (`LearnerProfile.cs`), Doku-Drift (DESIGN.md Tab „Kinder“, UI-SPEC Namensgrenze), Default-Zweig der Fehlerzuordnung (`PinInvalid` explizit, Rest `UnreachableException`). Zusätzlich: setup.sh und README nennen nach der Installation den nächsten Schritt (erstes Kind unter „Verwalten → Kinder“, dann ein Set).
+An 01-08 übergeben: Ladefehler der Kinderliste sichtbar machen; `AvatarKey` > 50 Zeichen ergibt 500 (Altbestand, gleiche Fehlerklasse wie T-01-29); Client-Tests für Namen mit 100 Zeichen und Server-Feldfehler an `displayName`.
+Belege nach Nachbesserung: Backend-Build 0 Warnungen/0 Fehler, Api.Tests 102/102, Learning.Tests 104/104; `design:check` errors 0, `design.md diff` regression false.
