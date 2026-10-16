@@ -78,8 +78,47 @@ Was dabei entsteht und **nicht** ins Repository gehört (steht in `.gitignore`):
 secrets/db_password.txt    48 Zeichen Zufall
 secrets/jwt_key.txt        48 Zeichen Zufall, signiert die Tokens
 .env                       Compose-Datei, Image-Präfix, weitere Einstellungen
-backups/                   tägliche pg_dumps (bisher nur Variante B)
+backups/                   tägliche pg_dumps, Ordner mit 0700
 ```
+
+#### Sicherung
+
+Der Dienst `backup` sichert die Datenbank jeden Tag nach `backups/`
+(`backups/daily/wordquest-<Datum>.sql.gz`) und hebt 14 tägliche, 8 wöchentliche
+und 6 monatliche Stände auf. `setup.sh` legt den Ordner mit `0700` an, denn die
+Dumps enthalten alle Familiendaten samt Passwort-Hashes, und nennt am Ende den
+Pfad. Der Ordner muss auf einem Linux-Dateisystem liegen (z. B. ext4), nicht auf
+einer SMB-Freigabe oder einem exFAT-Stick. Eine Sicherung sofort anstoßen:
+`docker compose exec backup /backup.sh`. Zurückspielen geht bisher von Hand,
+siehe [Betrieb](#betrieb).
+
+#### Passwort vergessen
+
+Im Installationsverzeichnis:
+
+```bash
+docker compose exec api dotnet WordQuest.Api.dll reset-password <E-Mail>
+```
+
+Der Befehl erzeugt ein neues Passwort und zeigt es **genau einmal** an; es wird
+nirgends im Klartext gespeichert. Damit anmelden. Gibt
+es kein Elternkonto mit dieser Adresse, meldet er das und ändert nichts.
+Angemeldete Geräte können ihre Sitzung danach nicht mehr verlängern. Wer schon
+angemeldet ist, bleibt höchstens bis zum Ablauf des aktuellen Zugangs angemeldet
+(Standard 15 Minuten, `Auth:AccessTokenMinutes`).
+
+#### Wenn die API nicht startet
+
+Fehlt das DB-Passwort oder der JWT-Schlüssel oder ist einer davon ein bekannter
+Standardwert aus diesem Repository, bricht die API den Start ab, zum Beispiel:
+
+```
+Start abgebrochen: WQ_JWT_SIGNING_KEY fehlt oder ist ein bekannter Standardwert. Führe `setup.sh` aus oder trage einen eigenen Wert ein.
+```
+
+`./setup.sh` erzeugt fehlende Secret-Dateien. Das gilt auch für einen selbst
+gesetzten `ConnectionStrings__Default`: Dessen Passwort wird genauso geprüft.
+Nur mit `ASPNETCORE_ENVIRONMENT=Development` (Variante C) entfällt die Prüfung.
 
 ### Variante B — Mit Domain und TLS (für Fortgeschrittene)
 

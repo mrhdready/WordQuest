@@ -49,6 +49,11 @@ for name in db_password jwt_key; do
   chmod 644 "$f"
 done
 
+# --- Sicherungen -------------------------------------------------------------
+# Die Dumps enthalten alle Familiendaten samt Passwort-Hashes: nur fuer den Besitzer.
+mkdir -p backups
+chmod 700 backups
+
 # --- .env --------------------------------------------------------------------
 if [[ -f .env ]]; then
   say "✓ .env existiert bereits — unverändert."
@@ -161,3 +166,5 @@ if [[ -n "$email" ]]; then
 else
   say "Fertig. WordQuest läuft unter: ${url} — Melde dich dort mit deinem Elternkonto an."
 fi
+say "Tägliche Sicherungen liegen in: $(pwd)/backups"
+

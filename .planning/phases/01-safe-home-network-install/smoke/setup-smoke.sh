@@ -136,4 +136,14 @@ start_abort "Start abgebrochen: ConnectionStrings__Default" \
   -e ConnectionStrings__Default="Host=gibt-es-nicht;Username=wordquest;Password=$known_db"
 echo "STARTABBRUCH OK"
 
+echo "== Taegliche Sicherung (SETUP-01)"
+grep -qF 'Tägliche Sicherungen liegen in:' run1.log || fail "Lauf 1 nennt den Sicherungsordner nicht."
+mode="$(stat -c '%a' backups 2>/dev/null || stat -f '%Lp' backups)"
+[[ "$mode" == 700 ]] || fail "backups hat Rechte $mode statt 700."
+docker compose exec -T backup /backup.sh </dev/null >/dev/null || fail "Manueller Lauf von /backup.sh fehlgeschlagen."
+dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1)"
+[[ -n "$dump" ]] || fail "Keine Datei backups/daily/wordquest-*.sql.gz."
+gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
+echo "BACKUP OK"
+
 echo "SMOKE OK"

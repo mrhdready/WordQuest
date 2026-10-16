@@ -8,6 +8,9 @@
 # legt .env an (COMPOSE_FILE zeigt auf diese Datei) und fragt nach dem
 # Elternkonto. Danach: http://<host>:8080
 #
+# Der Dienst backup sichert die Datenbank taeglich nach ./backups
+# (14 Tage, 8 Wochen, 6 Monate).
+#
 # Was damit NICHT geht:
 #   - Die App laesst sich nicht als PWA aufs Tablet legen. Service Worker
 #     brauchen HTTPS (Ausnahme: localhost). Im Browser laeuft alles, aber
@@ -69,6 +72,26 @@ services:
       - "${WQ_PORT:-8080}:8080"
     depends_on:
       - api
+    restart: unless-stopped
+
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: wordquest
+      POSTGRES_USER: wordquest
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 14
+      BACKUP_KEEP_WEEKS: 8
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    secrets:
+      - db_password
     restart: unless-stopped
 
 volumes:
