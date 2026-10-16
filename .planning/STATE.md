@@ -85,7 +85,9 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Quick 261006-r7l: axe auf `/lernen` nachholen (Werkzeug-Freigabe nötig), danach Commit nach Freigabe.
+- Quick 261006-r7l: axe auf `/lernen` nachholen — erledigt sich mit Plan 01-04 (axe-Werkzeug seit 01-01 vorhanden, `checkPage` auf den Lernseiten).
+- [Phase 3, REL-01]: Umstieg alter Schnellstart-Installationen — deren `pgdata`-Volume nutzt `POSTGRES_PASSWORD=wordquest`, die API verweigert diesen Wert seit 01-05. `upgrade.sh` braucht dafür einen Weg (Quelle: Review 01-05).
+- [Phase-1-Abschluss]: manuelle Abnahme Tab-Leiste bei 200 % Zoom, leere Zustände, Glas-Wirkung auf dem Tablet; `hostname -I` und Backup-Dienst auf einem Raspberry Pi prüfen.
 
 ### Quick Tasks
 
@@ -95,7 +97,6 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- [Phase 1]: Frontend has no test runner yet; QUAL-02 introduces one
 - [Phase 2]: Only a pure domain test project exists; QUAL-01 needs a new integration test project with real PostgreSQL
 
 ## Deferred Items
