@@ -3,9 +3,10 @@ import { ArrowLeft, Trash2, Upload } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Input, Textarea } from '@/components/ui/input'
-import { Badge, EmptyState, ErrorNote, Spinner } from '@/components/ui/misc'
+import { ListGroup, ListRow } from '@/components/ui/list'
+import { Badge, EmptyState, ErrorNote, Label, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import type { ImportPreview, VocabularyEntry } from '@/types'
 
@@ -52,37 +53,41 @@ export function SetDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/verwalten" className="flex items-center gap-2 text-sm font-semibold text-ink-soft">
-        <ArrowLeft className="h-4 w-4" />
+      <Link to="/verwalten" className="flex items-center gap-2 self-start type-body-md-strong text-ink">
+        <span className="glass-clear flex size-12 items-center justify-center rounded-full">
+          <ArrowLeft className="size-5" aria-hidden />
+        </span>
         Alle Sets
       </Link>
 
       {/* Schnellerfassung: zwei Felder, Enter, weiter. Alles andere ist
           optional und wuerde das Abtippen eines Vokabelhefts nur bremsen. */}
       <Card>
-        <CardContent className="pt-5">
-          <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row">
+        <form onSubmit={submit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="flex flex-1 flex-col gap-2">
+            <Label htmlFor="eintrag-deutsch">Deutsch</Label>
             <Input
+              id="eintrag-deutsch"
               value={source}
               onChange={(event) => setSource(event.target.value)}
-              placeholder="Deutsch"
-              aria-label="Deutsch"
             />
+          </div>
+          <div className="flex flex-1 flex-col gap-2">
+            <Label htmlFor="eintrag-englisch">Englisch</Label>
             <Input
+              id="eintrag-englisch"
               value={target}
               onChange={(event) => setTarget(event.target.value)}
-              placeholder="Englisch"
-              aria-label="Englisch"
             />
-            <Button type="submit" disabled={addEntry.isPending}>
-              Hinzufügen
-            </Button>
-          </form>
-        </CardContent>
+          </div>
+          <Button type="submit" disabled={addEntry.isPending}>
+            Hinzufügen
+          </Button>
+        </form>
       </Card>
 
       <Button variant="ghost" onClick={() => setShowImport((value) => !value)}>
-        <Upload className="h-4 w-4" />
+        <Upload className="size-4" aria-hidden />
         {showImport ? 'Import schließen' : 'Liste importieren (CSV)'}
       </Button>
 
@@ -102,28 +107,29 @@ export function SetDetailPage() {
       {entries.data?.length === 0 ? (
         <EmptyState title="Noch keine Vokabeln in diesem Set" />
       ) : (
-        <div className="flex flex-col gap-2">
+        <ListGroup>
           {entries.data?.map((entry) => (
-            <Card key={entry.id}>
-              <CardContent className="flex items-center gap-3 py-3">
-                {entry.emoji ? <span className="text-2xl">{entry.emoji}</span> : null}
-                <div className="flex-1">
-                  <p className="font-semibold">
-                    {entry.sourceText} <span className="text-ink-soft">→</span> {entry.targetText}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`${entry.sourceText} löschen`}
-                  onClick={() => removeEntry.mutate(entry.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
+            <ListRow key={entry.id} className="py-2">
+              {entry.emoji ? (
+                <span className="type-title" aria-hidden>
+                  {entry.emoji}
+                </span>
+              ) : null}
+              {/* Pfeil im selben Textknoten: allein gestellt kann axe seinen Kontrast nicht messen (nonBmp). */}
+              <p className="flex-1">
+                {entry.sourceText} → {entry.targetText}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`${entry.sourceText} löschen`}
+                onClick={() => removeEntry.mutate(entry.id)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </Button>
+            </ListRow>
           ))}
-        </div>
+        </ListGroup>
       )}
     </div>
   )
@@ -162,69 +168,71 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
   })
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3 pt-5">
-        <Textarea
-          rows={6}
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder={'Hund;dog\nHaus;house\ngehen;to go'}
-          className="font-mono text-sm"
-        />
+    <Card className="flex flex-col gap-4">
+      <Textarea
+        rows={6}
+        value={content}
+        onChange={(event) => setContent(event.target.value)}
+        placeholder={'Hund;dog\nHaus;house\ngehen;to go'}
+        aria-labelledby="import-hinweis"
+        className="font-mono"
+      />
 
-        <p className="text-sm text-ink-soft">
-          Eine Zeile pro Vokabel: Deutsch, Trennzeichen, Englisch. Semikolon, Komma und Tabulator
-          werden erkannt — eine aus Excel exportierte Datei kannst du direkt hier einfügen.
-        </p>
+      <p id="import-hinweis" className="type-body-md text-ink-soft">
+        Eine Zeile pro Vokabel: Deutsch, Trennzeichen, Englisch. Semikolon, Komma und Tabulator
+        werden erkannt — eine aus Excel exportierte Datei kannst du direkt hier einfügen.
+      </p>
 
-        {preview ? (
-          <>
-            <div className="flex gap-2">
-              <Badge tone="green">{preview.validCount} erkannt</Badge>
-              {preview.problemCount > 0 ? (
-                <Badge tone="yellow">{preview.problemCount} übersprungen</Badge>
-              ) : null}
-            </div>
+      {preview ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="green">{preview.validCount} erkannt</Badge>
+            {preview.problemCount > 0 ? (
+              <Badge tone="yellow">{preview.problemCount} übersprungen</Badge>
+            ) : null}
+          </div>
 
-            <div className="max-h-64 overflow-y-auto rounded-2xl border border-border-subtle">
-              {preview.rows.map((row) => (
-                <div
-                  key={row.lineNumber}
-                  className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 text-sm last:border-b-0"
-                >
-                  <span className="w-8 shrink-0 text-ink-soft">{row.lineNumber}</span>
-                  {row.problem ? (
-                    <span className="text-danger">{row.problem}</span>
-                  ) : (
-                    <span>
-                      {row.source} <span className="text-ink-soft">→</span> {row.target}{' '}
-                      {row.emoji ?? ''}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        {confirm.isError ? <ErrorNote message="Der Import ist fehlgeschlagen." /> : null}
-
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            disabled={content.trim().length === 0 || runPreview.isPending}
-            onClick={() => runPreview.mutate()}
+          {/* Kein ListGroup: Glas auf der Glas-Karte waere gestapelt (DESIGN.md Don'ts).
+              tabIndex, damit die scrollende Liste per Tastatur erreichbar ist. */}
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Vorschau"
+            className="flex max-h-64 flex-col divide-y divide-separator overflow-y-auto rounded-sm border border-separator"
           >
-            Vorschau
-          </Button>
-          <Button
-            disabled={!preview || preview.validCount === 0 || confirm.isPending}
-            onClick={() => confirm.mutate()}
-          >
-            {preview ? `${preview.validCount} Vokabeln übernehmen` : 'Übernehmen'}
-          </Button>
-        </div>
-      </CardContent>
+            {preview.rows.map((row) => (
+              <div key={row.lineNumber} className="flex items-center gap-2 px-4 py-2 type-body-md">
+                <span className="w-8 shrink-0 text-ink-soft">{row.lineNumber}</span>
+                {row.problem ? (
+                  <span className="text-danger-text">{row.problem}</span>
+                ) : (
+                  <span>
+                    {row.source} → {row.target} {row.emoji ?? ''}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {confirm.isError ? <ErrorNote message="Der Import ist fehlgeschlagen." /> : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
+          disabled={content.trim().length === 0 || runPreview.isPending}
+          onClick={() => runPreview.mutate()}
+        >
+          Vorschau
+        </Button>
+        <Button
+          disabled={!preview || preview.validCount === 0 || confirm.isPending}
+          onClick={() => confirm.mutate()}
+        >
+          {preview ? `${preview.validCount} Vokabeln übernehmen` : 'Übernehmen'}
+        </Button>
+      </div>
     </Card>
   )
 }

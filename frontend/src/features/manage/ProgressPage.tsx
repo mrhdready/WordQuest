@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Badge, EmptyState, Progress, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { avatarFor } from '@/lib/avatars'
@@ -57,19 +57,20 @@ export function ProgressPage() {
   return (
     <div className="flex flex-col gap-4">
       {learners.data.length > 1 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-wrap gap-2">
           {learners.data.map((learner) => (
             <button
               key={learner.id}
               onClick={() => setSelected(learner.id)}
+              aria-pressed={learner.id === learnerId}
               className={cn(
-                'flex touch-target shrink-0 items-center gap-2 rounded-2xl border-2 px-4 font-semibold transition',
-                learner.id === learnerId
-                  ? 'border-brand bg-brand-soft'
-                  : 'border-border-subtle bg-surface-raised',
+                'flex min-h-touch-default items-center gap-2 rounded-full px-4 type-body-md-strong transition',
+                learner.id === learnerId ? 'glass-selected text-primary' : 'glass text-ink',
               )}
             >
-              <span aria-hidden>{avatarFor(learner.avatarKey)}</span>
+              <span className="type-emoji" aria-hidden>
+                {avatarFor(learner.avatarKey)}
+              </span>
               {learner.displayName}
             </button>
           ))}
@@ -78,23 +79,22 @@ export function ProgressPage() {
 
       {overview.data ? (
         <Card>
-          <CardContent className="pt-5">
-            <div className="mb-3 flex items-baseline justify-between">
-              <span className="text-lg font-bold">Level {overview.data.level}</span>
-              <span className="text-sm text-ink-soft">🔥 {overview.data.streak} Tage</span>
-            </div>
+          <div className="mb-4 flex items-baseline justify-between gap-4">
+            <span className="type-headline">Level {overview.data.level}</span>
+            <span className="type-body-md text-ink-soft">🔥 {overview.data.streak} Tage</span>
+          </div>
 
-            <Progress value={overview.data.levelProgress} />
+          <Progress value={overview.data.levelProgress} label="Fortschritt bis zum nächsten Level" />
 
-            <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
+          {/* Unter sm untereinander: drei Kennzahlen in display-Groesse passen bei 320 px nicht nebeneinander. */}
+          <dl className="mt-4 grid gap-4 text-center sm:grid-cols-3">
               <Stat label="heute fällig" value={overview.data.dueToday} />
               <Stat label="neue Wörter frei" value={overview.data.newRemainingToday} />
               <Stat
                 label="sitzen sicher"
                 value={`${overview.data.cardsMastered}/${overview.data.cardsTotal}`}
               />
-            </dl>
-          </CardContent>
+          </dl>
         </Card>
       ) : null}
 
@@ -102,30 +102,27 @@ export function ProgressPage() {
 
       {trafficLight.data?.length ? (
         <Card>
-          <CardContent className="pt-5">
-            <h2 className="mb-3 font-bold">Wortschatz</h2>
-            <p className="mb-4 text-sm text-ink-soft">
-              Grün heißt: beide Richtungen sitzen — vom Deutschen ins Englische und zurück.
-            </p>
+          <h2 className="mb-2 type-headline">Wortschatz</h2>
+          <p className="mb-4 type-body-md text-ink-soft">
+            Grün heißt: beide Richtungen sitzen — vom Deutschen ins Englische und zurück.
+          </p>
 
-            <div className="flex flex-col divide-y divide-border-subtle">
-              {trafficLight.data.map((row) => (
-                <div key={row.entryId} className="flex items-center gap-3 py-2">
-                  <div className="flex-1">
-                    <p className="font-medium">
-                      {row.sourceText} <span className="text-ink-soft">→</span> {row.targetText}
-                    </p>
-                    {row.lapses > 0 ? (
-                      <p className="text-xs text-ink-soft">
-                        {row.lapses}× wieder vergessen
-                      </p>
-                    ) : null}
-                  </div>
-                  <Badge tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Badge>
+          {/* Trennlinien statt ListGroup: kein Glas auf der Glas-Karte (DESIGN.md Don'ts). */}
+          <div className="flex flex-col divide-y divide-separator">
+            {trafficLight.data.map((row) => (
+              <div key={row.entryId} className="flex items-center gap-4 py-2">
+                <div className="flex-1">
+                  <p className="type-body-lg">
+                    {row.sourceText} → {row.targetText}
+                  </p>
+                  {row.lapses > 0 ? (
+                    <p className="type-body-sm text-ink-soft">{row.lapses}× wieder vergessen</p>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          </CardContent>
+                <Badge tone={STATUS_TONE[row.status]}>{STATUS_LABEL[row.status]}</Badge>
+              </div>
+            ))}
+          </div>
         </Card>
       ) : null}
     </div>
@@ -135,8 +132,8 @@ export function ProgressPage() {
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
-      <dd className="text-xl font-black text-brand-strong">{value}</dd>
-      <dt className="text-xs text-ink-soft">{label}</dt>
+      <dd className="type-display text-primary">{value}</dd>
+      <dt className="type-label-section text-ink-soft">{label}</dt>
     </div>
   )
 }

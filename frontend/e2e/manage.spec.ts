@@ -83,3 +83,89 @@ test('"+" öffnet das Set-Formular', async ({ page }) => {
   await expect(page.locator('main form input').first()).toBeFocused()
   await checkPage(page)
 })
+
+async function openFirstSet(page: Page) {
+  await page.goto('/verwalten')
+  await page.locator('main a[href^="/verwalten/sets/"]').first().click()
+  await expect(page.getByRole('link', { name: 'Alle Sets' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /löschen$/ }).first()).toBeVisible()
+}
+
+test('Set-Detail: axe 0, Fokus nicht verdeckt', async ({ page }) => {
+  await openFirstSet(page)
+  await checkPage(page)
+  await expectFocusNotObscured(page)
+})
+
+test('Eintrag-Formular: unvollständig sendet nichts, Enter legt genau einen an', async ({ page }) => {
+  const posts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/api\/v1\/sets\/[^/]+\/entries$/.test(request.url())) {
+      posts.push(request.url())
+    }
+  })
+  await openFirstSet(page)
+  const german = page.getByLabel('Deutsch', { exact: true })
+  const english = page.getByLabel('Englisch', { exact: true })
+  const stamp = Date.now()
+
+  // 1: nur Englisch
+  await english.fill(`nur-englisch-${stamp}`)
+  await english.press('Enter')
+  await expect(page.getByText(`nur-englisch-${stamp}`, { exact: false })).toHaveCount(0)
+  expect(posts).toHaveLength(0)
+  await english.fill('')
+
+  // 2: nur Deutsch
+  await german.fill(`nur-deutsch-${stamp}`)
+  await english.press('Enter')
+  expect(posts).toHaveLength(0)
+
+  // Happy Path zuletzt: beide Felder, Enter im Feld Englisch
+  await german.fill(`Wort${stamp}`)
+  await english.fill(`word${stamp}`)
+  const created = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().endsWith('/entries'),
+  )
+  await english.press('Enter')
+  expect((await created).status()).toBe(201)
+  await expect(page.getByText(`word${stamp}`)).toBeVisible()
+  expect(posts).toHaveLength(1)
+})
+
+test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
+  await openFirstSet(page)
+  await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()
+
+  // Zustand geöffnet: leeres Textfeld, "Vorschau" deaktiviert
+  await expect(page.getByRole('button', { name: 'Vorschau' })).toBeDisabled()
+  await checkPage(page)
+
+  // Zustand Vorschau: eine gültige Zeile, eine ohne Trennzeichen
+  const stamp = Date.now()
+  await page.locator('textarea').fill(`Haus${stamp};house${stamp}\nohneTrennzeichen`)
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText('1 erkannt')).toBeVisible()
+  await expect(page.getByText('1 übersprungen')).toBeVisible()
+  await expect(page.getByText('Zeile hat keine zwei befuellten Spalten.')).toBeVisible()
+  await checkPage(page)
+
+  // Fehlerzustand: Server antwortet beim Übernehmen mit 500
+  const importUrl = '**/api/v1/sets/*/import'
+  await page.route(importUrl, (route) => route.fulfill({ status: 500, body: '' }))
+  await page.getByRole('button', { name: '1 Vokabeln übernehmen' }).click()
+  await expect(page.getByText('Der Import ist fehlgeschlagen.')).toBeVisible()
+  await checkPage(page)
+
+  // Happy Path zuletzt: Route entfernen, erneut übernehmen
+  await page.unroute(importUrl)
+  await page.getByRole('button', { name: '1 Vokabeln übernehmen' }).click()
+  await expect(page.getByRole('button', { name: 'Vorschau' })).toHaveCount(0)
+  await expect(page.getByText(`house${stamp}`)).toBeVisible()
+})
+
+test('Fortschritt: axe 0', async ({ page }) => {
+  await page.goto('/verwalten/fortschritt')
+  await expect(page.getByText(/^Level \d+$/)).toBeVisible()
+  await checkPage(page)
+})
