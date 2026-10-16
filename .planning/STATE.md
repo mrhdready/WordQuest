@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: executing
-stopped_at: Completed 01-06-PLAN.md
-last_updated: "2026-10-16T15:57:09.878Z"
+stopped_at: Completed 01-07-PLAN.md
+last_updated: "2026-10-16T20:23:20.026Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 59e651a1184df897d4e720f925ad319ebc443e32
+state_head: 00818587cbfba848a3e2bd2a3f3f7d85b751081f
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 1 (Safe Home-Network Install) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 1 execution started
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P05 | 135min | 3 tasks | 11 files |
 | Phase 01 P04 | 25min | 3 tasks | 7 files |
 | Phase 01 P06 | 23min | 3 tasks | 19 files |
+| Phase 01 P07 | 18min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-06: Tab-Leiste bricht bei 320 px neben dem + zweizeilig um; --wq-tab-bar-clearance waechst unter sm um eine Zeile
 - [Phase 01]: 01-06: body als grid mit min-height 100% statt height 100% (axe elmPartiallyObscured bei Seiten knapp ueber Bildschirmhoehe)
 - [Phase 01]: 01-06: Passwortwechsel widerruft keine Sitzungen; Pruefung gegen haeufige Passwoerter bleibt bekannte Luecke D-18
+- [Phase 01]: 01-07: PIN-, Namens- und Tageslimit-Regeln fuer Kinderprofile stehen in AccountRules (Identity-Modul); Endpoints mappen nur LearnerProfileProblem-Codes auf Feldtexte
+- [Phase 01]: 01-07: Kinderliste ohne Card, weil ListGroup/EmptyState selbst Glas sind (DESIGN.md: kein Glas auf Glas)
 
 ### Pending Todos
 
@@ -118,6 +121,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T15:57:09.853Z
-Stopped at: Completed 01-06-PLAN.md
+Last session: 2026-10-16T20:23:20.000Z
+Stopped at: Completed 01-07-PLAN.md
 Resume file: None
