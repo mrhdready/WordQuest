@@ -5,10 +5,17 @@ const ACCESS_KEY = 'wq.access'
 const REFRESH_KEY = 'wq.refresh'
 const USER_KEY = 'wq.user'
 
+// Deutsche Texte statt englischer Technik-Meldungen (UI-SPEC Copywriting "Error state").
+const UNREACHABLE =
+  'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
+const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
+
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    // Feldfehler einer ValidationProblem-Antwort, Schluessel wie im Request.
+    readonly errors?: Record<string, string[]>,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -113,29 +120,47 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const access = tokenStore.access
   if (access) headers.Authorization = `Bearer ${access}`
 
-  const response = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    // fetch wirft nur bei Netzfehlern (auch offline), Status 0 wie bei XHR.
+    throw new ApiError(UNREACHABLE, 0)
+  }
 
   if (response.status === 401 && retryOn401 && (await refreshAccessToken())) {
     return api<T>(path, { ...options, retryOn401: false })
   }
 
   if (!response.ok) {
-    throw new ApiError(await readErrorMessage(response), response.status)
+    throw await readError(response)
   }
 
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+async function readError(response: Response): Promise<ApiError> {
+  // 5xx-Koerper koennen Technikdetails enthalten; die zeigen wir nicht an.
+  if (response.status >= 500) return new ApiError(GENERIC, response.status)
   try {
-    const problem = (await response.json()) as { detail?: string; title?: string }
-    return problem.detail ?? problem.title ?? `Fehler ${response.status}`
+    const problem = (await response.json()) as {
+      detail?: string
+      title?: string
+      errors?: Record<string, string[]>
+    }
+    if (problem.detail) return new ApiError(problem.detail, response.status, problem.errors)
+    if (problem.errors) {
+      // Der title einer ValidationProblem-Antwort ist englisch, die Feldtexte sind es nicht.
+      const messages = Object.values(problem.errors).flat().join(' ')
+      return new ApiError(messages, response.status, problem.errors)
+    }
+    return new ApiError(problem.title ?? GENERIC, response.status)
   } catch {
-    return `Fehler ${response.status}`
+    return new ApiError(GENERIC, response.status)
   }
 }

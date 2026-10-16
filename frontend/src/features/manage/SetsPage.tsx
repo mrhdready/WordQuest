@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { ListGroup, ListRow } from '@/components/ui/list'
 import { EmptyState, ErrorNote, Spinner } from '@/components/ui/misc'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import type { VocabularySet } from '@/types'
 
 export function SetsPage() {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
+  const titleRef = useRef<HTMLInputElement>(null)
   // Das Formular oeffnet der "+" neben der Tab-Leiste ueber ?neu=1.
   const [searchParams, setSearchParams] = useSearchParams()
   const showForm = searchParams.has('neu')
@@ -37,7 +39,13 @@ export function SetsPage() {
       closeForm()
       void queryClient.invalidateQueries({ queryKey: ['sets'] })
     },
+    // Fokus auf das fehlerhafte Feld (UI-SPEC "Validierung und Fehleranzeige").
+    onError: (error) => {
+      if (error instanceof ApiError && error.errors?.title) titleRef.current?.focus()
+    },
   })
+  // Feldfehler des Servers stehen am Feld, alles andere im Hinweis darunter.
+  const titleError = create.error instanceof ApiError ? create.error.errors?.title?.[0] : undefined
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -51,13 +59,21 @@ export function SetsPage() {
       {showForm ? (
         <Card>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <Input
-              autoFocus
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="z. B. Unit 3 — At the zoo"
-            />
-            {create.isError ? <ErrorNote message="Das Set konnte nicht angelegt werden." /> : null}
+            <Field id="titel" label="Titel" error={titleError}>
+              {(control) => (
+                <Input
+                  {...control}
+                  ref={titleRef}
+                  autoFocus
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="z. B. Unit 3 — At the zoo"
+                />
+              )}
+            </Field>
+            {create.isError && !titleError ? (
+              <ErrorNote message="Das Set konnte nicht angelegt werden." />
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={create.isPending}>
                 Anlegen
