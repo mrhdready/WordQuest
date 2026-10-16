@@ -183,6 +183,12 @@
     height: 100%;
   }
 
+  /* Fokussierte Elemente nicht unter der schwebenden Tab-Leiste (WCAG 2.4.11);
+     gleicher Wert wie pb-28 an <main> in ManageLayout. */
+  html {
+    scroll-padding-bottom: calc(var(--spacing) * 28);
+  }
+
   /* Backdrop direkt auf body (kein Pseudo-Element): der Kontrastlauf ersetzt ihn
      per CSSOM durch je eine Blob-Farbe. */
   body {

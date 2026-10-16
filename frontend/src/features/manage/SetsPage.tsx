@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { ListGroup, ListRow } from '@/components/ui/list'
 import { EmptyState, ErrorNote, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import type { VocabularySet } from '@/types'
@@ -12,7 +13,16 @@ import type { VocabularySet } from '@/types'
 export function SetsPage() {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
-  const [showForm, setShowForm] = useState(false)
+  // Das Formular oeffnet der "+" neben der Tab-Leiste ueber ?neu=1.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const showForm = searchParams.has('neu')
+
+  function closeForm() {
+    setSearchParams((params) => {
+      params.delete('neu')
+      return params
+    })
+  }
 
   const sets = useQuery({
     queryKey: ['sets'],
@@ -24,7 +34,7 @@ export function SetsPage() {
       api<VocabularySet>('/sets', { method: 'POST', body: { title: newTitle } }),
     onSuccess: () => {
       setTitle('')
-      setShowForm(false)
+      closeForm()
       void queryClient.invalidateQueries({ queryKey: ['sets'] })
     },
   })
@@ -38,6 +48,28 @@ export function SetsPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {showForm ? (
+        <Card>
+          <form onSubmit={submit} className="flex flex-col gap-4">
+            <Input
+              autoFocus
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="z. B. Unit 3 — At the zoo"
+            />
+            {create.isError ? <ErrorNote message="Das Set konnte nicht angelegt werden." /> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={create.isPending}>
+                Anlegen
+              </Button>
+              <Button type="button" variant="ghost" onClick={closeForm}>
+                Abbrechen
+              </Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
+
       {sets.data?.length === 0 && !showForm ? (
         <EmptyState
           title="Noch keine Vokabelsets"
@@ -45,51 +77,24 @@ export function SetsPage() {
         />
       ) : null}
 
-      {sets.data?.map((set) => (
-        <Link key={set.id} to={`/verwalten/sets/${set.id}`}>
-          <Card className="transition active:scale-[0.99]">
-            <CardContent className="flex items-center gap-3 py-4">
-              <div className="flex-1">
-                <p className="font-bold">{set.title}</p>
-                <p className="text-sm text-ink-soft">
-                  {set.entryCount} {set.entryCount === 1 ? 'Vokabel' : 'Vokabeln'} ·{' '}
-                  {set.sourceLanguage.toUpperCase()} → {set.targetLanguage.toUpperCase()}
-                </p>
-              </div>
-              <ChevronRight className="h-5 w-5 text-ink-soft" />
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
-
-      {showForm ? (
-        <Card>
-          <CardContent className="pt-5">
-            <form onSubmit={submit} className="flex flex-col gap-3">
-              <Input
-                autoFocus
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="z. B. Unit 3 — At the zoo"
-              />
-              {create.isError ? <ErrorNote message="Das Set konnte nicht angelegt werden." /> : null}
-              <div className="flex gap-2">
-                <Button type="submit" disabled={create.isPending}>
-                  Anlegen
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
-                  Abbrechen
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      ) : (
-        <Button variant="secondary" size="lg" onClick={() => setShowForm(true)}>
-          <Plus className="h-5 w-5" />
-          Neues Set
-        </Button>
-      )}
+      {sets.data && sets.data.length > 0 ? (
+        <ListGroup>
+          {sets.data.map((set) => (
+            <ListRow key={set.id} asChild>
+              <Link to={`/verwalten/sets/${set.id}`}>
+                <div className="flex-1">
+                  <p className="type-body-lg">{set.title}</p>
+                  <p className="type-body-md text-ink-soft">
+                    {set.entryCount} {set.entryCount === 1 ? 'Vokabel' : 'Vokabeln'} ·{' '}
+                    {set.sourceLanguage.toUpperCase()} → {set.targetLanguage.toUpperCase()}
+                  </p>
+                </div>
+                <ChevronRight className="size-5 text-ink-soft" aria-hidden />
+              </Link>
+            </ListRow>
+          ))}
+        </ListGroup>
+      ) : null}
     </div>
   )
 }

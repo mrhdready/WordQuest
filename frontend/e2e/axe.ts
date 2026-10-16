@@ -72,6 +72,9 @@ export async function expectOpaqueFallback(page: Page) {
     features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
   })
   const surfaces = await page.evaluate((classes) => {
+    // Bedienelemente mit "transition" blenden Blur und Flaeche ueber: gemessen
+    // wird der Endzustand, den man sieht, nicht der erste Frame des Uebergangs.
+    for (const animation of document.getAnimations()) animation.finish()
     const probe = document.createElement('div')
     probe.style.backgroundColor = 'var(--color-glass-opaque)'
     document.body.append(probe)

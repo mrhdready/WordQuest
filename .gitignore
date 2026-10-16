@@ -36,6 +36,8 @@ coverage/
 TestResults/
 test-results/
 playwright-report/
+# Anmeldezustand der e2e-Laeufe (enthaelt Tokens des Testkontos)
+frontend/playwright/.auth/
 *.tsbuildinfo
 .eslintcache
 npm-debug.log*

@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
 // den Vite-Dev-Server: CSP, nginx und Produktions-Build sollen mitgeprueft werden.
 export default defineConfig({
   testDir: 'e2e',
+  globalSetup: './e2e/global-setup.ts',
   workers: 1,
   fullyParallel: false,
   retries: 0,
