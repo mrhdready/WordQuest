@@ -234,6 +234,8 @@ function FeedbackPanel({ result, onNext }: { result: AnswerResult; onNext: () =>
   useEffect(() => buttonRef.current?.focus(), [])
 
   // Rueckmeldung als Sheet von unten; "Fast!" ruhig in warn, nie als Fehler.
+  // "Weiter" bekommt den Fokus und verweist per aria-describedby auf die
+  // Rueckmeldung, damit Screenreader sie mit ansagen (WCAG 4.1.3, ohne role="alert").
   return (
     <div
       className={cn(
@@ -242,6 +244,7 @@ function FeedbackPanel({ result, onNext }: { result: AnswerResult; onNext: () =>
       )}
     >
       <div
+        id="rueckmeldung"
         className={cn(
           'rounded-lg p-4 text-center',
           result.correct ? 'bg-surface-success' : 'bg-surface-warn',
@@ -267,7 +270,13 @@ function FeedbackPanel({ result, onNext }: { result: AnswerResult; onNext: () =>
         ) : null}
       </div>
 
-      <Button ref={buttonRef} size="lg" className="w-full" onClick={onNext}>
+      <Button
+        ref={buttonRef}
+        size="lg"
+        className="w-full"
+        aria-describedby="rueckmeldung"
+        onClick={onNext}
+      >
         Weiter
       </Button>
     </div>

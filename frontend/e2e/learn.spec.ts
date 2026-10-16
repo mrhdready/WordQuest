@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Response } from '@playwright/test'
+import type { AnswerResult } from '@/types'
 import { checkPage } from './axe'
 
 // Demo-Kind aus DemoDataSeeder (Teststack laeuft mit WQ_SEED_DEMO_DATA).
@@ -136,13 +137,25 @@ test.describe('ohne Secure Context', () => {
   const isAnswer = (url: string) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(url)
   const sendButton = (page: Page) => page.getByRole('button', { name: /^Antwort(en| senden)$/ })
 
+  // Prueft die angezeigte Rueckmeldung gegen die Serverantwort; "Weiter" (hat
+  // nach der Antwort den Fokus) beschreibt sie per aria-describedby (WCAG 4.1.3).
   async function answer(page: Page, action: () => Promise<void>) {
     const [response] = await Promise.all([
       page.waitForResponse((candidate) => isAnswer(candidate.url())),
       action(),
     ])
     expect(response.status()).toBe(200)
-    await expect(page.getByRole('button', { name: 'Weiter' })).toBeVisible()
+    const result = (await response.json()) as AnswerResult
+    const headline = result.correct ? 'Richtig!' : 'Fast!'
+    const weiter = page.getByRole('button', { name: 'Weiter' })
+    await expect(weiter).toBeFocused()
+    await expect(page.getByText(headline, { exact: true })).toBeVisible()
+    await expect(weiter).toHaveAccessibleDescription(new RegExp(`^${headline}`))
+    if (!result.correct) {
+      await expect(page.getByText(`Es heißt: ${result.correctAnswer}`)).toBeVisible()
+      await expect(weiter).toHaveAccessibleDescription(new RegExp(`Es heißt: ${result.correctAnswer}`))
+    }
+    return result
   }
 
   test('Lernen über HTTP', async ({ page }) => {
