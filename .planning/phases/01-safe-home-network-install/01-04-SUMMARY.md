@@ -194,3 +194,38 @@ completed: 2026-10-16
 
 - FOUND: frontend/e2e/learn.spec.ts, frontend/src/features/auth/ProfilePickerPage.tsx, frontend/src/features/learn/LearnHomePage.tsx, frontend/src/features/learn/SessionPage.tsx, frontend/src/index.css, frontend/src/lib/api.ts
 - FOUND: 7fc4d84, c63c52c, 2264179, 729f50e, 033dbb4 (Vorfahren von HEAD)
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+**Urteil des Reviews: NACHBESSERN.** Ein Befund war MAJOR (WCAG 4.1.3, Rückmeldung wird nicht angesagt). Dazu kamen Fokus und Doppelansage nach falscher PIN, Lücken im e2e (Rundenende, „alles erledigt“, Rückmeldungstext), der uneinheitliche Apostroph in „Los geht’s“ und ein Flackern bei der letzten Karte. Offen war außerdem, was „Schließen“ mit einer angefangenen Runde macht.
+
+**Entscheidung von Dennis zu „Schließen“ (2026-10-16):** Ist mindestens eine Karte beantwortet, schließt „Schließen“ die Runde ab wie am Ende. Die Serie zählt, den Bonus berechnet der Server, danach geht es zur Startseite. Ohne beantwortete Karte wird nur navigiert.
+
+**Vorab geprüft (Backend, nur gelesen):** `LearningService.CompleteSessionAsync` (`LearningService.cs:259-307`) und `POST /sessions/{id}/complete` (`SessionEndpoints.cs:75-90`) prüfen nicht, ob die Runde vollständig ist. Ein Abschluss mitten in der Runde wird mit 200 angenommen. Der Bonus kommt aus `XpRules.ForSessionCompletion(answered, correct)` und zählt nur beantwortete Karten. Bei `answered == 0` gibt es keinen Bonus und keine Serie, ein zweiter Abschluss bleibt wegen `CompletedAt` folgenlos. Am Backend wurde nichts geändert.
+
+### Behoben
+
+| Befund | Fix | Commit |
+|---|---|---|
+| Fokus nach falscher PIN, Doppelansage „0 Ziffern eingegeben“ | Nach einem Fehler springt der Fokus auf die Taste „1“. Das Statusfeld bleibt leer, solange der Fehler steht und noch keine Ziffer eingegeben ist. e2e: vorher rot (`toBeFocused`, `Received: inactive`) | `ecfee7b` |
+| „Los geht’s“ uneinheitlich | Lern-Startseite schreibt jetzt `’`. Die Anmeldung hatte es schon. Ein gemeinsamer Locator im e2e | `27e3397` |
+| MAJOR WCAG 4.1.3: Rückmeldung wird nicht angesagt | Container `id="rueckmeldung"`, „Weiter“ mit `aria-describedby`, kein `role="alert"`. `answer()` prüft den Fokus, den angezeigten Text gegen die Serverantwort („Richtig!“/„Fast!“, „Es heißt: …“) und die Accessible Description. Vorher rot (`Received string: ""`) | `0f7bb6a` |
+| „Schließen“ in einer angefangenen Runde, Flackern bei der letzten Karte | `close()`: nach mindestens einer Antwort `finish(true)` (Complete, dann `/`), sonst nur `navigate('/')`. Während eine Antwort unterwegs ist, ist „Schließen“ gesperrt. Die neue Phase `finishing` zeigt einen Spinner statt des Antwortfelds und verhindert ein doppeltes „Weiter“. e2e mit gemockten Sitzungs-Endpunkten: ohne Antwort 0 Complete-Requests, nach einer Antwort genau 1. Vorher rot (`Expected 1, Received 0`) | `37fe76e` |
+| e2e erreicht weder Rundenende noch „alles erledigt“ | „Lernen über HTTP“ spielt die Runde zu Ende. `checkPage` läuft auf der Zusammenfassung, auf der Startseite mit „alles erledigt“ und auf der leeren Runde. Den Fehlerzustand (POST /sessions → 500) stellt `page.route` her. `checkPage` wartet jetzt auf endliche Animationen: auf der Zusammenfassung hatte axe mitten in `animate-pop` 2,51:1 gemessen (`#b29273` auf `#f0efe8`) | `3de0c3c` |
+
+### Gate (beobachtet)
+
+- `npm run lint`, `typecheck`, `npx vitest run` (`Test Files 7 passed (7)`, `Tests 35 passed (35)`), `build`, `design:check` (`errors: 0, warnings: 0`), `design:classes` (`keine alten Klassen`): Exit 0.
+- e2e, Durchgang 1 (`npm run e2e:stack`, alle Specs): `14 passed`, `2 failed`. Beide Fehlschläge in learn.spec kamen von „Rate-Limit auth erreicht“ (429), weil das Budget von 10/min nach account, login und manage aufgebraucht war.
+- e2e, Durchgang 2 (API neu gestartet, `learn.spec.ts`): `4 passed`. Der erste Versuch scheiterte im globalSetup, weil die API nach dem Neustart noch nicht bereit war. Danach wurde auf `healthy` gewartet.
+- Backend nicht berührt, deshalb kein dotnet-Lauf. Teststack mit `down -v` entfernt.
+- axe (WCAG 2.2 AA über `checkPage`): 0 Verstöße auf Zusammenfassung und Startseite mit „alles erledigt“. Auf der leeren Runde und dem Fehlerzustand laufen axe, Kontrast und Reflow ohne den Fallback-Teil, weil diese Seiten kein Glas haben.
+
+### Offen
+
+- **429-Text „in einer Minute“** dupliziert `Window = 1 min` aus `Program.cs`. Er hängt an FIX-01 (Forwarded Headers): ohne sie teilen sich alle Geräte im Heimnetz einen Topf. Wird mit 01-08 behoben.
+- **`refreshAccessToken` meldet bei 429 ab** (Bestand, `api.ts` ~96-98).
+- **Verwaiste neue Karten (Backend, Bestand, durch „Schließen“ häufiger):** `StartSessionAsync` legt beim Start für jede neue Karte einen `ReviewState` im Zustand `New` an (`DueAt = now`). Unbeantwortete Karten wählt keine Runde mehr aus, denn `Compose` nimmt nur Relearning, Review und ungesehene Karten. Die Übersicht zählt sie aber in `dueToday` (`LearnerEndpoints.cs:160-163`). Nach einer abgebrochenen Runde zeigt die Startseite also „N Karten fällig“, und die Runde ist trotzdem leer. Nicht geändert, Entscheidung nötig.
+- **Perfekt-Bonus bei Teilrunden:** `ForSessionCompletion` vergibt `XpPerfectSessionBonus`, sobald alle *beantworteten* Karten richtig sind, also auch bei 1 von 5. Das entspricht der Serverregel und Dennis' Vorgabe („Bonus wie vom Server berechnet“). Ausnutzen lässt es sich kaum, weil das Tagesbudget neuer Karten schon beim Start verbraucht wird.
+- **Mitten-in-der-Runde-Abschluss gegen den echten Server** ist nur durch Lesen des Codes belegt, das e2e mockt die Sitzungs-Endpunkte. Grund: Das Tagesbudget von 5 neuen Karten reicht für genau eine echte Runde, und die braucht „Lernen über HTTP“.
+- **Review dieser Nachbesserung** durch einen Subagenten (AGENTS.md „Review“) steht aus. Ebenso offen sind Tastatur-Durchgang und 200 % Zoom auf Zusammenfassung und Fehlerseite (D7, Abnahme am Ende der Phase).
