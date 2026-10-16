@@ -307,7 +307,7 @@ Durchgehend weich: Bedienelemente als Kapsel oder Kreis (`full`), Karten `lg` (3
 - **Listen:** gruppiert in `list-group`, Trennlinien `list-separator`, Zeilen `list-row`.
 - **Formulare:** Felder gruppiert in einer Glasfläche, Beschriftung über dem Feld (`input-label`), sichtbar, nie nur Platzhalter. Jedes Feld hat eine 1-px-Grenze in `border-control` (WCAG 1.4.11), damit die Feldgrenze unabhängig vom durchscheinenden Hintergrund erkennbar bleibt.
 - **Hinweise:** `note-error` (`role="alert"`) und `note-success` (`role="status"`) auf deckender Fläche, unter dem auslösenden Element.
-- **Eltern-Navigation:** `tab-bar` unten mit Vokabeln, Fortschritt und Konto, aktiver Tab `tab-active`; bei 320 px bricht sie neben dem „+“ in zwei Zeilen um.
+- **Eltern-Navigation:** `tab-bar` unten mit Vokabeln, Fortschritt, Kinder und Konto, aktiver Tab `tab-active`; bei 320 px bricht sie neben dem „+“ in zwei Zeilen um.
 - **Fokus:** global `:focus-visible` mit 3 px Ring in `primary-deep`, 3 px Abstand. `primary` hält gegen `backdrop-blue` keine 3:1 (WCAG 1.4.11), `primary-deep` schon.
 
 ## Do's and Don'ts

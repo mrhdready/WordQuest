@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using WordQuest.Api.Auth;
 using WordQuest.Api.Contracts;
@@ -56,7 +57,8 @@ public static class LearnerEndpoints
                     LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
                     LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: "Der Name darf höchstens 100 Zeichen lang sein."),
                     LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 bis 6 Ziffern ein."),
-                    _ => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
+                    LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
+                    _ => throw new UnreachableException($"Unbekannter Befund {problem}."),
                 })
                 .ToDictionary(error => error.Field, error => new[] { error.Message }));
         }

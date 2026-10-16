@@ -53,7 +53,9 @@ Dann erzeugt es DB-Passwort und JWT-Schlüssel als Dateien in `secrets/`, legt
 `.env` an (`COMPOSE_FILE=docker-compose.quick.yml`), lädt die Images, startet
 WordQuest und legt das Elternkonto an. Danach läuft die App auf
 **http://<host>:8080**; anmelden kannst du dich nur mit diesem Konto, einen
-Demo-Zugang gibt es nicht.
+Demo-Zugang gibt es nicht. Als Nächstes legst du unter „Verwalten → Kinder“
+das erste Kind mit PIN an und unter „Vokabeln“ ein Set; danach wählt das Kind
+auf der Startseite sein Profil und lernt.
 
 Ein zweiter Lauf von `setup.sh` ändert nichts: Secrets, `.env` und Konto
 bleiben, wie sie sind. Ein anderer Port geht mit `WQ_PORT=9000` in `.env`.

@@ -223,7 +223,7 @@ Applicable state considerations resolved: 10 covered, 2 backstop, 3 dismissed, 0
 |----------|------------|--------|---------------------|
 | empty | Kinderliste | ✅ covered | Leere Liste zeigt `EmptyState` mit der Copy "Noch kein Kinderprofil" (siehe Copywriting Contract, Zeilen Empty state). |
 | zero-one-many | Kinderliste | ✅ covered | Ein Kind und viele Kinder rendern dieselbe Kartenliste untereinander; kein Singular/Plural-Text nötig ("Neue Karten pro Tag: {n}"). |
-| long-text | Kindername in Liste, Formular, Anmelde-Kachel | 🧪 backstop | Name bricht um (`break-words`), wird nie abgeschnitten; visueller Test bei 320 px Breite und 200 % Zoom. Der Server kennt kein Längenlimit (`LearnerEndpoints.cs:48-63`), hier wird keines erfunden. |
+| long-text | Kindername in Liste, Formular, Anmelde-Kachel | 🧪 backstop | Name bricht um (`break-words`), wird nie abgeschnitten; visueller Test bei 320 px Breite und 200 % Zoom. Der Server begrenzt den Namen auf 100 Zeichen (D-15, Spalte `HasMaxLength(100)`). |
 | loading | Kind-bearbeiten-Formular | ✅ covered | `Spinner` bis die Liste `['learners']` geladen ist; Felder erscheinen erst vorbefüllt, kein Leer-Flackern. |
 | error | Kind-bearbeiten mit unbekannter ID | ✅ covered | Liste geladen, ID nicht darin: `EmptyState` "Dieses Kind gibt es nicht (mehr)." mit Link "Alle Kinder". |
 | error | Passwort- und Kind-Formular, Server nicht erreichbar | ✅ covered | Deutscher Fehlertext in `ErrorNote`, Eingaben bleiben erhalten, Button wieder aktiv. Gilt auch offline: `QueryClient` steht auf `networkMode: 'offlineFirst'` (`App.tsx:22`), Speichern läuft deshalb als `try/catch` wie `GuardianLoginPage.tsx:18-30` und nicht als pausierende Mutation. |
