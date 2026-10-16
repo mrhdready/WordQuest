@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Browser } from '@playwright/test'
 import { checkPage, expectReflow } from './axe'
 import { guardianStorageState } from './global-setup'
 
@@ -6,8 +6,29 @@ test.use({ storageState: guardianStorageState })
 
 const created = 'Das Kind ist angelegt. Es kann sich jetzt mit seiner PIN anmelden.'
 
-// Rate-Limit "auth" (10 pro Minute): diese Datei nutzt hoechstens 3 Aufrufe
-// (globalSetup, Profilwahl, learner-login).
+// Kind meldet sich in einem frischen Kontext ohne Eltern-Sitzung an (2 Aufrufe der Policy "auth").
+async function learnerLogin(browser: Browser, baseURL: string | undefined, name: string, pin: string) {
+  const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } })
+  const child = await context.newPage()
+  const [profiles] = await Promise.all([
+    child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/profiles')),
+    child.goto('/'),
+  ])
+  expect(profiles.status(), 'Rate-Limit auth erreicht').not.toBe(429)
+  await child.getByRole('button', { name }).click()
+  await expect(child.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
+  for (const digit of pin) await child.keyboard.press(digit)
+  const [login] = await Promise.all([
+    child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/learner-login')),
+    child.keyboard.press('Enter'),
+  ])
+  expect(login.status()).toBe(200)
+  await expect(child.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
+  await context.close()
+}
+
+// Rate-Limit "auth": diese Datei nutzt hoechstens 5 Aufrufe
+// (globalSetup, je Anmeldetest Profilwahl und learner-login).
 test('Kind anlegen und anmelden', async ({ page, browser, baseURL }) => {
   const name = `Testkind ${Date.now()}`
   const pin = '583920'
@@ -26,24 +47,35 @@ test('Kind anlegen und anmelden', async ({ page, browser, baseURL }) => {
   await expect(row).toBeVisible()
   await expect(row.locator('..')).toContainText('Neue Karten pro Tag: 7')
 
-  // Neuer Kontext ohne Eltern-Sitzung: das Kind meldet sich auf der Profilwahl an.
-  const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } })
-  const child = await context.newPage()
-  const [profiles] = await Promise.all([
-    child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/profiles')),
-    child.goto('/'),
-  ])
-  expect(profiles.status(), 'Rate-Limit auth erreicht').not.toBe(429)
-  await child.getByRole('button', { name }).click()
-  await expect(child.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
-  for (const digit of pin) await child.keyboard.press(digit)
-  const [login] = await Promise.all([
-    child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/learner-login')),
-    child.keyboard.press('Enter'),
-  ])
-  expect(login.status()).toBe(200)
-  await expect(child.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
-  await context.close()
+  await learnerLogin(browser, baseURL, name, pin)
+})
+
+// Nicht das Demo-Kind: learn.spec nutzt dessen PIN.
+test('Kind bearbeiten und mit neuer PIN anmelden', async ({ page, browser, baseURL }) => {
+  const stamp = Date.now()
+  const name = `Bearbeitkind ${stamp}`
+  const renamed = `Umbenannt ${stamp}`
+
+  await page.goto('/verwalten/kinder/neu')
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await page.getByLabel('PIN', { exact: true }).fill('4711')
+  await page.getByRole('button', { name: 'Kind anlegen' }).click()
+  await expect(page.getByRole('status').filter({ hasText: created })).toBeVisible()
+
+  await page.getByRole('link', { name: new RegExp(name) }).click()
+  await expect(page).toHaveURL(/\/verwalten\/kinder\/[0-9a-f-]{36}$/)
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(name)
+  await expect(page.getByLabel('Neue PIN')).toHaveValue('')
+  await page.getByLabel('Name', { exact: true }).fill(renamed)
+  await page.getByLabel('Neue Karten pro Tag').fill('9')
+  await page.getByLabel('Neue PIN').fill('2580')
+  await page.getByLabel('Neue PIN').press('Enter')
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Die Änderungen sind gespeichert. Die neue PIN gilt ab sofort.' }),
+  ).toBeVisible()
+  await expect(page.getByLabel('Neue PIN')).toHaveValue('')
+
+  await learnerLogin(browser, baseURL, renamed, '2580')
 })
 
 // Ungünstigster Fall nach D-15: 100 Zeichen ohne Trennstelle. Kein Aufruf im Rate-Limit "auth".

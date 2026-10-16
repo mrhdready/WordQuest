@@ -43,10 +43,10 @@ describe('Kinderliste', () => {
     stubLearners([learner(1)])
     render()
     const name = await screen.findByText('Kind 1')
-    const row = name.closest('div.min-h-15')
+    const row = name.closest('a.min-h-15')
     expect(row?.textContent).toContain('Neue Karten pro Tag: 4')
     expect(row?.querySelector('[aria-hidden]')?.textContent).toBe('🦉')
-    expect(document.querySelectorAll('div.min-h-15')).toHaveLength(1)
+    expect(document.querySelectorAll('a.min-h-15')).toHaveLength(1)
     expect(screen.queryByText('Noch kein Kinderprofil')).toBeNull()
   })
 
@@ -54,7 +54,7 @@ describe('Kinderliste', () => {
     stubLearners([learner(1), learner(2), learner(3)])
     render()
     await screen.findByText('Kind 3')
-    const rows = document.querySelectorAll('div.min-h-15')
+    const rows = document.querySelectorAll('a.min-h-15')
     expect(rows).toHaveLength(3)
     expect([...rows].map((row) => row.textContent)).toEqual([
       '🦉Kind 1Neue Karten pro Tag: 4',

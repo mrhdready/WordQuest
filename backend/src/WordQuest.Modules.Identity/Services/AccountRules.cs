@@ -16,6 +16,9 @@ public static class AccountRules
     /// <summary>Hoechstlaenge eines Anzeigenamens, wie die Spalte in der Datenbank (D-15).</summary>
     public const int MaxDisplayNameLength = 100;
 
+    /// <summary>Hoechstlaenge eines Avatar-Schluessels, wie die Spalte in der Datenbank.</summary>
+    public const int MaxAvatarKeyLength = 50;
+
     /// <summary>Untergrenze fuer neue Karten pro Tag.</summary>
     public const int MinDailyNewLimit = 3;
 
@@ -62,14 +65,14 @@ public static class AccountRules
         pin is { Length: >= 4 and <= 6 } && pin.All(c => c is >= '0' and <= '9');
 
     /// <summary>
-    /// Alle Befunde zu Name und PIN eines Kinderprofils auf einmal, damit das
-    /// Formular jeden Fehler am Feld zeigen kann. <c>null</c> (und bei der PIN
-    /// auch die leere Zeichenkette) heisst "nicht angegeben" und ist nur dann
-    /// ein Befund, wenn das Feld Pflicht ist; ein angegebener Name aus Leerraum
-    /// fehlt immer.
+    /// Alle Befunde zu Name, PIN und Avatar-Schluessel eines Kinderprofils auf
+    /// einmal, damit das Formular jeden Fehler am Feld zeigen kann. <c>null</c>
+    /// (und bei der PIN auch die leere Zeichenkette) heisst "nicht angegeben"
+    /// und ist nur dann ein Befund, wenn das Feld Pflicht ist; ein angegebener
+    /// Name aus Leerraum fehlt immer. Der Avatar-Schluessel ist nie Pflicht.
     /// </summary>
     public static IReadOnlyList<LearnerProfileProblem> ValidateLearnerProfile(
-        string? displayName, bool nameRequired, string? pin, bool pinRequired)
+        string? displayName, bool nameRequired, string? pin, bool pinRequired, string? avatarKey = null)
     {
         var problems = new List<LearnerProfileProblem>();
 
@@ -92,6 +95,11 @@ public static class AccountRules
         else if (!IsValidPin(pin))
         {
             problems.Add(LearnerProfileProblem.PinInvalid);
+        }
+
+        if (avatarKey is not null && avatarKey.Trim().Length > MaxAvatarKeyLength)
+        {
+            problems.Add(LearnerProfileProblem.AvatarKeyTooLong);
         }
 
         return problems;

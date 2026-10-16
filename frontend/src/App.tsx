@@ -83,6 +83,7 @@ function AppRoutes() {
         <Route path="fortschritt" element={<ProgressPage />} />
         <Route path="kinder" element={<ChildrenPage />} />
         <Route path="kinder/neu" element={<ChildFormPage mode="create" />} />
+        <Route path="kinder/:learnerId" element={<ChildFormPage mode="edit" />} />
         <Route path="konto" element={<AccountPage />} />
       </Route>
 

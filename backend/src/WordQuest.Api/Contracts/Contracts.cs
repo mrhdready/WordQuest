@@ -38,7 +38,8 @@ public sealed record UpdateLearnerSettingsRequest(
     int? DailyNewLimit,
     string? Speed,
     bool? SoundEnabled,
-    string? Pin);
+    string? Pin,
+    string? DisplayName);
 
 // --- Inhalte ----------------------------------------------------------------
 

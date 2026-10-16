@@ -41,6 +41,13 @@ export interface CreateLearnerRequest {
   dailyNewLimit: number
 }
 
+// pin fehlt = PIN unveraendert.
+export interface UpdateLearnerSettingsRequest {
+  displayName: string
+  dailyNewLimit: number
+  pin?: string
+}
+
 export interface VocabularySet {
   id: string
   title: string

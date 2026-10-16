@@ -47,20 +47,10 @@ public static class LearnerEndpoints
         CancellationToken ct)
     {
         IReadOnlyList<LearnerProfileProblem> problems = AccountRules.ValidateLearnerProfile(
-            request.DisplayName, nameRequired: true, request.Pin, pinRequired: true);
+            request.DisplayName, nameRequired: true, request.Pin, pinRequired: true, request.AvatarKey);
         if (problems.Count > 0)
         {
-            // Je Feld hoechstens ein Befund: Fehlen und Ungueltigkeit schliessen sich aus.
-            return Results.ValidationProblem(problems
-                .Select(problem => problem switch
-                {
-                    LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
-                    LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: "Der Name darf höchstens 100 Zeichen lang sein."),
-                    LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 bis 6 Ziffern ein."),
-                    LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
-                    _ => throw new UnreachableException($"Unbekannter Befund {problem}."),
-                })
-                .ToDictionary(error => error.Field, error => new[] { error.Message }));
+            return ValidationProblem(problems);
         }
 
         Guid tenantId = http.User.TenantId();
@@ -111,6 +101,19 @@ public static class LearnerEndpoints
             return Results.NotFound();
         }
 
+        // Alles pruefen, bevor etwas zugewiesen wird: eine abgelehnte Anfrage aendert nichts.
+        IReadOnlyList<LearnerProfileProblem> problems = AccountRules.ValidateLearnerProfile(
+            request.DisplayName, nameRequired: false, request.Pin, pinRequired: false);
+        if (problems.Count > 0)
+        {
+            return ValidationProblem(problems);
+        }
+
+        if (request.DisplayName is not null)
+        {
+            profile.User!.DisplayName = request.DisplayName.Trim();
+        }
+
         if (request.DailyNewLimit is { } limit)
         {
             profile.DailyNewLimit = AccountRules.ClampDailyNewLimit(limit);
@@ -126,7 +129,8 @@ public static class LearnerEndpoints
             profile.SoundEnabled = sound;
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Pin))
+        // Leer heisst "PIN unveraendert"; eine neue PIN hebt eine Sperre sofort auf.
+        if (!string.IsNullOrEmpty(request.Pin))
         {
             profile.PinHash = PasswordHasher.Hash(request.Pin);
             profile.FailedPinAttempts = 0;
@@ -139,6 +143,21 @@ public static class LearnerEndpoints
             profile.Id, profile.User!.DisplayName, profile.AvatarKey, profile.DailyNewLimit,
             profile.Speed.ToString(), profile.SoundEnabled, profile.PinHash != null));
     }
+
+    // Feldtexte fuer POST und PATCH; die Regeln selbst stehen allein in AccountRules.
+    // Je Feld hoechstens ein Befund: Fehlen und Ungueltigkeit schliessen sich aus.
+    private static IResult ValidationProblem(IReadOnlyList<LearnerProfileProblem> problems) =>
+        Results.ValidationProblem(problems
+            .Select(problem => problem switch
+            {
+                LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
+                LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: "Der Name darf höchstens 100 Zeichen lang sein."),
+                LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 bis 6 Ziffern ein."),
+                LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
+                LearnerProfileProblem.AvatarKeyTooLong => (Field: "avatarKey", Message: "Das Bild darf höchstens 50 Zeichen lang sein."),
+                _ => throw new UnreachableException($"Unbekannter Befund {problem}."),
+            })
+            .ToDictionary(error => error.Field, error => new[] { error.Message }));
 
     private static async Task<IResult> OverviewAsync(
         Guid learnerId,

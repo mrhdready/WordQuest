@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { ListGroup, ListRow } from '@/components/ui/list'
 import { EmptyState, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api } from '@/lib/api'
@@ -29,14 +30,17 @@ export function ChildrenPage() {
       {learners.data?.length ? (
         <ListGroup>
           {learners.data.map((learner) => (
-            <ListRow key={learner.id}>
-              <span className="type-emoji" aria-hidden>
-                {avatarFor(learner.avatarKey)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="break-words type-body-lg">{learner.displayName}</p>
-                <p className="type-body-md text-ink-soft">Neue Karten pro Tag: {learner.dailyNewLimit}</p>
-              </div>
+            <ListRow key={learner.id} asChild>
+              <Link to={`/verwalten/kinder/${learner.id}`}>
+                <span className="type-emoji" aria-hidden>
+                  {avatarFor(learner.avatarKey)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="break-words type-body-lg">{learner.displayName}</p>
+                  <p className="type-body-md text-ink-soft">Neue Karten pro Tag: {learner.dailyNewLimit}</p>
+                </div>
+                <ChevronRight className="size-5 text-ink-soft" aria-hidden />
+              </Link>
             </ListRow>
           ))}
         </ListGroup>
