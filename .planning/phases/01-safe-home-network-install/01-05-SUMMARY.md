@@ -138,3 +138,14 @@ completed: 2026-10-16
 - `UNBEKANNT:` ob der Backup-Dienst auf einem Raspberry Pi 5 (arm64) läuft; das Image `prodrigestivill/postgres-backup-local:17` ist dasselbe wie in `docker-compose.yml`, hier nur auf macOS/Docker Desktop belegt.
 
 ## Self-Check: PASSED
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+Urteil NACHBESSERN, behoben vom Orchestrator in `c20bddd`:
+- MAJOR: README verwies auf eine Restore-Anleitung, die gegen eine migrierte Datenbank nichts wiederherstellt (nachgestellt vom Reviewer). Jetzt: Wiederherstellung kommt mit `restore.sh` (REL-02).
+- MINOR: Sicherungsdienst läuft als root → README nennt `sudo` zum Löschen; setup.sh bricht verständlich ab, wenn `backups` nicht dem Nutzer gehört.
+- MINOR: unlesbarer `ConnectionStrings__Default` und JWT-Schlüssel unter 32 Zeichen brechen mit lesbarer Meldung statt Stacktrace ab (`SecretCheck.SigningKeyProblem`, 3 neue Tests).
+- MINOR: Smoke prüft, dass der Dump `COPY public.app_user` enthält.
+
+Belege nach der Nachbesserung (sauberer Worktree): Build 0 Warnungen/0 Fehler; Api.Tests 40/40, Learning.Tests 104/104; Smoke Exit 0 mit IMAGE/LOGIN/RESET/STARTABBRUCH/BACKUP/SMOKE OK.
+Offen für Phase 3 (REL-01): Bestandsinstallationen der alten Schnellstart-Variante haben ein `pgdata`-Volume mit `POSTGRES_PASSWORD=wordquest`; die API verweigert diesen Wert jetzt. Der Umstieg braucht einen dokumentierten Weg in `upgrade.sh`.
