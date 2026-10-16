@@ -108,4 +108,32 @@ docker compose exec -T api dotnet WordQuest.Api.dll reset-password fremd@example
 grep -qF 'Es gibt kein Elternkonto mit dieser E-Mail-Adresse.' reset-unknown.log || fail "reset-password: Text fuer unbekannte Adresse fehlt."
 echo "RESET OK"
 
+echo "== Startabbruch mit bekannten Standard-Secrets (SETUP-05)"
+# Genau das Image, mit dem der api-Container des Stacks laeuft (IMAGE OK oben).
+API_IMAGE="$(docker inspect -f '{{.Image}}' "$(docker compose ps -q api)")"
+[[ -n "$API_IMAGE" ]] || fail "Kein laufender api-Container fuer den Startabbruch-Test."
+# Bekannte Standardwerte aus dem Bestand, zufaellige Werte frisch erzeugt; nichts davon wird ausgegeben.
+known_db="$(sed -n 's/.*ReadSecret("WQ_DB_PASSWORD", "\(.*\)").*/\1/p' "$ROOT/backend/src/WordQuest.Api/Program.cs")"
+known_jwt="nur-zum-ausprobieren-bitte-nicht-im-echtbetrieb-verwenden"
+[[ -n "$known_db" ]] || fail "Bekannter DB-Standardwert in Program.cs nicht gefunden."
+random_db="$(openssl rand -hex 24)"
+random_jwt="$(openssl rand -hex 24)"
+
+# Kein DB-Host erreichbar: die Pruefung muss vor jedem Verbindungsversuch greifen.
+start_abort() {
+  local expected="$1"; shift
+  local status=0 out
+  out="$(docker run --rm -e ASPNETCORE_ENVIRONMENT=Production -e WQ_DB_HOST=gibt-es-nicht "$@" "$API_IMAGE" 2>&1)" || status=$?
+  [[ "$status" == 1 ]] || fail "Start mit Standard-Secret ($expected): Exit $status statt 1."
+  grep -qF "$expected" <<<"$out" || fail "Start mit Standard-Secret: '$expected' fehlt in der Ausgabe."
+}
+start_abort "Start abgebrochen: WQ_DB_PASSWORD" \
+  -e WQ_DB_PASSWORD="$known_db" -e WQ_JWT_SIGNING_KEY="$random_jwt"
+start_abort "Start abgebrochen: WQ_JWT_SIGNING_KEY" \
+  -e WQ_DB_PASSWORD="$random_db" -e WQ_JWT_SIGNING_KEY="$known_jwt"
+start_abort "Start abgebrochen: ConnectionStrings__Default" \
+  -e WQ_DB_PASSWORD="$random_db" -e WQ_JWT_SIGNING_KEY="$random_jwt" \
+  -e ConnectionStrings__Default="Host=gibt-es-nicht;Username=wordquest;Password=$known_db"
+echo "STARTABBRUCH OK"
+
 echo "SMOKE OK"

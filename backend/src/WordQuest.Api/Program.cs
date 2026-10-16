@@ -12,6 +12,25 @@ using WordQuest.Shared.Kernel;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+// Ausserhalb von Development keine fehlenden oder bekannten Standard-Secrets
+// (SETUP-05). Laeuft vor jedem Datenbankzugriff und vor jedem CLI-Verb.
+if (!builder.Environment.IsDevelopment())
+{
+    string? explicitConnection = builder.Configuration.GetConnectionString("Default");
+    string? secretProblem =
+        SecretCheck.Problem("WQ_JWT_SIGNING_KEY", ReadSecret("WQ_JWT_SIGNING_KEY", builder.Configuration["Auth:SigningKey"]))
+        ?? (string.IsNullOrWhiteSpace(explicitConnection)
+            ? SecretCheck.Problem("WQ_DB_PASSWORD", ReadSecret("WQ_DB_PASSWORD", null))
+            : SecretCheck.ConnectionStringProblem(explicitConnection));
+
+    if (secretProblem is not null)
+    {
+        Console.Error.WriteLine(secretProblem);
+        Environment.ExitCode = 1;
+        return;
+    }
+}
+
 // --- Konfiguration ----------------------------------------------------------
 // Secrets kommen als Datei (Docker Secrets), nicht als Umgebungsvariable:
 // Umgebungsvariablen tauchen in Prozesslisten, Crashdumps und `docker inspect`
