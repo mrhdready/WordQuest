@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 export function Label({ className, ...props }: ComponentProps<typeof LabelPrimitive.Root>) {
   return (
     <LabelPrimitive.Root
-      className={cn('text-sm font-semibold text-ink-soft', className)}
+      className={cn('type-label-section text-ink-soft', className)}
       {...props}
     />
   )
@@ -64,7 +64,7 @@ export function Spinner({ label = 'Lädt …' }: { label?: string }) {
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger" role="alert">
+    <p className="rounded-sm bg-surface-error p-4 type-body-md-strong text-danger-text" role="alert">
       {message}
     </p>
   )

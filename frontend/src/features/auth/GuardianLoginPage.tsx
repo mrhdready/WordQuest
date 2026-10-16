@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ErrorNote, Label } from '@/components/ui/misc'
 import { useAuth } from '@/lib/auth'
@@ -30,10 +30,10 @@ export function GuardianLoginPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-5 py-8 safe-top safe-bottom">
+    <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center px-4 py-8 safe-top safe-bottom">
       <Card>
         <CardHeader>
-          <CardTitle>Anmelden</CardTitle>
+          <h1 className="type-large-title">Anmelden</h1>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -70,7 +70,7 @@ export function GuardianLoginPage() {
         </CardContent>
       </Card>
 
-      <Link to="/" className="mt-6 text-center text-sm font-semibold text-ink-soft underline">
+      <Link to="/" className="mt-6 text-center type-body-md-strong text-ink underline">
         Zur Profilauswahl
       </Link>
     </div>

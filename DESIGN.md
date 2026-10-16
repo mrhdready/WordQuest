@@ -64,6 +64,11 @@ typography:
     fontSize: 15px
     fontWeight: 400
     lineHeight: 21px
+  body-md-strong:
+    fontFamily: "-apple-system, 'SF Pro Rounded', ui-rounded, 'Segoe UI Variable', system-ui, sans-serif"
+    fontSize: 15px
+    fontWeight: 600
+    lineHeight: 21px
   body-sm:
     fontFamily: "-apple-system, 'SF Pro Rounded', ui-rounded, 'Segoe UI Variable', system-ui, sans-serif"
     fontSize: 14px
@@ -85,6 +90,11 @@ typography:
     fontSize: 34px
     fontWeight: 400
     lineHeight: 41px
+  emoji:
+    fontFamily: "-apple-system, 'SF Pro Rounded', ui-rounded, 'Segoe UI Variable', system-ui, sans-serif"
+    fontSize: 60px
+    fontWeight: 400
+    lineHeight: 60px
 rounded:
   sm: 24px
   md: 28px
@@ -262,6 +272,9 @@ Liquid Glass nach dem Vorbild von iOS: Bedienelemente schweben als Glasflächen 
 ## Typography
 
 Systemschrift, abgerundet wo vorhanden (SF Pro Rounded auf Apple-Geräten). Große Titel (`large-title`, 34 px) oben links auf jeder Hauptseite. Das abgefragte Wort im Quiz steht in `display`. Abschnittsüberschriften in Listen als `label-section` in Großbuchstaben. Fließtext mindestens 15 px, Kinder-Texte 17 px. Gewichte 400/600/700/800.
+
+- `body-md-strong`: wie `body-md` mit Gewicht 600, für Fehlertexte in Hinweisen (`note-error`).
+- `emoji`: 60 px für die Emoji-Avatare der Kinderprofile.
 
 ## Layout
 

@@ -1,10 +1,9 @@
 @import 'tailwindcss';
 
 /*
-  Zwei Bereiche, zwei Tonlagen:
-  - Kinderbereich: warm, kontrastreich, grosse Flaechen.
-  - Elternbereich: ruhig, sachlich, dicht.
-  Die Tokens hier sind der gemeinsame Nenner.
+  Uebergang: alte Theme-Namen fuer noch nicht umgestellte Seiten, entfaellt in 01-04.
+  Der Block steht vor dem Token-Import, damit gleichnamige Tokens (ink, ink-soft,
+  coin) die Werte aus DESIGN.md bekommen.
 */
 @theme {
   --color-ink: oklch(0.22 0.03 265);
@@ -35,9 +34,211 @@
     sans-serif;
 }
 
+/* Aus DESIGN.md erzeugt (npm run design:export), nie von Hand aendern. */
+@import './design-tokens.css';
+
+/*
+  Die benannten Abstaende aus DESIGN.md kollidieren mit max-w-* (Containerbreiten):
+  ohne Reset waere max-w-md nur 16 px breit. Die Skala 4/8/16/24/32/48/64 laeuft
+  ueber die Tailwind-Stufen 1/2/4/6/8/12/16.
+*/
+@theme {
+  --spacing-xs: initial;
+  --spacing-sm: initial;
+  --spacing-md: initial;
+  --spacing-lg: initial;
+  --spacing-xl: initial;
+  --spacing-2xl: initial;
+  --spacing-3xl: initial;
+}
+
+/*
+  Eine Schriftstufe = eine Klasse. text-<stufe> taugt nicht: tailwind-merge haelt
+  es fuer eine Textfarbe und wirft die daneben stehende Farbe weg.
+*/
+@utility type-* {
+  font-size: --value(--text-*);
+  line-height: --value(--leading-*);
+  font-weight: --value(--font-weight-*);
+  letter-spacing: --value(--tracking-*);
+}
+
+/*
+  Glasflaechen (DESIGN.md "Elevation & Depth"). Pflicht-Fallback: ohne
+  backdrop-filter oder bei reduzierter Transparenz deckend in glass-opaque.
+  Tiefe (Schatten, Lichtkante) steht einmal zentral in --wq-glass-depth.
+*/
+@utility glass {
+  background-color: var(--color-glass);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--wq-glass-rim);
+    -webkit-mask:
+      linear-gradient(var(--color-on-primary) 0 0) content-box,
+      linear-gradient(var(--color-on-primary) 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-clear {
+  background-color: var(--color-glass-clear);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--wq-glass-rim);
+    -webkit-mask:
+      linear-gradient(var(--color-on-primary) 0 0) content-box,
+      linear-gradient(var(--color-on-primary) 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-sheet {
+  background-color: var(--color-glass-sheet);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--wq-glass-rim);
+    -webkit-mask:
+      linear-gradient(var(--color-on-primary) 0 0) content-box,
+      linear-gradient(var(--color-on-primary) 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-selected {
+  background-color: var(--color-glass-selected);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--wq-glass-rim);
+    -webkit-mask:
+      linear-gradient(var(--color-on-primary) 0 0) content-box,
+      linear-gradient(var(--color-on-primary) 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/*
+  Glasfarbe ohne Blur fuer Eingabefelder, Chips und Ziffern-Tasten: viele kleine
+  Blur-Ebenen ruckeln auf guenstigen Tablets. Gleicher deckender Fallback.
+*/
+@utility glass-flat {
+  background-color: var(--color-glass);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+  }
+}
+
+@utility glass-flat-clear {
+  background-color: var(--color-glass-clear);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+  }
+}
+
+@utility glass-flat-selected {
+  background-color: var(--color-glass-selected);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+  }
+}
+
 @layer base {
   :root {
     color-scheme: light;
+    --wq-glass-depth:
+      0 12px 40px color-mix(in oklch, var(--color-primary-deep) 18%, transparent),
+      inset 0 1px 0 color-mix(in oklch, var(--color-on-primary) 95%, transparent),
+      inset 0 -1px 0 color-mix(in oklch, var(--color-on-primary) 40%, transparent);
+    /* Verlaufsrand: hell oben links und unten rechts. */
+    --wq-glass-rim: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--color-on-primary) 90%, transparent),
+      transparent 40%,
+      transparent 60%,
+      color-mix(in oklch, var(--color-on-primary) 70%, transparent)
+    );
+  }
+
+  /* Bezug fuer den Verlaufsrand (::before). :where() haelt die Spezifitaet bei 0,
+     damit absolute/fixed aus Utilities immer gewinnen. */
+  :where(.glass, .glass-clear, .glass-sheet, .glass-selected) {
+    position: relative;
   }
 
   * {
@@ -50,11 +251,19 @@
     height: 100%;
   }
 
+  /* Backdrop direkt auf body (kein Pseudo-Element): der Kontrastlauf ersetzt ihn
+     per CSSOM durch je eine Blob-Farbe. */
   body {
     margin: 0;
-    background: var(--color-surface);
+    background-color: var(--color-backdrop-base);
+    background-image:
+      radial-gradient(circle at 0% 0%, var(--color-backdrop-blue), transparent 55%),
+      radial-gradient(circle at 100% 30%, var(--color-backdrop-cyan), transparent 50%),
+      radial-gradient(circle at 0% 100%, var(--color-backdrop-pink), transparent 55%),
+      radial-gradient(circle at 100% 100%, var(--color-backdrop-yellow), transparent 50%);
+    background-attachment: fixed;
     color: var(--color-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-body-md);
     /* Overscroll abschalten: ein Kind, das beim Antippen die Seite
        nach unten zieht, verliert mitten im Spiel den Kontext. */
     overscroll-behavior: none;
@@ -67,6 +276,12 @@
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Ein Fokusbild fuer alle Bedienelemente (UI-SPEC D6). */
+  :focus-visible {
+    outline: 3px solid var(--color-primary);
+    outline-offset: 3px;
   }
 
   button,
