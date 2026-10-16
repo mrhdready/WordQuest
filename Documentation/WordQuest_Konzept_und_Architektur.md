@@ -566,6 +566,8 @@ POST   /auth/learner-login              learnerId + PIN   → Access + Refresh
 POST   /auth/refresh
 POST   /auth/logout
 
+POST   /account/password                currentPassword, newPassword → 204 (Elternkonto)
+
 GET    /learners                        Kinder des Mandanten
 POST   /learners                        displayName, avatarKey?, pin?
 PATCH  /learners/{id}/settings          dailyNewLimit, speed, soundEnabled, pin
@@ -592,7 +594,7 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 
-Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen pro Minute pro IP auf allen `/auth`-Routen, einschließlich `refresh`. Weil im Heimnetz hinter dem Proxy alle Geräte dieselbe IP haben, kann ein Familienmitglied die anderen aussperren (bekannter Fehler, `FIX-01`). PIN: nach 10 Fehlversuchen in Folge wird das Profil 15 Minuten gesperrt.
+Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen pro Minute pro IP auf allen `/auth`-Routen, einschließlich `refresh`, und auf `/account/password`. Weil im Heimnetz hinter dem Proxy alle Geräte dieselbe IP haben, kann ein Familienmitglied die anderen aussperren (bekannter Fehler, `FIX-01`). PIN: nach 10 Fehlversuchen in Folge wird das Profil 15 Minuten gesperrt.
 
 ---
 
@@ -636,6 +638,7 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 | Thema | Umsetzung |
 |---|---|
 | Passwörter | PBKDF2-HMAC-SHA256, 210 000 Iterationen, eigene Implementierung (`PasswordHasher.cs`), kein ASP.NET Core Identity |
+| Passwort ändern | `POST /api/v1/account/password` (`AccountEndpoints.cs`, nur Elternkonten, Rate-Limit wie `/auth`) prüft das aktuelle Passwort; die Konto-Id kommt nur aus dem Token. Falsches aktuelles Passwort ergibt 400 mit Feldfehler, nicht 401. Neue Passwörter brauchen mindestens 8 Zeichen; Passwörter nur aus Leerzeichen werden abgelehnt, Leerzeichen am Rand bleiben Teil des Passworts. Andere Sitzungen bleiben angemeldet. **Bekannte Lücke:** neue Passwörter werden nicht gegen Listen häufiger Passwörter geprüft (v1, D-18) |
 | PIN | separat gehasht (gleiches Verfahren), 10 Fehlversuche in Folge, dann 15 Minuten Sperre |
 | Token | Access 15 min, Refresh 30 Tage rotierend, Reuse-Detection; gespeichert wird nur der Hash des Refresh-Tokens. `reset-password` widerruft alle Refresh-Tokens des Kontos; bereits ausgegebene Access-Tokens bleiben bis zu ihrem Ablauf gültig (höchstens 15 Minuten, `Auth:AccessTokenMinutes`) |
 | Transport | HSTS außerhalb von Development; TLS nur in der Domain-Variante. Keine Cookies: Tokens liegen im `localStorage` und gehen im `Authorization`-Header (bewusst akzeptiertes Risiko) |

@@ -102,7 +102,8 @@ docker compose exec api dotnet WordQuest.Api.dll reset-password <E-Mail>
 ```
 
 Der Befehl erzeugt ein neues Passwort und zeigt es **genau einmal** an; es wird
-nirgends im Klartext gespeichert. Damit anmelden. Gibt
+nirgends im Klartext gespeichert. Damit anmelden und das Passwort danach unter
+„Konto“ ändern. Gibt
 es kein Elternkonto mit dieser Adresse, meldet er das und ändert nichts.
 Angemeldete Geräte können ihre Sitzung danach nicht mehr verlängern. Wer schon
 angemeldet ist, bleibt höchstens bis zum Ablauf des aktuellen Zugangs angemeldet

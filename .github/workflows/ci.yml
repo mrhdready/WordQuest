@@ -70,7 +70,7 @@ jobs:
           path: "**/TestResults/**"
 
   frontend:
-    name: Frontend (lint & build)
+    name: Frontend (lint, build, test & design)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,6 +88,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      - run: npm test
+      # DESIGN.md-Lint und -Export (npx @google/design.md, gepinnte Version in package.json).
+      - run: npm run design:check
+      - run: npm run design:classes
 
   images:
     name: Container images

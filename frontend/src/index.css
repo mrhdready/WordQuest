@@ -156,9 +156,17 @@
   }
 
   html,
-  body,
   #root {
     height: 100%;
+  }
+
+  /* body waechst mit dem Inhalt (min-height statt height): sonst endet seine Box
+     bei Seiten knapp ueber Bildschirmhoehe mitten in der schwebenden Tab-Leiste,
+     und axe meldet deren Kontrast als nicht messbar (elmPartiallyObscured).
+     grid laesst #root mit height: 100% trotzdem die volle Hoehe fuellen. */
+  body {
+    display: grid;
+    min-height: 100%;
   }
 
   /* Fokussierte Elemente nicht unter der schwebenden Tab-Leiste (WCAG 2.4.11).
