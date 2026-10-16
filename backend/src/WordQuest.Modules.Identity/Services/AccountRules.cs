@@ -3,7 +3,8 @@ using System.Net.Mail;
 namespace WordQuest.Modules.Identity.Services;
 
 /// <summary>
-/// Regeln fuer Elternkonten (E-Mail, Passwort). Sie stehen an genau einer
+/// Regeln fuer Elternkonten (E-Mail, Passwort) und Kinderprofile (Name, PIN,
+/// Tageslimit). Sie stehen an genau einer
 /// Stelle, damit UI, direkter API-Aufruf und CLI (setup.sh) dieselbe Regel
 /// anwenden; Oberflaechen spiegeln sie nur fuer die sofortige Rueckmeldung.
 /// </summary>
@@ -11,6 +12,15 @@ public static class AccountRules
 {
     /// <summary>Mindestlaenge eines Passworts (entschieden 2026-10-15, D-05).</summary>
     public const int MinPasswordLength = 8;
+
+    /// <summary>Hoechstlaenge eines Anzeigenamens, wie die Spalte in der Datenbank (D-15).</summary>
+    public const int MaxDisplayNameLength = 100;
+
+    /// <summary>Untergrenze fuer neue Karten pro Tag.</summary>
+    public const int MinDailyNewLimit = 3;
+
+    /// <summary>Obergrenze fuer neue Karten pro Tag.</summary>
+    public const int MaxDailyNewLimit = 15;
 
     /// <summary>Normalisiert eine E-Mail-Adresse wie der Login (Trim, Kleinschreibung).</summary>
     public static string NormalizeEmail(string email)
@@ -41,4 +51,56 @@ public static class AccountRules
     /// </summary>
     public static bool IsValidPassword(string? password) =>
         !string.IsNullOrWhiteSpace(password) && password.Length >= MinPasswordLength;
+
+    /// <summary>
+    /// 4 bis 6 Zeichen, jedes aus '0' bis '9' (PAR-02). Bewusst kein
+    /// <c>char.IsDigit</c> bzw. <c>\d</c>: die treffen auch andere
+    /// Unicode-Ziffern, die das Kind auf dem Ziffernfeld nicht eingeben kann.
+    /// Kein Trimmen.
+    /// </summary>
+    public static bool IsValidPin(string? pin) =>
+        pin is { Length: >= 4 and <= 6 } && pin.All(c => c is >= '0' and <= '9');
+
+    /// <summary>
+    /// Alle Befunde zu Name und PIN eines Kinderprofils auf einmal, damit das
+    /// Formular jeden Fehler am Feld zeigen kann. <c>null</c> (und bei der PIN
+    /// auch die leere Zeichenkette) heisst "nicht angegeben" und ist nur dann
+    /// ein Befund, wenn das Feld Pflicht ist; ein angegebener Name aus Leerraum
+    /// fehlt immer.
+    /// </summary>
+    public static IReadOnlyList<LearnerProfileProblem> ValidateLearnerProfile(
+        string? displayName, bool nameRequired, string? pin, bool pinRequired)
+    {
+        var problems = new List<LearnerProfileProblem>();
+
+        if (displayName is null ? nameRequired : string.IsNullOrWhiteSpace(displayName))
+        {
+            problems.Add(LearnerProfileProblem.NameMissing);
+        }
+        else if (displayName is not null && displayName.Trim().Length > MaxDisplayNameLength)
+        {
+            problems.Add(LearnerProfileProblem.NameTooLong);
+        }
+
+        if (string.IsNullOrEmpty(pin))
+        {
+            if (pinRequired)
+            {
+                problems.Add(LearnerProfileProblem.PinMissing);
+            }
+        }
+        else if (!IsValidPin(pin))
+        {
+            problems.Add(LearnerProfileProblem.PinInvalid);
+        }
+
+        return problems;
+    }
+
+    /// <summary>
+    /// Gedeckelt, weil ein zu hoher Wert in den Folgetagen eine
+    /// Wiederholungslawine erzeugt (Konzept §6.3).
+    /// </summary>
+    public static int ClampDailyNewLimit(int limit) =>
+        Math.Clamp(limit, MinDailyNewLimit, MaxDailyNewLimit);
 }

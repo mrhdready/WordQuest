@@ -6,6 +6,8 @@ import { ProfilePickerPage } from '@/features/auth/ProfilePickerPage'
 import { LearnHomePage } from '@/features/learn/LearnHomePage'
 import { SessionPage } from '@/features/learn/SessionPage'
 import { AccountPage } from '@/features/manage/AccountPage'
+import { ChildFormPage } from '@/features/manage/ChildFormPage'
+import { ChildrenPage } from '@/features/manage/ChildrenPage'
 import { ManageLayout } from '@/features/manage/ManageLayout'
 import { ProgressPage } from '@/features/manage/ProgressPage'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
@@ -79,6 +81,8 @@ function AppRoutes() {
         <Route index element={<SetsPage />} />
         <Route path="sets/:setId" element={<SetDetailPage />} />
         <Route path="fortschritt" element={<ProgressPage />} />
+        <Route path="kinder" element={<ChildrenPage />} />
+        <Route path="kinder/neu" element={<ChildFormPage mode="create" />} />
         <Route path="konto" element={<AccountPage />} />
       </Route>
 

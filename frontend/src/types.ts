@@ -35,6 +35,12 @@ export interface Learner {
   hasPin: boolean
 }
 
+export interface CreateLearnerRequest {
+  displayName: string
+  pin: string
+  dailyNewLimit: number
+}
+
 export interface VocabularySet {
   id: string
   title: string

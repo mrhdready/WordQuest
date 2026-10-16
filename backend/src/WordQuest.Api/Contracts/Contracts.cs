@@ -32,7 +32,7 @@ public sealed record LearnerDto(
     bool SoundEnabled,
     bool HasPin);
 
-public sealed record CreateLearnerRequest(string DisplayName, string? AvatarKey, string? Pin);
+public sealed record CreateLearnerRequest(string DisplayName, string? AvatarKey, string? Pin, int? DailyNewLimit);
 
 public sealed record UpdateLearnerSettingsRequest(
     int? DailyNewLimit,

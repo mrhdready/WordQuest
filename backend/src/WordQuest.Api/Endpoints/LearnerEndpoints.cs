@@ -45,12 +45,20 @@ public static class LearnerEndpoints
         HttpContext http,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.DisplayName))
+        IReadOnlyList<LearnerProfileProblem> problems = AccountRules.ValidateLearnerProfile(
+            request.DisplayName, nameRequired: true, request.Pin, pinRequired: true);
+        if (problems.Count > 0)
         {
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["displayName"] = ["Wie soll das Kind heissen? Ein Spitzname genuegt."],
-            });
+            // Je Feld hoechstens ein Befund: Fehlen und Ungueltigkeit schliessen sich aus.
+            return Results.ValidationProblem(problems
+                .Select(problem => problem switch
+                {
+                    LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
+                    LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: "Der Name darf höchstens 100 Zeichen lang sein."),
+                    LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 bis 6 Ziffern ein."),
+                    _ => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
+                })
+                .ToDictionary(error => error.Field, error => new[] { error.Message }));
         }
 
         Guid tenantId = http.User.TenantId();
@@ -67,8 +75,12 @@ public static class LearnerEndpoints
             Id = user.Id,
             TenantId = tenantId,
             AvatarKey = string.IsNullOrWhiteSpace(request.AvatarKey) ? "fox" : request.AvatarKey.Trim(),
-            PinHash = string.IsNullOrWhiteSpace(request.Pin) ? null : PasswordHasher.Hash(request.Pin),
+            PinHash = PasswordHasher.Hash(request.Pin!),
         };
+        if (request.DailyNewLimit is { } limit)
+        {
+            profile.DailyNewLimit = AccountRules.ClampDailyNewLimit(limit);
+        }
 
         db.Users.Add(user);
         db.LearnerProfiles.Add(profile);
@@ -99,9 +111,7 @@ public static class LearnerEndpoints
 
         if (request.DailyNewLimit is { } limit)
         {
-            // Gedeckelt, weil ein zu hoher Wert in den Folgetagen eine
-            // Wiederholungslawine erzeugt (Konzept §6.3).
-            profile.DailyNewLimit = Math.Clamp(limit, 3, 15);
+            profile.DailyNewLimit = AccountRules.ClampDailyNewLimit(limit);
         }
 
         if (request.Speed is not null && Enum.TryParse(request.Speed, true, out GameSpeed speed))
