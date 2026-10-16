@@ -4,9 +4,10 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Field } from '@/components/ui/field'
 import { Input, Textarea } from '@/components/ui/input'
 import { ListGroup, ListRow } from '@/components/ui/list'
-import { Badge, EmptyState, ErrorNote, Label, Spinner } from '@/components/ui/misc'
+import { Badge, EmptyState, ErrorNote, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import type { ImportPreview, VocabularyEntry } from '@/types'
 
@@ -64,22 +65,24 @@ export function SetDetailPage() {
           optional und wuerde das Abtippen eines Vokabelhefts nur bremsen. */}
       <Card>
         <form onSubmit={submit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="flex flex-1 flex-col gap-2">
-            <Label htmlFor="eintrag-deutsch">Deutsch</Label>
-            <Input
-              id="eintrag-deutsch"
-              value={source}
-              onChange={(event) => setSource(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-1 flex-col gap-2">
-            <Label htmlFor="eintrag-englisch">Englisch</Label>
-            <Input
-              id="eintrag-englisch"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-            />
-          </div>
+          <Field id="eintrag-deutsch" label="Deutsch" className="flex-1">
+            {(control) => (
+              <Input
+                {...control}
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field id="eintrag-englisch" label="Englisch" className="flex-1">
+            {(control) => (
+              <Input
+                {...control}
+                value={target}
+                onChange={(event) => setTarget(event.target.value)}
+              />
+            )}
+          </Field>
           <Button type="submit" disabled={addEntry.isPending}>
             Hinzufügen
           </Button>
