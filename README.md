@@ -32,38 +32,10 @@ einem Raspberry Pi 5 oder einem ARM-NAS.
 > Change visibility → Public** umstellen, für `-web` genauso. Ohne diesen
 > Schritt braucht jeder Zielhost eine Anmeldung mit Token.
 
-### Variante A — Schnelltest, zwei Minuten
+### Variante A — Heimnetz (Standard)
 
-Zum Ausprobieren auf irgendeinem Docker-Host. Eine Datei, kein Zertifikat,
-keine Konfiguration.
-
-```bash
-curl -O https://raw.githubusercontent.com/<account>/WordQuest/master/docker-compose.quick.yml
-
-WQ_IMAGE_PREFIX=ghcr.io/<account>/wordquest \
-  docker compose -f docker-compose.quick.yml up -d
-```
-
-Fertig. Die App läuft auf **http://<host>:8080**.
-
-| | |
-|---|---|
-| Eltern | `demo@wordquest.local` / `demo1234` |
-| Kind | Profil „Max", PIN `1234` |
-
-Ein anderer Port geht mit `WQ_PORT=9000` vor dem Befehl.
-
-**Was hier fehlt:** Ohne HTTPS lässt sich die App nicht als PWA aufs Tablet
-legen — Service Worker verlangen eine sichere Herkunft (außer auf
-`localhost`). Im Browser funktioniert alles, aber ohne Installation und ohne
-Offlinebetrieb. Außerdem stehen die Passwörter im Klartext in der Compose-Datei.
-Für den Dauerbetrieb also Variante B.
-
-Aufräumen: `docker compose -f docker-compose.quick.yml down -v`
-
-### Variante B — Dauerbetrieb mit TLS
-
-Das ist die Variante für den Rechner, auf dem es wirklich laufen soll.
+Für den Rechner im Heimnetz, auf dem WordQuest laufen soll. Kein Zertifikat,
+keine Domain.
 
 ```bash
 git clone https://github.com/<account>/WordQuest.git wordquest
@@ -71,9 +43,30 @@ cd wordquest
 ./setup.sh
 ```
 
-`setup.sh` erzeugt Secrets, fragt Hostname, ACME-Mail und Image-Präfix ab,
-zieht die Images und startet den Stack. Danach ist WordQuest unter
-`https://<dein-host>` erreichbar.
+`setup.sh` fragt genau drei Dinge:
+
+1. das Image-Präfix (`ghcr.io/<account>/wordquest`),
+2. die E-Mail-Adresse für dein Elternkonto,
+3. das Passwort dafür, zweimal, mindestens 8 Zeichen; die Eingabe bleibt unsichtbar.
+
+Dann erzeugt es DB-Passwort und JWT-Schlüssel als Dateien in `secrets/`, legt
+`.env` an (`COMPOSE_FILE=docker-compose.quick.yml`), lädt die Images, startet
+WordQuest und legt das Elternkonto an. Danach läuft die App auf
+**http://<host>:8080**; anmelden kannst du dich nur mit diesem Konto, einen
+Demo-Zugang gibt es nicht.
+
+Ein zweiter Lauf von `setup.sh` ändert nichts: Secrets, `.env` und Konto
+bleiben, wie sie sind. Ein anderer Port geht mit `WQ_PORT=9000` in `.env`.
+
+**Was hier fehlt:** Ohne HTTPS lässt sich die App nicht als PWA aufs Tablet
+legen — Service Worker verlangen eine sichere Herkunft (außer auf
+`localhost`). Im Browser funktioniert alles, aber ohne Installation und ohne
+Offlinebetrieb. Wer das braucht, nimmt Variante B.
+
+**Früherer Schnelltest:** Wer WordQuest schon mit der alten Schnelltest-Datei
+gestartet hat, findet dessen Daten im Volume des Compose-Projekts
+`wordquest-quick`. Sie werden nicht übernommen. Werden sie nicht mehr gebraucht:
+`docker compose -p wordquest-quick down -v`.
 
 Der Installer schützt das Verzeichnis `secrets/` mit `0700`. Die einzelnen
 Secret-Dateien erhalten `0644`, damit die Container sie als Non-Root-Benutzer
@@ -84,9 +77,26 @@ Was dabei entsteht und **nicht** ins Repository gehört (steht in `.gitignore`):
 ```
 secrets/db_password.txt    48 Zeichen Zufall
 secrets/jwt_key.txt        48 Zeichen Zufall, signiert die Tokens
-.env                       Hostname, Image-Präfix, ACME-Einstellungen
-backups/                   tägliche pg_dumps
+.env                       Compose-Datei, Image-Präfix, weitere Einstellungen
+backups/                   tägliche pg_dumps (bisher nur Variante B)
 ```
+
+### Variante B — Mit Domain und TLS (für Fortgeschrittene)
+
+Mit eigener Domain und Let's-Encrypt-Zertifikat über Traefik. Nur damit lässt
+sich die App als PWA installieren.
+
+```bash
+git clone https://github.com/<account>/WordQuest.git wordquest
+cd wordquest
+cp .env.example .env
+```
+
+In `.env` von Hand eintragen: `COMPOSE_FILE=docker-compose.yml`,
+`WQ_IMAGE_PREFIX`, `WQ_HOST`, `WQ_ACME_EMAIL` und den DNS-Anbieter (siehe
+unten). Danach `./setup.sh`: Es lässt die vorhandene `.env` unverändert,
+erzeugt die Secrets, startet den Stack und legt auch hier das Elternkonto an.
+WordQuest ist dann unter `https://<WQ_HOST>` erreichbar.
 
 #### Zu TLS — die häufigste Stolperstelle
 
@@ -114,11 +124,12 @@ Kind, das erst eine Sicherheitswarnung wegklicken muss, um zu lernen, ist kein
 guter Ausgangspunkt — und iOS installiert eine PWA mit ungültigem Zertifikat
 gar nicht erst.
 
-#### Nach der Ersteinrichtung
+#### Demo-Daten
 
-1. Eigenes Elternkonto anlegen, Demo-Passwort ändern.
-2. In `.env` `WQ_SEED_DEMO_DATA=false` setzen.
-3. `docker compose up -d` — die Demo-Daten bleiben, werden aber nicht neu angelegt.
+Demo-Daten (Elternkonto, Kind, Beispielset) gibt es nur noch als
+Entwickler-Option: `WQ_SEED_DEMO_DATA=true` legt sie beim Start auf einer
+leeren Datenbank an. In beiden Compose-Dateien und in `.env.example` steht der
+Wert auf `false`.
 
 #### Aktualisieren
 
@@ -149,7 +160,9 @@ npm install
 npm run dev                                    # http://localhost:5173
 ```
 
-Der Vite-Dev-Server leitet `/api` an `localhost:5080` weiter.
+Der Vite-Dev-Server leitet `/api` an `localhost:5080` weiter. Im
+Entwicklungsmodus legt die API Demo-Daten an (Zugangsdaten in
+`backend/src/WordQuest.Infrastructure/Seed/DemoDataSeeder.cs`).
 
 Images lokal bauen statt ziehen:
 

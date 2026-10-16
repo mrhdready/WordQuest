@@ -4,7 +4,7 @@
 # docker-compose.build.yml dazunehmen:
 #     docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 #
-# Zum schnellen Ausprobieren ohne Domain und Zertifikat: docker-compose.quick.yml
+# Heimnetz ohne Domain und Zertifikat (Standard): docker-compose.quick.yml
 
 name: wordquest
 
@@ -40,9 +40,8 @@ services:
       WQ_PUBLIC_URL: https://${WQ_HOST:-wordquest.local}
       WQ_TIMEZONE: ${WQ_TIMEZONE:-Europe/Berlin}
       WQ_AI_PROVIDER: none
-      # Seed-Daten beim ersten Start (Demo-Elternkonto, Kind, Beispielset).
-      # Nach der Ersteinrichtung auf "false" setzen.
-      WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-true}
+      # Demo-Daten nur fuer Entwicklung und Tests.
+      WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-false}
     depends_on:
       db:
         condition: service_healthy

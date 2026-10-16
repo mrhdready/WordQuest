@@ -458,7 +458,7 @@ Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen
 
 ### 10.1 C4 — Container
 
-Das Bild zeigt die Variante mit Domain und TLS (`docker-compose.yml`). Primärer Betrieb für v1.0 ist das Heimnetz über HTTP ohne Traefik: `docker-compose.quick.yml` liefert `web` auf Port 8080 aus und wird für v1.0 betriebstauglich gemacht (`SETUP-01`). Die Domain-Variante bleibt für fortgeschrittene Nutzer bestehen.
+Das Bild zeigt die Variante mit Domain und TLS (`docker-compose.yml`). Primärer Betrieb für v1.0 ist das Heimnetz über HTTP ohne Traefik: `docker-compose.quick.yml` liefert `web` auf Port 8080 aus, liest DB-Passwort und JWT-Schlüssel aus Dateien in `./secrets` und wird mit `./setup.sh` eingerichtet (`SETUP-01`, `SETUP-02`). Die Domain-Variante bleibt für fortgeschrittene Nutzer bestehen.
 
 ```
 ┌──────────────────── Docker-Host (NAS / Mini-PC / Raspberry Pi 5) ────────────────┐
@@ -483,7 +483,7 @@ Das Bild zeigt die Variante mit Domain und TLS (`docker-compose.yml`). Primärer
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Traefik leitet alle Anfragen an `web`; nginx im `web`-Container reicht `/api/` und `/health/` an `api` weiter (`frontend/nginx.conf`). Der `backup`-Container verbindet sich mit `postgres`, nicht mit `api`. Aufbewahrung: 14 Tage, 8 Wochen, 6 Monate. In der HTTP-Variante (`docker-compose.quick.yml`) gibt es heute weder Traefik noch Backup. Ein optionaler Log-Container (seq) ist nicht vorhanden.
+Traefik leitet alle Anfragen an `web`; nginx im `web`-Container reicht `/api/` und `/health/` an `api` weiter (`frontend/nginx.conf`). Der `backup`-Container verbindet sich mit `postgres`, nicht mit `api`. Aufbewahrung: 14 Tage, 8 Wochen, 6 Monate. In der HTTP-Variante (`docker-compose.quick.yml`) gibt es kein Traefik und bisher kein Backup. Ein optionaler Log-Container (seq) ist nicht vorhanden.
 
 Kein Redis, kein Message Broker, kein separater Auth-Server im MVP. Für eine Familie mit drei Kindern ist das Over-Engineering, und jeder zusätzliche Container ist ein Ding, das der Betreiber (die Eltern) warten muss. Bei Schulbetrieb kämen Redis (Session-Cache) und ein Worker-Container dazu — die API hält keinen Zustand im Speicher außer dem Rate Limiter; Schulen sind für v1.0 außer Scope.
 
@@ -616,14 +616,14 @@ Die Compose-Dateien im Repository sind die Quelle; hier steht nur die Übersicht
 
 | Datei | Zweck | Stand |
 |---|---|---|
-| `docker-compose.quick.yml` | Heimnetz über HTTP, `http://<host>:8080`, kein Traefik, kein Zertifikat | **primärer Betrieb für v1.0**; heute noch als Probebetrieb markiert: bekannte Standardwerte für DB-Passwort und JWT-Schlüssel, Demo-Daten an, kein Backup. Betriebstauglich machen: `SETUP-01`, `SETUP-02`, `SETUP-05` |
+| `docker-compose.quick.yml` | Heimnetz über HTTP, `http://<host>:8080`, kein Traefik, kein Zertifikat | **primärer Betrieb für v1.0**; Secret-Dateien aus `setup.sh`, Elternkonto aus `setup.sh`, Demo-Daten standardmäßig aus (`WQ_SEED_DEMO_DATA=false`). Noch offen: Backup und Startprüfung der Secrets (`SETUP-01` Rest, `SETUP-05`) |
 | `docker-compose.yml` | Domain + Traefik v3 + Let's Encrypt (DNS-Challenge), Secrets als Dateien, tägliches Backup | für fortgeschrittene Nutzer; wird in v1.0 nicht erweitert |
 | `docker-compose.build.yml` | Images aus dem Quellcode bauen (zusätzlich zu `docker-compose.yml`) | — |
 | `docker-compose.dev.yml` | Entwicklung | — |
 
 Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION:-master}`. Versionierte Tags (z. B. `1.0.0`) statt `master` sind für v1.0 geplant (`REL-04`). Die CI baut die Images für `linux/amd64` und `linux/arm64`.
 
-**Zielbild Erstinstallation:** `git clone`, `./setup.sh`, `docker compose up -d`, Browser öffnen, anmelden. Fünf Minuten, keine manuelle SQL-Eingabe. Migrationen laufen beim API-Start automatisch. Heute erzeugt `setup.sh` die Secrets und fragt Hostname, E-Mail für Let's Encrypt und Image-Präfix ab; die Zugangsdaten des DNS-Providers müssen von Hand in `.env` eingetragen werden. Ein Elternkonto legt `setup.sh` noch nicht an — ohne Demo-Daten gibt es heute keinen Weg zum ersten Login. Geplant: `setup.sh` fragt E-Mail und Passwort ab und legt das Konto an (`SETUP-02`); Update und Wiederherstellung über `upgrade.sh` und `restore.sh` (`REL-01`, `REL-02`).
+**Zielbild Erstinstallation:** `git clone`, `./setup.sh`, `docker compose up -d`, Browser öffnen, anmelden. Fünf Minuten, keine manuelle SQL-Eingabe. Migrationen laufen beim API-Start automatisch. Heute erzeugt `setup.sh` die Secrets, legt `.env` mit `COMPOSE_FILE=docker-compose.quick.yml` an (einzige Frage dazu: Image-Präfix), startet den Stack und fragt E-Mail und Passwort für das Elternkonto ab; das Konto legt das CLI-Verb `create-owner` im API-Container an, das Passwort geht per stdin hinein (`SETUP-02`). Ein zweiter Lauf ändert nichts. Für die Domain-Variante werden `COMPOSE_FILE=docker-compose.yml`, Hostname, ACME-Adresse und DNS-Provider von Hand in `.env` eingetragen. Demo-Daten gibt es nur noch als Entwickler-Option (`WQ_SEED_DEMO_DATA=true`). Geplant: Update und Wiederherstellung über `upgrade.sh` und `restore.sh` (`REL-01`, `REL-02`).
 
 **Zu TLS im Heimnetz:** Eine PWA ist nur über HTTPS installierbar (Ausnahme `localhost`). Im LAN ist das die häufigste Stolperstelle. Für v1.0 ist deshalb der HTTP-Betrieb ohne Domain der Standard — ohne Zertifikatswarnungen, dafür ohne PWA-Installation. Für fortgeschrittene Nutzer bleibt der Weg über eine echte Subdomain (`wordquest.deine-domain.de`) mit Let's-Encrypt-DNS-Challenge, per lokalem DNS auf die interne IP aufgelöst. Das vermeidet Zertifikatswarnungen auf dem Tablet des Kindes — und ein Kind, das eine Sicherheitswarnung wegklicken muss, um zu lernen, ist pädagogisch kein guter Ausgangspunkt. Die Alternative (Reverse Proxy über Cloudflare Tunnel) ist nicht Default, weil sie Daten durch Dritte leitet.
 
