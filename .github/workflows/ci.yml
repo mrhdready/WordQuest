@@ -15,6 +15,24 @@ jobs:
   backend:
     name: Backend (build & test)
     runs-on: ubuntu-latest
+    # Integrationstests (WordQuest.Api.Tests) laufen gegen echtes PostgreSQL.
+    # Das Passwort gilt nur fuer diesen CI-Dienst.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: wordquest
+          POSTGRES_USER: wordquest
+          POSTGRES_PASSWORD: devpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wordquest -d wordquest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      WQ_TEST_DB: Host=localhost;Port=5432;Username=wordquest;Password=devpassword
     steps:
       - uses: actions/checkout@v5
 

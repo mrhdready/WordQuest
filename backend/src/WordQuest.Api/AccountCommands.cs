@@ -50,15 +50,20 @@ public static class AccountCommands
         }
     }
 
+    // Exit 2 = Eingabe falsch (setup.sh fragt erneut), Exit 3 = Konto existiert schon.
     private static async Task<int> ReportAsync(OwnerCreation result, string email, TextWriter output)
     {
-        switch (result)
+        (int code, string message) = result switch
         {
-            case OwnerCreation.Created:
-                await output.WriteLineAsync($"Elternkonto für {AccountRules.NormalizeEmail(email)} angelegt.");
-                return 0;
-            default:
-                throw new InvalidOperationException($"Unbekanntes Ergebnis {result}.");
-        }
+            OwnerCreation.Created => (0, $"Elternkonto für {AccountRules.NormalizeEmail(email)} angelegt."),
+            OwnerCreation.InvalidEmail => (2, "Das sieht nicht nach einer E-Mail-Adresse aus. Bitte noch einmal."),
+            OwnerCreation.PasswordTooShort => (2, $"Das Passwort muss mindestens {AccountRules.MinPasswordLength} Zeichen lang sein."),
+            OwnerCreation.PasswordBlank => (2, "Das Passwort darf nicht nur aus Leerzeichen bestehen."),
+            OwnerCreation.AlreadyExists => (3, "Es gibt schon ein Elternkonto."),
+            _ => throw new InvalidOperationException($"Unbekanntes Ergebnis {result}."),
+        };
+
+        await output.WriteLineAsync(message);
+        return code;
     }
 }

@@ -82,4 +82,11 @@ grep -qF 'Elternkonto ist schon angelegt' run2.log || fail "Lauf 2 meldet kein b
 [[ "$(shasum secrets/*.txt .env)" == "$before" ]] || fail "Lauf 2 hat secrets/*.txt oder .env veraendert."
 [[ "$(tenants)" == 1 ]] || fail "Mehr als ein Mandant nach Lauf 2."
 
+echo "== Zweites Elternkonto direkt ueber create-owner"
+status=0
+printf '%s\n' 'anderes-456' \
+  | docker compose exec -T api dotnet WordQuest.Api.dll create-owner zweite@example.de || status=$?
+[[ "$status" == 3 ]] || fail "Zweites create-owner: Exit $status statt 3."
+[[ "$(tenants)" == 1 ]] || fail "Mehr als ein Mandant nach zweitem create-owner."
+
 echo "SMOKE OK"

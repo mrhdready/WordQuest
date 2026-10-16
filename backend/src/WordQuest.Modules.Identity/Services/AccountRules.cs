@@ -1,3 +1,5 @@
+using System.Net.Mail;
+
 namespace WordQuest.Modules.Identity.Services;
 
 /// <summary>
@@ -16,4 +18,27 @@ public static class AccountRules
         ArgumentNullException.ThrowIfNull(email);
         return email.Trim().ToLowerInvariant();
     }
+
+    /// <summary>
+    /// Einfache Adresse der Form <c>name@domain.tld</c>, ohne Anzeigenamen,
+    /// hoechstens 320 Zeichen.
+    /// </summary>
+    public static bool IsValidEmail(string? email)
+    {
+        string trimmed = email?.Trim() ?? string.Empty;
+        return trimmed.Length is > 0 and <= 320
+            && MailAddress.TryCreate(trimmed, out MailAddress? parsed)
+            && parsed.Address == trimmed
+            && parsed.Host.Contains('.', StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Gueltig ab <see cref="MinPasswordLength"/> Zeichen und nicht nur aus
+    /// Leerraum. Kein Trimmen: das Passwort gilt genau so, wie es eingegeben
+    /// wurde. Die Leerraum-Regel entspricht der Vorbedingung von
+    /// <see cref="PasswordHasher.Hash"/>, sonst endete die Eingabe dort in einer
+    /// Ausnahme (500 bzw. Absturz des CLI-Verbs).
+    /// </summary>
+    public static bool IsValidPassword(string? password) =>
+        !string.IsNullOrWhiteSpace(password) && password.Length >= MinPasswordLength;
 }

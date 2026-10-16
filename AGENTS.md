@@ -157,6 +157,8 @@ dotnet test backend/WordQuest.slnx -c Release
 cd frontend && npm ci && npm run lint && npm run typecheck && npm run build
 ```
 
+Die Backend-Tests brauchen ein laufendes PostgreSQL (`docker compose -f docker-compose.dev.yml up -d`); die Verbindung kommt aus `WQ_TEST_DB` (Standard `Host=localhost;Port=5432;Username=wordquest;Password=devpassword`), jede Test-Factory legt darauf eine eigene Datenbank an. Ohne lokales .NET-SDK laufen Build und Tests im Container `mcr.microsoft.com/dotnet/sdk:10.0` mit `-e WQ_TEST_DB='Host=host.docker.internal;Port=5432;Username=wordquest;Password=devpassword'`.
+
 UI-Änderungen brauchen zusätzlich einen axe-Check (WCAG 2.2 AA) der berührten Seiten, Ergebnis wird festgehalten, sowie den `DESIGN.md`-Lint und -Export (siehe Design).
 
 ## Lokale Entwicklung

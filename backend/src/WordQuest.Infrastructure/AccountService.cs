@@ -25,6 +25,26 @@ public sealed class AccountService(WordQuestDbContext db)
         ArgumentNullException.ThrowIfNull(email);
         ArgumentNullException.ThrowIfNull(password);
 
+        if (await HasOwnerAsync(ct))
+        {
+            return OwnerCreation.AlreadyExists;
+        }
+
+        if (!AccountRules.IsValidEmail(email))
+        {
+            return OwnerCreation.InvalidEmail;
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            return OwnerCreation.PasswordBlank;
+        }
+
+        if (!AccountRules.IsValidPassword(password))
+        {
+            return OwnerCreation.PasswordTooShort;
+        }
+
         var tenant = new Tenant { Name = "Familie", Type = TenantType.Family };
         var owner = new User
         {
