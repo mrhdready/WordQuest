@@ -42,6 +42,11 @@ async function openForm() {
   return screen.findByLabelText('Titel')
 }
 
+// Ein Tick fuer ausstehende Mutationen: ohne ihn waere "kein POST" schon vor dem Senden wahr.
+async function settle() {
+  await new Promise((resolve) => setTimeout(resolve, 20))
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -52,6 +57,7 @@ describe('Set-Formular "Neues Set"', () => {
     const posts = stubApi(async () => Response.json(createdSet, { status: 201 }))
     await openForm()
     await userEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
+    await settle()
     expect(posts).toHaveLength(0)
   })
 
@@ -60,6 +66,7 @@ describe('Set-Formular "Neues Set"', () => {
     const input = await openForm()
     await userEvent.type(input, '   ')
     await userEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
+    await settle()
     expect(posts).toHaveLength(0)
   })
 
@@ -81,6 +88,7 @@ describe('Set-Formular "Neues Set"', () => {
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(input.getAttribute('aria-describedby')).toContain('titel-fehler')
     expect(screen.queryByRole('alert')).toBeNull()
+    expect(document.activeElement).toBe(input)
   })
 
   it('4: Server nicht erreichbar zeigt den Hinweis, Eingabe bleibt', async () => {

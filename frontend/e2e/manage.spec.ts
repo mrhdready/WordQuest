@@ -114,7 +114,7 @@ test('Set-Detail: axe 0, Fokus nicht verdeckt', async ({ page }) => {
   await expectFocusNotObscured(page)
 })
 
-test('Eintrag-Formular: unvollständig sendet nichts, Enter legt genau einen an', async ({ page }) => {
+test('Eintrag-Formular: unvollständig sendet nichts, Enter und Knopf legen je einen an', async ({ page }) => {
   const posts: string[] = []
   page.on('request', (request) => {
     if (request.method() === 'POST' && /\/api\/v1\/sets\/[^/]+\/entries$/.test(request.url())) {
@@ -138,16 +138,33 @@ test('Eintrag-Formular: unvollständig sendet nichts, Enter legt genau einen an'
   await english.press('Enter')
   expect(posts).toHaveLength(0)
 
-  // Happy Path zuletzt: beide Felder, Enter im Feld Englisch
-  await german.fill(`Wort${stamp}`)
-  await english.fill(`word${stamp}`)
-  const created = page.waitForResponse(
-    (response) => response.request().method() === 'POST' && response.url().endsWith('/entries'),
-  )
-  await english.press('Enter')
-  expect((await created).status()).toBe(201)
-  await expect(page.getByText(`word${stamp}`)).toBeVisible()
-  expect(posts).toHaveLength(1)
+  // 3: Deutsch nur Leerzeichen, ueber den Knopf
+  const add = page.getByRole('button', { name: 'Hinzufügen' })
+  await german.fill('   ')
+  await english.fill(`leer-deutsch-${stamp}`)
+  await add.click()
+  expect(posts).toHaveLength(0)
+
+  // 4: Englisch nur Leerzeichen, ueber den Knopf
+  await german.fill(`leer-englisch-${stamp}`)
+  await english.fill('   ')
+  await add.click()
+  expect(posts).toHaveLength(0)
+
+  // Happy Path zuletzt: beide Felder, einmal Enter im Feld Englisch, einmal der Knopf.
+  // Die Endzahl 2 belegt zugleich, dass die Faelle 1 bis 4 nichts gesendet haben.
+  for (const submit of [() => english.press('Enter'), () => add.click()]) {
+    const word = `word${posts.length}-${stamp}`
+    await german.fill(`Wort${posts.length}-${stamp}`)
+    await english.fill(word)
+    const created = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().endsWith('/entries'),
+    )
+    await submit()
+    expect((await created).status()).toBe(201)
+    await expect(page.getByText(word)).toBeVisible()
+  }
+  expect(posts).toHaveLength(2)
 })
 
 test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
@@ -158,9 +175,17 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Vorschau' })).toBeDisabled()
   await checkPage(page)
 
-  // Zustand Vorschau: eine gültige Zeile, eine ohne Trennzeichen
+  // Fehlerzustand Vorschau: Server antwortet mit 500, der deutsche Allgemeintext erscheint
   const stamp = Date.now()
   await page.locator('textarea').fill(`Haus${stamp};house${stamp}\nohneTrennzeichen`)
+  const previewUrl = '**/api/v1/sets/import/preview'
+  await page.route(previewUrl, (route) => route.fulfill({ status: 500, body: '' }))
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await checkPage(page)
+  await page.unroute(previewUrl)
+
+  // Zustand Vorschau: eine gültige Zeile, eine ohne Trennzeichen
   await page.getByRole('button', { name: 'Vorschau' }).click()
   await expect(page.getByText('1 erkannt')).toBeVisible()
   await expect(page.getByText('1 übersprungen')).toBeVisible()

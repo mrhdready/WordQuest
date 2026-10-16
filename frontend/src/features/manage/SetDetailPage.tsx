@@ -216,6 +216,8 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
         </>
       ) : null}
 
+      {/* ApiError.message ist immer ein deutscher ganzer Satz (lib/api.ts). */}
+      {runPreview.isError ? <ErrorNote message={runPreview.error.message} /> : null}
       {confirm.isError ? <ErrorNote message="Der Import ist fehlgeschlagen." /> : null}
 
       <div className="flex flex-wrap gap-2">
