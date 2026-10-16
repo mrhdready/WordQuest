@@ -165,6 +165,37 @@ describe('Passwort ändern', () => {
     expect(bodies).toHaveLength(1)
   })
 
+  it('12: neues Passwort vom Server abgelehnt steht am Feld', async () => {
+    stubFetch(fieldError('newPassword', 'Das neue Passwort muss mindestens 8 Zeichen lang sein.'))
+    const f = await fill({})
+    await userEvent.click(f.button)
+    const error = await screen.findByText('Das neue Passwort muss mindestens 8 Zeichen lang sein.')
+    expect(error.id).toBe('neues-passwort-fehler')
+    expect(f.next.getAttribute('aria-invalid')).toBe('true')
+    expect(f.next.getAttribute('aria-describedby')).toContain('neues-passwort-fehler')
+    expect(document.activeElement).toBe(f.next)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('13: zu viele Versuche (429) zeigt den Hinweis ohne Feldfehler', async () => {
+    stubFetch(async () => new Response(null, { status: 429 }))
+    const f = await fill({})
+    await userEvent.click(f.button)
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Zu viele Versuche. Bitte in einer Minute nochmal probieren.',
+    )
+    expect(document.querySelectorAll('[id$="-fehler"]')).toHaveLength(0)
+    expect(f.current.value).toBe(valid.current)
+  })
+
+  it('14: Enter im ersten Feld sendet genau einmal ab', async () => {
+    const bodies = stubFetch(noContent)
+    const f = await fill({})
+    await userEvent.type(f.current, '{Enter}')
+    await screen.findByText(success)
+    expect(bodies).toEqual([{ currentPassword: valid.current, newPassword: valid.next }])
+  })
+
   it('11: Happy Path zeigt den Erfolg und leert die Felder', async () => {
     const bodies = stubFetch(noContent)
     const f = await fill({})
