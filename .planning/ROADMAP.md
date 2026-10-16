@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Safe Home-Network Install
+
 **Goal**: A parent installs WordQuest in the home network over plain HTTP with their own account, generated secrets and daily backups, and can recover their own password and a child's forgotten PIN without help
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
@@ -29,10 +30,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Parent changes their password in the app and can then log in only with the new one; an operator who lost it resets it with one command inside the container and logs in with the result
   4. Parent edits a child's name, daily new-card limit and PIN, and the child logs in with the new PIN; a PIN that is not 4-6 digits is rejected by the server with a readable message, also when sent directly to the API
   5. The password-change and edit-child forms have frontend tests covering the full edge-case matrix (one wrong field at a time, exact error texts, Enter-submit path, happy path last), axe reports 0 WCAG 2.2 AA violations on both pages, and a keyboard walkthrough plus 200 % zoom pass
-**Plans**: 8 plans
+
+**Plans**: 1/8 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen (alte Theme-Namen als Übergang), Playwright/axe und Vitest einrichten (mit Paket-Freigabe)
+- [x] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen (alte Theme-Namen als Übergang), Playwright/axe und Vitest einrichten (mit Paket-Freigabe)
 - [ ] 01-02-PLAN.md — setup.sh im Heimnetz-Modus: eigenes Elternkonto, erzeugte Secrets, kein Demo-Konto; Smoke gegen frisch gebautes Image; Integrationstest-Projekt
 - [ ] 01-03-PLAN.md — Verwalten-Seiten (Vokabeln, Set, Fortschritt) auf DESIGN.md, Field-Baustein, Testhilfe mit Parameterrouten, CSV-Import-Zustände belegt
 - [ ] 01-04-PLAN.md — Kinder-Anmeldung per Tastatur und Maus mit PIN 4–6, Lernseiten auf DESIGN.md, Lernen über HTTP belegt, Design-Migration abschließen
@@ -40,9 +42,11 @@ Plans:
 - [ ] 01-06-PLAN.md — Passwort ändern in der App, Formular-Matrix, Frontend-Schritte im CI-Gate
 - [ ] 01-07-PLAN.md — Kind anlegen mit PIN- und Namensregel im Identity-Modul, seedfreier Erstdurchlauf bis zur ersten Lernantwort
 - [ ] 01-08-PLAN.md — Kind bearbeiten inklusive neuer PIN, Rate-Limit-robustes Phasen-Abschluss-Gate
+
 **UI hint**: yes
 
 ### Phase 2: Reliable Learning & Clean Family Data
+
 **Goal**: Children learn without lockouts, crashes, stuck cards or wrong numbers, and a parent can delete a child or correct sets and entries without orphaned data or lost progress, proven by integration tests against real PostgreSQL
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -53,10 +57,12 @@ Plans:
   3. After a missed day the dashboard shows the actual current streak (not the old one as ongoing), and the parent overview and traffic light count the same words as mastered (ease >= 2.1, defined once)
   4. After a parent deletes a set, an entry or a child (with confirmation), none of the removed words appear in any session and no learning history of the deleted child remains; renaming a set or correcting an entry keeps the child's progress on that word; the new rename/edit forms and the delete dialog pass the edge-case matrix and axe (0 WCAG 2.2 AA violations) like the Phase 1 forms
   5. API integration tests run against a real PostgreSQL in CI and cover login, refresh, isolation between siblings and each FIX requirement, all green
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 3: Installable 1.0.0 Release
+
 **Goal**: Another family installs, updates and restores WordQuest 1.0.0 in its home network by following one install page, without special know-how
 **Mode:** mvp
 **Depends on**: Phase 2
@@ -66,6 +72,7 @@ Plans:
   2. Following only the install page (install, update, backup/restore, step by step), a person new to the project gets from an empty host to a working parent login in home-network mode
   3. `upgrade.sh` writes a DB backup before pulling the new version, and the family's children, sets and progress are intact after the upgrade
   4. `restore.sh` restores a chosen backup, and afterwards the parent sees the data as of that backup
+
 **Plans**: TBD
 
 ## Progress
@@ -75,6 +82,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safe Home-Network Install | 0/8 | Planned | - |
+| 1. Safe Home-Network Install | 1/8 | In Progress | - |
 | 2. Reliable Learning & Clean Family Data | 0/TBD | Not started | - |
 | 3. Installable 1.0.0 Release | 0/TBD | Not started | - |
