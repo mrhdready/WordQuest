@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Delete } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ErrorNote, Spinner } from '@/components/ui/misc'
@@ -36,6 +36,13 @@ export function ProfilePickerPage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const firstKey = useRef<HTMLButtonElement>(null)
+
+  // Nach falscher PIN zurueck an den Anfang des Ziffernfelds. Als Effekt, weil
+  // die Tasten erst nach dem Rendern mit busy=false wieder fokussierbar sind.
+  useEffect(() => {
+    if (error) firstKey.current?.focus()
+  }, [error])
 
   const profiles = useQuery({
     queryKey: ['profiles'],
@@ -178,8 +185,14 @@ export function ProfilePickerPage() {
                 />
               ))}
             </div>
+            {/* Leer, solange nach einem Fehler noch nichts eingegeben ist: sonst kaeme
+                "0 Ziffern eingegeben" als zweite Ansage neben der Fehlermeldung. */}
             <span className="sr-only" role="status">
-              {pin.length === 1 ? '1 Ziffer eingegeben' : `${pin.length} Ziffern eingegeben`}
+              {error && pin.length === 0
+                ? ''
+                : pin.length === 1
+                  ? '1 Ziffer eingegeben'
+                  : `${pin.length} Ziffern eingegeben`}
             </span>
 
             {error ? <ErrorNote message={error} /> : null}
@@ -190,6 +203,7 @@ export function ProfilePickerPage() {
               {DIGITS.map((digit) => (
                 <button
                   key={digit}
+                  ref={digit === '1' ? firstKey : undefined}
                   type="button"
                   className={keyClass}
                   disabled={busy}

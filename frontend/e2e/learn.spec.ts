@@ -120,7 +120,11 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
 
   await sendLogin(page, () => goButton(page).click())
   await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()
-  await expect(status(page)).toHaveText('0 Ziffern eingegeben')
+  // Fokus zurueck an den Anfang des Ziffernfelds; keine zweite Ansage neben der Fehlermeldung.
+  await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused()
+  await expect(status(page)).toHaveCount(0)
+  await page.keyboard.press('1')
+  await expect(status(page)).toHaveText('1 Ziffer eingegeben')
   expect(logins.count).toBe(1)
 })
 
