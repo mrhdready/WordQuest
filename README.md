@@ -327,8 +327,8 @@ Tabellen dort schon existieren.
 
 ## Datenschutz
 
-Pflichtfeld für ein Kind ist ausschließlich ein Anzeigename — ein Spitzname
-genügt. Kein Geburtsdatum, keine E-Mail, keine Klasse. Es gibt keine Telemetrie
+Pflichtfelder für ein Kind sind ausschließlich ein Anzeigename — ein Spitzname
+genügt — und die PIN für die Anmeldung. Kein Geburtsdatum, keine E-Mail, keine Klasse. Es gibt keine Telemetrie
 und keinen externen Analytics-Dienst; Schriften und Icons werden mitgeliefert
 statt von einem CDN geladen.
 

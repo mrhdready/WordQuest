@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Ende-zu-Ende-Smoke fuer setup.sh (Plan 01-02, SETUP-01/02).
+# Ende-zu-Ende-Smoke fuer setup.sh (Plan 01-02, SETUP-01/02) bis zur ersten
+# Lernantwort eines Kindes auf der frischen Installation (01-07, PAR-05).
 # Laeuft in einer Arbeitskopie des Arbeitsbaums gegen frisch gebaute Images,
 # eigener Compose-Projektname und Port, raeumt am Ende alles wieder ab.
 #
@@ -146,5 +147,14 @@ dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1)"
 gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
 gunzip -c "$dump" | grep -q 'COPY public.app_user' || fail "$dump enthaelt die Kontodaten nicht."
 echo "BACKUP OK"
+
+echo "== Seedfreier Erstdurchlauf bis zur ersten Lernantwort (PAR-05)"
+# Playwright aus dem Repo (dort liegen node_modules), gegen diesen Stack. Das
+# Reset-Passwort steht nur fuer diesen einen Aufruf in der Umgebung, nie in der Ausgabe.
+WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
+  WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD="$owner_password" \
+  npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
+  || fail "Erstdurchlauf auf frischer Installation fehlgeschlagen."
+echo "FIRST RUN OK"
 
 echo "SMOKE OK"

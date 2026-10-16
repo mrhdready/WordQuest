@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { checkPage, expectReflow } from './axe'
 import { guardianStorageState } from './global-setup'
 
 test.use({ storageState: guardianStorageState })
@@ -43,4 +44,87 @@ test('Kind anlegen und anmelden', async ({ page, browser, baseURL }) => {
   expect(login.status()).toBe(200)
   await expect(child.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
   await context.close()
+})
+
+// Ungünstigster Fall nach D-15: 100 Zeichen ohne Trennstelle. Kein Aufruf im Rate-Limit "auth".
+test('Langer Name', async ({ page }) => {
+  const stamp = `Langername${Date.now()}`
+  const name = stamp + 'x'.repeat(100 - stamp.length)
+
+  await page.goto('/verwalten/kinder/neu')
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await page.getByLabel('PIN', { exact: true }).fill('1357')
+  await page.getByRole('button', { name: 'Kind anlegen' }).click()
+  await expect(page.getByRole('status').filter({ hasText: created })).toBeVisible()
+
+  const shown = page.getByRole('main').getByText(name, { exact: true })
+  await expect(shown).toBeVisible()
+  await expectReflow(page)
+  // Der Name bricht um, statt abgeschnitten zu werden.
+  await page.setViewportSize({ width: 320, height: 568 })
+  expect(await shown.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  expect(await shown.textContent()).toBe(name)
+})
+
+// Kein Aufruf im Rate-Limit "auth": leeres Absenden bleibt im Client.
+test('Kinder barrierefrei', async ({ page }) => {
+  await page.goto('/verwalten/kinder')
+  await expect(page.getByRole('main').getByText('Neue Karten pro Tag: ').first()).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Bereiche' }).getByRole('link')).toHaveText([
+    'Vokabeln',
+    'Fortschritt',
+    'Kinder',
+    'Konto',
+  ])
+  await expect(page.getByRole('link', { name: 'Kinder', exact: true })).toHaveAttribute('aria-current', 'page')
+  await checkPage(page)
+
+  await page.goto('/verwalten/kinder/neu')
+  await expect(page.getByRole('heading', { name: 'Kind anlegen' })).toBeVisible()
+  await checkPage(page)
+
+  // Leeres Absenden: Feldfehler an Name und PIN, je per aria-describedby; Limit hat den Startwert 5.
+  await page.getByRole('button', { name: 'Kind anlegen' }).click()
+  const expected = [
+    ['Name', 'Wie soll das Kind heißen? Ein Spitzname genügt.'],
+    ['PIN', 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'],
+  ] as const
+  for (const [label, message] of expected) {
+    const field = page.getByLabel(label, { exact: true })
+    await expect(field).toHaveAttribute('aria-invalid', 'true')
+    await expect(field).toHaveAccessibleDescription(new RegExp(message.replace('?', '\\?').replace('.', '\\.')))
+  }
+  await expect(page.getByLabel('Name', { exact: true })).toBeFocused()
+  await checkPage(page)
+
+  // Tab-Reihenfolge in <main> bei 320 px, kein Ziel unter der Tab-Leiste (WCAG 2.4.11).
+  await page.setViewportSize({ width: 320, height: 568 })
+  // Start im Kopf: Tab fuehrt von "Abmelden" in den Inhalt.
+  await page.getByRole('button', { name: 'Abmelden' }).focus()
+  const steps: { name: string; bottom: number; barTop: number }[] = []
+  for (let index = 0; index < 20 && steps.length < 5; index += 1) {
+    await page.keyboard.press('Tab')
+    const step = await page.evaluate(() => {
+      const element = document.activeElement
+      if (!element?.closest('main')) return null
+      const bar = document.querySelector('nav[aria-label="Bereiche"]')?.parentElement
+      const label = element.id ? document.querySelector(`label[for="${element.id}"]`) : null
+      return {
+        name: (label?.textContent ?? element.textContent ?? '').trim(),
+        bottom: element.getBoundingClientRect().bottom,
+        barTop: bar?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+      }
+    })
+    if (step) steps.push(step)
+  }
+  expect(steps.map((step) => step.name)).toEqual([
+    'Alle Kinder',
+    'Name',
+    'Neue Karten pro Tag',
+    'PIN',
+    'Kind anlegen',
+  ])
+  for (const step of steps) {
+    expect(step.bottom, `"${step.name}" unter der Tab-Leiste`).toBeLessThanOrEqual(step.barTop)
+  }
 })
