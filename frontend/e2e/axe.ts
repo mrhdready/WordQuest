@@ -112,6 +112,10 @@ export async function expectReflow(page: Page) {
 }
 
 export async function checkPage(page: Page) {
+  // Am Seitenende steht die schwebende Tab-Leiste ueber dem Innenabstand von <main>,
+  // also ueber Leerraum. Weiter oben verdeckt sie je nach Scrollposition Ziele, die
+  // man per Scrollen frei bekommt; axe target-size misst nur die aktuelle Lage.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
   await expectNoAxeViolations(page)
   await expectGlassContrast(page)
   await expectOpaqueFallback(page)

@@ -10,6 +10,7 @@ interface FocusStep {
   inBar: boolean
   bottom: number
   barTop: number
+  startBottom: number | null
 }
 
 // Tab von Dokumentanfang bis zum Ende; je Schritt Name, Ziel und Lage zur Leiste.
@@ -27,6 +28,9 @@ async function walkTabOrder(page: Page): Promise<FocusStep[]> {
         inBar: bar?.contains(element) ?? false,
         bottom: element.getBoundingClientRect().bottom,
         barTop: bar?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+        startBottom: element.hasAttribute('data-start-bottom')
+          ? Number(element.getAttribute('data-start-bottom'))
+          : null,
       }
     })
     if (!step) break
@@ -36,11 +40,23 @@ async function walkTabOrder(page: Page): Promise<FocusStep[]> {
 }
 
 // WCAG 2.4.11: kein per Tab fokussiertes Element liegt unter der schwebenden Leiste.
+// Bei Scroll 0 merkt sich jedes Element seine Unterkante; mindestens ein Ziel muss
+// dort unter der Leiste beginnen, sonst prueft der Test nur den trivialen Fall.
 async function expectFocusNotObscured(page: Page) {
   await page.setViewportSize({ width: 320, height: 568 })
+  const startBarTop = await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    for (const element of document.querySelectorAll('main *')) {
+      element.setAttribute('data-start-bottom', String(element.getBoundingClientRect().bottom))
+    }
+    const bar = document.querySelector('nav[aria-label="Bereiche"]')?.parentElement
+    return bar?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY
+  })
   const steps = await walkTabOrder(page)
-  expect(steps.length).toBeGreaterThan(0)
-  for (const step of steps.filter((entry) => !entry.inBar)) {
+  const inContent = steps.filter((entry) => !entry.inBar)
+  const coveredAtStart = inContent.filter((entry) => (entry.startBottom ?? 0) > startBarTop)
+  expect(coveredAtStart.length, 'kein Ziel lag bei Scroll 0 unter der Leiste').toBeGreaterThan(0)
+  for (const step of inContent) {
     expect(step.bottom, `"${step.name}" unter der Tab-Leiste`).toBeLessThanOrEqual(step.barTop)
   }
 }
@@ -71,7 +87,8 @@ test('Tab-Reihenfolge: Kopf, Inhalt, Tabs, "+"', async ({ page }) => {
 })
 
 test('Fokus nicht verdeckt bei 320 px', async ({ page }) => {
-  await page.goto('/verwalten')
+  // Mit offenem Formular reicht die Set-Liste bei 320 x 568 unter die Leiste.
+  await page.goto('/verwalten?neu=1')
   await expect(page.locator('main a[href^="/verwalten/sets/"]').first()).toBeVisible()
   await expectFocusNotObscured(page)
 })

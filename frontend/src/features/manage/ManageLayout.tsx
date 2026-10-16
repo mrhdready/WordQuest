@@ -32,18 +32,12 @@ export function ManageLayout() {
         </Button>
       </header>
 
-      {/*
-        Die Tab-Leiste steht im Fluss unter <main> (bei kurzen Seiten unten am
-        Rand), nicht sticky darueber: eine Leiste ueber scrollendem Inhalt
-        verdeckt Teile von Links und Buttons (axe target-size, WCAG 2.5.8) und
-        fokussierte Elemente (2.4.11). Ein eigener Scrollbereich in <main>
-        haette das geloest, macht aber den Kontrast dort fuer axe unmessbar.
-      */}
-      <main className="flex-1">
+      {/* Innenabstand = Leistenhoehe plus float-bottom; gleicher Wert als scroll-padding in index.css. */}
+      <main className="flex-1 pb-(--wq-tab-bar-clearance)">
         <Outlet />
       </main>
 
-      <div className="flex items-center gap-2 pt-6 pb-float-bottom">
+      <div className="sticky bottom-float-bottom flex items-center gap-2">
         <nav aria-label="Bereiche" className="glass flex min-w-0 flex-1 flex-wrap gap-2 rounded-full p-2">
           {tabs.map(({ to, end, label, icon: Icon }) => (
             <NavLink
