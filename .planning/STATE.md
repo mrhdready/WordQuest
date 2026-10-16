@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
-status: executing
-stopped_at: Completed 01-07-PLAN.md
-last_updated: "2026-10-16T20:23:20.026Z"
+status: verifying
+stopped_at: Completed 01-08-PLAN.md
+last_updated: "2026-10-16T20:50:40.466Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 00818587cbfba848a3e2bd2a3f3f7d85b751081f
+state_head: 4f95cee7b152516bd51bc49464930116925bf7f5
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 Phase: 1 (Safe Home-Network Install) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-16 — Phase 1 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P04 | 25min | 3 tasks | 7 files |
 | Phase 01 P06 | 23min | 3 tasks | 19 files |
 | Phase 01 P07 | 18min | 3 tasks | 19 files |
+| Phase 01 P08 | 20min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-06: Passwortwechsel widerruft keine Sitzungen; Pruefung gegen haeufige Passwoerter bleibt bekannte Luecke D-18
 - [Phase 01]: 01-07: PIN-, Namens- und Tageslimit-Regeln fuer Kinderprofile stehen in AccountRules (Identity-Modul); Endpoints mappen nur LearnerProfileProblem-Codes auf Feldtexte
 - [Phase 01]: 01-07: Kinderliste ohne Card, weil ListGroup/EmptyState selbst Glas sind (DESIGN.md: kein Glas auf Glas)
+- [Phase 01]: 01-08: Auth-Limit aus Auth:RequestsPerMinute (Standard 10), nur der e2e-Teststack hebt es an; Produktion unveraendert
+- [Phase 01]: 01-08: Bearbeiten-Seite liest das Kind aus ['learners']; Ladefehler (ErrorNote) getrennt von unbekannter ID (EmptyState)
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T20:23:20.000Z
-Stopped at: Completed 01-07-PLAN.md
+Last session: 2026-10-16T20:50:40.441Z
+Stopped at: Completed 01-08-PLAN.md
 Resume file: None

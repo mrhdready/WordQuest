@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Parent edits a child's name, daily new-card limit and PIN, and the child logs in with the new PIN; a PIN that is not 4-6 digits is rejected by the server with a readable message, also when sent directly to the API
   5. The password-change and edit-child forms have frontend tests covering the full edge-case matrix (one wrong field at a time, exact error texts, Enter-submit path, happy path last), axe reports 0 WCAG 2.2 AA violations on both pages, and a keyboard walkthrough plus 200 % zoom pass
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans executed
 
 Plans:
 - [x] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen (alte Theme-Namen als Übergang), Playwright/axe und Vitest einrichten (mit Paket-Freigabe)
@@ -41,7 +41,7 @@ Plans:
 - [x] 01-05-PLAN.md — Passwort-Reset per Befehl, Secret-Prüfung beim Start (auch expliziter Connection-String), tägliche Sicherung
 - [x] 01-06-PLAN.md — Passwort ändern in der App, Formular-Matrix, Frontend-Schritte im CI-Gate
 - [x] 01-07-PLAN.md — Kind anlegen mit PIN- und Namensregel im Identity-Modul, seedfreier Erstdurchlauf bis zur ersten Lernantwort
-- [ ] 01-08-PLAN.md — Kind bearbeiten inklusive neuer PIN, Rate-Limit-robustes Phasen-Abschluss-Gate
+- [x] 01-08-PLAN.md — Kind bearbeiten inklusive neuer PIN, Rate-Limit-robustes Phasen-Abschluss-Gate
 
 **UI hint**: yes
 
@@ -82,6 +82,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safe Home-Network Install | 7/8 | In Progress | - |
+| 1. Safe Home-Network Install | 8/8 | In Progress | - |
 | 2. Reliable Learning & Clean Family Data | 0/TBD | Not started | - |
 | 3. Installable 1.0.0 Release | 0/TBD | Not started | - |
