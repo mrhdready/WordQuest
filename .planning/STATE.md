@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: executing
-stopped_at: Completed 01-04-PLAN.md
-last_updated: "2026-10-16T15:33:00.971Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-10-16T15:57:09.878Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 033dbb45aeb9ca7cd2074ea4a562a92e41affcae
+state_head: 59e651a1184df897d4e720f925ad319ebc443e32
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 1 (Safe Home-Network Install) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 1 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P03 | 29min | 3 tasks | 17 files |
 | Phase 01 P05 | 135min | 3 tasks | 11 files |
 | Phase 01 P04 | 25min | 3 tasks | 7 files |
+| Phase 01 P06 | 23min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Text direkt auf dem Backdrop in text-ink statt text-ink-soft (ink-soft auf backdrop-blue 4,14:1)
 - [Phase 01]: Zurueck zur Profilwahl als runder Knopf oben (button-round) statt Zelle im Ziffernfeld
 - [Phase 01]: Design-Migration abgeschlossen: --color/--text/--font-weight/--radius-* vor dem Token-Import geleert, design:classes ueber ganz src ins Gate
+- [Phase 01]: 01-06: Tab-Leiste bricht bei 320 px neben dem + zweizeilig um; --wq-tab-bar-clearance waechst unter sm um eine Zeile
+- [Phase 01]: 01-06: body als grid mit min-height 100% statt height 100% (axe elmPartiallyObscured bei Seiten knapp ueber Bildschirmhoehe)
+- [Phase 01]: 01-06: Passwortwechsel widerruft keine Sitzungen; Pruefung gegen haeufige Passwoerter bleibt bekannte Luecke D-18
 
 ### Pending Todos
 
@@ -114,6 +118,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T15:33:00.938Z
-Stopped at: Completed 01-04-PLAN.md
+Last session: 2026-10-16T15:57:09.853Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None
