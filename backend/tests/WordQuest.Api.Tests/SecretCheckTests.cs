@@ -53,6 +53,29 @@ public sealed class SecretCheckTests
     }
 
     [Fact]
+    public void ConnectionStringProblem_reports_malformed_string_instead_of_throwing()
+    {
+        Assert.Equal(
+            "Start abgebrochen: ConnectionStrings__Default ist kein gültiger Connection-String.",
+            SecretCheck.ConnectionStringProblem("das ist kein connection string"));
+    }
+
+    [Fact]
+    public void SigningKeyProblem_reports_short_key()
+    {
+        Assert.Equal(
+            "Start abgebrochen: WQ_JWT_SIGNING_KEY ist zu kurz (mindestens 32 Zeichen). Führe `setup.sh` aus oder trage einen längeren Wert ein.",
+            SecretCheck.SigningKeyProblem("q7Vx2LmR9tKp4WzB8nHc3YdF6jGs5Za"));
+    }
+
+    [Fact]
+    public void SigningKeyProblem_reports_known_default_and_accepts_own_value()
+    {
+        Assert.NotNull(SecretCheck.SigningKeyProblem("nur-zum-ausprobieren-bitte-nicht-im-echtbetrieb-verwenden"));
+        Assert.Null(SecretCheck.SigningKeyProblem(Random48));
+    }
+
+    [Fact]
     public void ConnectionStringProblem_accepts_own_random_password()
     {
         Assert.Null(SecretCheck.ConnectionStringProblem($"Host=db;Username=wordquest;Password={Random48}"));

@@ -144,6 +144,7 @@ docker compose exec -T backup /backup.sh </dev/null >/dev/null || fail "Manuelle
 dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1)"
 [[ -n "$dump" ]] || fail "Keine Datei backups/daily/wordquest-*.sql.gz."
 gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
+gunzip -c "$dump" | grep -q 'COPY public.app_user' || fail "$dump enthaelt die Kontodaten nicht."
 echo "BACKUP OK"
 
 echo "SMOKE OK"

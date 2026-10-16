@@ -18,7 +18,7 @@ if (!builder.Environment.IsDevelopment())
 {
     string? explicitConnection = builder.Configuration.GetConnectionString("Default");
     string? secretProblem =
-        SecretCheck.Problem("WQ_JWT_SIGNING_KEY", ReadSecret("WQ_JWT_SIGNING_KEY", builder.Configuration["Auth:SigningKey"]))
+        SecretCheck.SigningKeyProblem(ReadSecret("WQ_JWT_SIGNING_KEY", builder.Configuration["Auth:SigningKey"]))
         ?? (string.IsNullOrWhiteSpace(explicitConnection)
             ? SecretCheck.Problem("WQ_DB_PASSWORD", ReadSecret("WQ_DB_PASSWORD", null))
             : SecretCheck.ConnectionStringProblem(explicitConnection));

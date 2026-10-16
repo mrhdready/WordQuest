@@ -52,6 +52,8 @@ done
 # --- Sicherungen -------------------------------------------------------------
 # Die Dumps enthalten alle Familiendaten samt Passwort-Hashes: nur fuer den Besitzer.
 mkdir -p backups
+# Legt docker compose den Ordner zuerst an, gehoert er root; dann scheitert chmod.
+[[ -O backups ]] || die "Der Ordner backups gehört nicht dir. Ändere den Besitzer mit: sudo chown -R \"\$(id -un)\" backups — und starte setup.sh erneut."
 chmod 700 backups
 
 # --- .env --------------------------------------------------------------------

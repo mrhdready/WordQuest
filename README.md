@@ -89,8 +89,9 @@ und 6 monatliche Stände auf. `setup.sh` legt den Ordner mit `0700` an, denn die
 Dumps enthalten alle Familiendaten samt Passwort-Hashes, und nennt am Ende den
 Pfad. Der Ordner muss auf einem Linux-Dateisystem liegen (z. B. ext4), nicht auf
 einer SMB-Freigabe oder einem exFAT-Stick. Eine Sicherung sofort anstoßen:
-`docker compose exec backup /backup.sh`. Zurückspielen geht bisher von Hand,
-siehe [Betrieb](#betrieb).
+`docker compose exec backup /backup.sh`. Der Sicherungsdienst läuft als root;
+unter Linux gehören die Dumps deshalb root, und alte Stände löschst du mit
+`sudo`. Zurückspielen kommt mit `restore.sh` (Phase 3).
 
 #### Passwort vergessen
 
@@ -317,14 +318,9 @@ Drei Bremsen tragen das ganze System:
 | Secrets | Dateien unter `./secrets/`, nie als Umgebungsvariable |
 | Logs | `docker compose logs -f api` |
 
-Wiederherstellung aus einem Backup:
-
-```bash
-gunzip -c backups/daily/wordquest-<datum>.sql.gz \
-  | docker compose exec -T db psql -U wordquest -d wordquest
-```
-
-> Ein Backup, das nie zurückgespielt wurde, ist kein Backup. Einmal ausprobieren.
+Die Wiederherstellung aus einem Backup kommt mit `restore.sh` (Phase 3). Ein
+einfaches `psql` in die laufende Datenbank stellt nichts wieder her, weil die
+Tabellen dort schon existieren.
 
 ---
 

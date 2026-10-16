@@ -9,6 +9,8 @@ namespace WordQuest.Api;
 /// </summary>
 public static class SecretCheck
 {
+    private const int MinimumSigningKeyLength = 32;
+
     // Werte, die im Repository stehen oder standen und deshalb oeffentlich bekannt sind.
     private static readonly HashSet<string> KnownDefaults = new(StringComparer.Ordinal)
     {
@@ -37,6 +39,23 @@ public static class SecretCheck
     }
 
     /// <summary>
+    /// Wie <see cref="Problem"/> fuer den JWT-Schluessel, dazu die Mindestlaenge,
+    /// damit auch ein zu kurzer Schluessel mit lesbarer Meldung abbricht.
+    /// </summary>
+    public static string? SigningKeyProblem(string? value)
+    {
+        string? problem = Problem("WQ_JWT_SIGNING_KEY", value);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        return value!.Trim().Length < MinimumSigningKeyLength
+            ? $"Start abgebrochen: WQ_JWT_SIGNING_KEY ist zu kurz (mindestens {MinimumSigningKeyLength} Zeichen). Führe `setup.sh` aus oder trage einen längeren Wert ein."
+            : null;
+    }
+
+    /// <summary>
     /// Prueft den Passwort-Teil eines explizit gesetzten Connection-Strings wie
     /// <see cref="Problem"/>; ohne Passwort-Teil gilt er als fehlend.
     /// </summary>
@@ -44,7 +63,17 @@ public static class SecretCheck
     {
         ArgumentNullException.ThrowIfNull(connectionString);
 
-        string? password = new NpgsqlConnectionStringBuilder(connectionString).Password;
+        string? password;
+        try
+        {
+            password = new NpgsqlConnectionStringBuilder(connectionString).Password;
+        }
+        catch (ArgumentException)
+        {
+            // Npgsql wirft bei unlesbarem String; Laien sollen eine Meldung statt eines Stacktraces sehen.
+            return "Start abgebrochen: ConnectionStrings__Default ist kein gültiger Connection-String.";
+        }
+
         return Problem("ConnectionStrings__Default", password);
     }
 }
