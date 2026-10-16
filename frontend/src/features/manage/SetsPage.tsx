@@ -19,7 +19,10 @@ export function SetsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const showForm = searchParams.has('neu')
 
+  // Beim Schliessen Eingabe und alten Fehler verwerfen: das naechste "+" beginnt leer.
   function closeForm() {
+    create.reset()
+    setTitle('')
     setSearchParams((params) => {
       params.delete('neu')
       return params
@@ -35,7 +38,6 @@ export function SetsPage() {
     mutationFn: (newTitle: string) =>
       api<VocabularySet>('/sets', { method: 'POST', body: { title: newTitle } }),
     onSuccess: () => {
-      setTitle('')
       closeForm()
       void queryClient.invalidateQueries({ queryKey: ['sets'] })
     },

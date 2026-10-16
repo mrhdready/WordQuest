@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { Link } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SetsPage } from '@/features/manage/SetsPage'
 import { renderWithProviders } from '@/test/render'
@@ -29,8 +30,15 @@ function stubApi(onPost: () => Promise<Response>) {
   return posts
 }
 
+// Der Link steht fuer das "+" aus ManageLayout, das ?neu=1 setzt.
 async function openForm() {
-  renderWithProviders(<SetsPage />, { route: '/verwalten?neu=1', path: '/verwalten' })
+  renderWithProviders(
+    <>
+      <SetsPage />
+      <Link to="/verwalten?neu=1">Neues Set</Link>
+    </>,
+    { route: '/verwalten?neu=1', path: '/verwalten' },
+  )
   return screen.findByLabelText('Titel')
 }
 
@@ -88,7 +96,24 @@ describe('Set-Formular "Neues Set"', () => {
     expect((input as HTMLInputElement).value).toBe('Unit 3')
   })
 
-  it('5: Enter im Titelfeld sendet genau einmal mit getrimmtem Titel', async () => {
+  it('5: nach Serverfehler, Abbrechen und "+" ist das Formular wieder leer', async () => {
+    stubApi(async () =>
+      Response.json({ errors: { title: ['Ein Set braucht einen Titel.'] } }, { status: 400 }),
+    )
+    const input = await openForm()
+    await userEvent.type(input, 'Unit 3')
+    await userEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
+    await screen.findByText('Ein Set braucht einen Titel.')
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(screen.queryByLabelText('Titel')).toBeNull())
+    await userEvent.click(screen.getByRole('link', { name: 'Neues Set' }))
+    const reopened = await screen.findByLabelText('Titel')
+    expect(screen.queryByText('Ein Set braucht einen Titel.')).toBeNull()
+    expect(reopened.getAttribute('aria-invalid')).toBeNull()
+    expect((reopened as HTMLInputElement).value).toBe('')
+  })
+
+  it('6: Enter im Titelfeld sendet genau einmal mit getrimmtem Titel', async () => {
     const posts = stubApi(async () => Response.json(createdSet, { status: 201 }))
     const input = await openForm()
     await userEvent.type(input, '  Unit 9  {Enter}')
@@ -96,7 +121,7 @@ describe('Set-Formular "Neues Set"', () => {
     expect(posts).toEqual([{ title: 'Unit 9' }])
   })
 
-  it('6: Happy Path schliesst das Formular und entfernt ?neu', async () => {
+  it('7: Happy Path schliesst das Formular und entfernt ?neu', async () => {
     const posts = stubApi(async () => Response.json(createdSet, { status: 201 }))
     const input = await openForm()
     await userEvent.type(input, 'Unit 9')
