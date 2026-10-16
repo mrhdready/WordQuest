@@ -185,3 +185,16 @@ Hinweis zur Zählung: `commits: 4` ist gemessen (`git rev-list --count 9b859d4..
 - `host.docker.internal` im AGENTS.md-Containerbefehl funktioniert unter Docker Desktop; unter Linux braucht es `--add-host=host.docker.internal:host-gateway`.
 
 ## Self-Check: PASSED
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+Urteil FREIGABE mit fünf MINOR-Befunden. Behoben vom Orchestrator in `e307ad1`:
+- M1: setup.sh bricht ab, wenn eine ältere `.env` `WQ_SEED_DEMO_DATA=true` setzt (Demo-Konto mit bekanntem Passwort, T-01-05).
+- M2: Secret-Erzeugung ohne Ergebnis oder leere Secret-Datei bricht mit klarer Meldung ab.
+- M3: Image-Präfix wird vor dem Schreiben geprüft, `.env` entsteht in einem Schritt.
+- M5: `has-owner` meldet „kein Elternkonto“ mit Exit 10 statt 1.
+
+Akzeptiert (nicht geändert): M4 — „nur ein Elternkonto“ ist Prüfen-dann-Einfügen ohne DB-Absicherung. setup.sh ruft `create-owner` nur nacheinander auf, Zugriff braucht Host-Rechte (T-01-06). Ein Unique-Index setzt voraus, dass eine Instanz nie mehrere Familien trägt; das ist eine Produktentscheidung.
+
+Nebenbefund außerhalb des Plans, behoben in `c84a3ee`: `AuthService` schrieb bei fehlgeschlagenem Login die E-Mail-Adresse ins Log.
+Offen: `hostname -I` kann auf manchen Hosts zuerst eine Docker-Bridge-Adresse liefern; auf einem Raspberry Pi prüfen.
