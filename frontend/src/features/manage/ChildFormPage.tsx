@@ -62,7 +62,8 @@ function EditChild() {
 
   if (learners.isLoading) return <Spinner />
   // Ladefehler ist nicht "gibt es nicht": sonst haelt man ein vorhandenes Kind fuer geloescht.
-  if (learners.isError) return <ErrorNote message={learners.error.message} />
+  // Nur der Erstladefehler: scheitert spaeter ein Neuladen, bleibt das Formular samt Eingaben stehen.
+  if (learners.isError && !learners.data) return <ErrorNote message={learners.error.message} />
   const learner = learners.data?.find((entry) => entry.id === learnerId)
   // Der Weg zurueck ist der Link "Alle Kinder" darueber.
   if (!learner) return <EmptyState title="Dieses Kind gibt es nicht (mehr). Gehe zurück zur Liste." />

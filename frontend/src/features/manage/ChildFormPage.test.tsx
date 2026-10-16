@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChildFormPage } from '@/features/manage/ChildFormPage'
@@ -394,6 +394,17 @@ describe('Kind bearbeiten', () => {
       expect(screen.queryByLabelText('Name')).toBeNull()
     })
   }
+
+  it('Scheitert das Neuladen nach dem Speichern, bleiben Formular und Erfolgsmeldung', async () => {
+    let loads = 0
+    stubEdit(patched, async () => (++loads === 1 ? Response.json(children) : new Response('', { status: 500 })))
+    const f = await fillEdit({ limit: '9' })
+    await userEvent.click(f.button)
+    await screen.findByText(saved)
+    await waitFor(() => expect(loads).toBe(2))
+    expect(screen.getByText(saved)).toBeTruthy()
+    expect((screen.getByLabelText('Neue Karten pro Tag') as HTMLInputElement).value).toBe('9')
+  })
 
   it('PIN leer: Anfrage ohne pin, Erfolg ohne PIN-Hinweis', async () => {
     const bodies = stubEdit()

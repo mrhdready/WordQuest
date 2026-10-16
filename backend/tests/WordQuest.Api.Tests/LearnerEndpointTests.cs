@@ -259,6 +259,13 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal("Das Bild darf höchstens 50 Zeichen lang sein.", await FieldErrorAsync(response, "avatarKey"));
     }
 
+    [Fact]
+    public async Task Avatar_key_with_50_characters_is_accepted()
+    {
+        await CreatedAsync(await CreateAsync(
+            new { displayName = UniqueName(), pin = "1234", avatarKey = new string('a', 50) }));
+    }
+
     // --- PATCH /learners/{id}/settings (PAR-01, PAR-02 beim Aendern) -------
 
     // Invariante: dieselbe Regel auf beiden Wegen, auch bei direktem API-Aufruf.

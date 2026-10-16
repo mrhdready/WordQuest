@@ -96,6 +96,11 @@ builder.Services.AddAuthorizationBuilder()
 // nginx mit einer IP kommen. Die Ursache "eine IP fuer alle Geraete" behebt FIX-01
 // in Phase 2.
 int authRequestsPerMinute = builder.Configuration.GetValue("Auth:RequestsPerMinute", 10);
+if (authRequestsPerMinute < 1)
+{
+    // Sonst startet die API und jeder Login endet erst beim ersten Aufruf mit 500.
+    throw new InvalidOperationException("Start abgebrochen: Auth:RequestsPerMinute muss mindestens 1 sein.");
+}
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

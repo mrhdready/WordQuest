@@ -86,4 +86,20 @@ public sealed class AccountRulesTests
     [InlineData(16, 15)]
     public void ClampDailyNewLimit(int limit, int expected) =>
         Assert.Equal(expected, AccountRules.ClampDailyNewLimit(limit));
+
+    [Theory]
+    [InlineData(50, 0)]
+    [InlineData(51, 1)]
+    public void ValidateLearnerProfile_limits_avatar_key(int length, int expectedProblems)
+    {
+        IReadOnlyList<LearnerProfileProblem> problems =
+            AccountRules.ValidateLearnerProfile("Max", true, "1234", true, new string('a', length));
+
+        Assert.Equal(expectedProblems, problems.Count);
+        Assert.All(problems, problem => Assert.Equal(LearnerProfileProblem.AvatarKeyTooLong, problem));
+    }
+
+    [Fact]
+    public void ValidateLearnerProfile_trims_avatar_key_before_length_check() =>
+        Assert.Empty(AccountRules.ValidateLearnerProfile("Max", true, "1234", true, "  " + new string('a', 50) + "  "));
 }
