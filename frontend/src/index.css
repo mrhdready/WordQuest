@@ -212,7 +212,7 @@
 
   /* Ein Fokusbild fuer alle Bedienelemente (UI-SPEC D6). */
   :focus-visible {
-    outline: 3px solid var(--color-primary);
+    outline: 3px solid var(--color-primary-deep);
     outline-offset: 3px;
   }
 

@@ -135,7 +135,7 @@ completed: 2026-10-16
 - `index.css`: Übergangsblock (alte Theme-Namen), Token-Import, Spacing-Reset, `type-*`, `glass`/`glass-clear`/`glass-sheet`/`glass-selected` mit Blur und Tiefe, `glass-flat`/`glass-flat-clear`/`glass-flat-selected` ohne Blur, jeweils mit `@supports not`- und `prefers-reduced-transparency`-Fallback. Dazu Backdrop mit vier Radialverläufen auf `body`, globaler `:focus-visible`-Ring und `progress`-Styling.
 - Bausteine `button` (neu: `round`, `roundPrimary`), `input`, `card`, `misc` (Label, ErrorNote, Progress nativ, Badge, Spinner, EmptyState) und `GuardianLoginPage` auf Tokens umgestellt.
 - `index.html`: Zoom-Sperren entfernt.
-- Teststack `wordquest-e2e` (Port 127.0.0.1:18080, reine Testwerte, Demo-Seed), `e2e/axe.ts` mit `checkPage` (Hauptlauf, Glas-Kontrast je Blob, deckender Fallback über alle sieben Glas-Utilities, Reflow).
+- Teststack `wordquest-e2e` (Port 127.0.0.1:18080, reine Testwerte, Demo-Seed), `e2e/axe.ts` mit `checkPage` (Hauptlauf, Glas-Kontrast je Blob, deckender Fallback für die Glas-Utilities, die auf der Seite vorkommen — auf /login nur `glass` und `glass-flat`; die übrigen fünf belegen 01-03 und 01-04 auf ihren Seiten —, Reflow).
 - Vitest mit `misc.test.tsx`, Klassen-Gate `scripts/design-classes.mjs`.
 
 ## Task Commits
@@ -214,3 +214,14 @@ completed: 2026-10-16
 
 - FOUND: frontend/src/design-tokens.css, frontend/playwright.config.ts, frontend/e2e/docker-compose.e2e.yml, frontend/e2e/axe.ts, frontend/e2e/login.spec.ts, frontend/scripts/design-classes.mjs, frontend/src/components/ui/misc.test.tsx, frontend/src/test/setup.ts
 - FOUND: 35ebf24, c7008bc (Vorfahren von HEAD)
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+Urteil NACHBESSERN, behoben vom Orchestrator:
+- MAJOR: `expectGlassContrast` liess nicht gemessenen Kontrast (`incomplete`) still durch. Jetzt scheitert jeder `incomplete`-Knoten ausser `bgGradient` (getoente Buttons, Kontrast per Token belegt).
+- MINOR: SUMMARY nannte den Fallback-Test für alle sieben Glas-Utilities; korrigiert.
+- MINOR: DESIGN.md an Code angeglichen (Lichtkante ohne Verlaufsrand, `note-error` mit `body-md-strong`); `design.md diff` ohne Regression.
+- MINOR: Fokusring in `primary-deep` statt `primary` (gegen `backdrop-blue` 2,94:1 → ca. 3,7:1, WCAG 1.4.11).
+
+Als Übergangsschuld an 01-03/01-04 übergeben (nicht hier geändert): doppelter Innenabstand durch `Card p-6` plus `CardContent pt-5/py-*` in den alten Seiten, gewachsene Button-Höhen, Blur auf jeder Ziffern-Taste in `ProfilePickerPage.tsx`, `bg-success-soft` gegen `glass` in `LearnHomePage.tsx:112`.
+Bewusst offen: Button-Variante `round` ist identisch mit `secondary`; beim ersten Nutzer unterscheiden oder streichen.

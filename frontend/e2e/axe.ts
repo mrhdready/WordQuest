@@ -34,10 +34,17 @@ export async function expectGlassContrast(page: Page) {
     }, color)
     const result = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze()
     expect(result.violations, `color-contrast auf backdrop-${color}`).toEqual([])
-    const incomplete = result.incomplete.reduce((sum, entry) => sum + entry.nodes.length, 0)
+    // Ohne Seitenverlauf darf "incomplete" nur noch von getoenten Buttons kommen
+    // (eigener Verlauf, Kontrast per Token belegt). Jeder andere Grund heisst:
+    // axe hat nicht gemessen, also scheitern statt still gruen.
+    const incomplete = result.incomplete.flatMap((entry) => entry.nodes)
+    const unmeasured = incomplete
+      .map((node) => ({ target: node.target.join(' '), reason: node.any[0]?.data?.messageKey }))
+      .filter((node) => node.reason !== 'bgGradient')
+    expect(unmeasured, `nicht gemessener Kontrast auf backdrop-${color}`).toEqual([])
     test.info().annotations.push({
       type: `axe incomplete color-contrast backdrop-${color}`,
-      description: String(incomplete),
+      description: String(incomplete.length),
     })
   }
   await page.evaluate(() => {

@@ -213,7 +213,7 @@ components:
   note-error:
     backgroundColor: "{colors.surface-error}"
     textColor: "{colors.danger-text}"
-    typography: "{typography.body-md}"
+    typography: "{typography.body-md-strong}"
     rounded: "{rounded.sm}"
     padding: "{spacing.md}"
   note-success:
@@ -261,7 +261,7 @@ Liquid Glass nach dem Vorbild von iOS: Bedienelemente schweben als Glasflächen 
 
 ## Colors
 
-- **Primary (oklch 0.47 0.18 265):** kräftiges Blau für die eine Hauptaktion pro Screen, Fortschrittsbalken, aktiven Tab, Fokusring und Links. Getönte Buttons zeigen einen Verlauf von `primary-light` nach `primary-deep`; Weiß darauf hält 4,5:1 an jedem Punkt des Verlaufs.
+- **Primary (oklch 0.47 0.18 265):** kräftiges Blau für die eine Hauptaktion pro Screen, Fortschrittsbalken, aktiven Tab und Links. Getönte Buttons zeigen einen Verlauf von `primary-light` nach `primary-deep`; Weiß darauf hält 4,5:1 an jedem Punkt des Verlaufs.
 - **Ink / Ink soft:** Text. `ink-soft` ist dunkler als im Bestand, weil Glasflächen den Hintergrund durchscheinen lassen.
 - **Statusfarben als Textfarben:** `success-text`, `warn-text`, `danger-text` sind dunkle Töne für Text auf hellen, deckenden Flächen (`surface-success`, `surface-warn`, `surface-error`).
 - **Coin:** Münzen, nur mit dem 🪙-Zeichen.
@@ -287,7 +287,7 @@ Alle Abstände (Innen- und Außenabstand, Lücken, Positionen) folgen ausschlie�
 Tiefe entsteht durch Glas, nicht durch Farbe:
 
 - Glasflächen: `backdrop-filter: blur(28px) saturate(200%)`.
-- Lichtkante: oben innen 1 px weiß (95 %), unten innen 1 px weiß (40 %), dazu ein 1,5 px Verlaufsrand (hell oben links und unten rechts).
+- Lichtkante: oben innen 1 px weiß (95 %), unten innen 1 px weiß (40 %). Kein zusätzlicher Verlaufsrand: als Pseudo-Element verhindert er, dass axe den Kontrast auf Glas berechnet.
 - Schatten: `0 12px 40px` in dunklem Blau mit 18 % Deckkraft; getönte Buttons werfen einen blauen Schatten.
 - Ebenen: Hintergrund → Inhaltskarten (`glass`) → schwebende Bedienung (`glass-clear`, getönte Buttons) → Sheets (`glass-sheet`).
 
@@ -308,7 +308,7 @@ Durchgehend weich: Bedienelemente als Kapsel oder Kreis (`full`), Karten `lg` (3
 - **Formulare:** Felder gruppiert in einer Glasfläche, Beschriftung über dem Feld (`input-label`), sichtbar, nie nur Platzhalter. Jedes Feld hat eine 1-px-Grenze in `border-control` (WCAG 1.4.11), damit die Feldgrenze unabhängig vom durchscheinenden Hintergrund erkennbar bleibt.
 - **Hinweise:** `note-error` (`role="alert"`) und `note-success` (`role="status"`) auf deckender Fläche, unter dem auslösenden Element.
 - **Eltern-Navigation:** `tab-bar` unten mit Vokabeln und Fortschritt, aktiver Tab `tab-active`.
-- **Fokus:** global `:focus-visible` mit 3 px Ring in `primary`, 3 px Abstand.
+- **Fokus:** global `:focus-visible` mit 3 px Ring in `primary-deep`, 3 px Abstand. `primary` hält gegen `backdrop-blue` keine 3:1 (WCAG 1.4.11), `primary-deep` schon.
 
 ## Do's and Don'ts
 
