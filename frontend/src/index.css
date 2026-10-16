@@ -67,26 +67,14 @@
   Glasflaechen (DESIGN.md "Elevation & Depth"). Pflicht-Fallback: ohne
   backdrop-filter oder bei reduzierter Transparenz deckend in glass-opaque.
   Tiefe (Schatten, Lichtkante) steht einmal zentral in --wq-glass-depth.
+  Den 1,5-px-Verlaufsrand gibt es bewusst nicht: als ::before verhindert er,
+  dass axe den Textkontrast auf Glas berechnet (incomplete "pseudoContent").
 */
 @utility glass {
   background-color: var(--color-glass);
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   backdrop-filter: blur(28px) saturate(200%);
   box-shadow: var(--wq-glass-depth);
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: var(--wq-glass-rim);
-    -webkit-mask:
-      linear-gradient(var(--color-on-primary) 0 0) content-box,
-      linear-gradient(var(--color-on-primary) 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     background-color: var(--color-glass-opaque);
   }
@@ -102,20 +90,6 @@
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   backdrop-filter: blur(28px) saturate(200%);
   box-shadow: var(--wq-glass-depth);
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: var(--wq-glass-rim);
-    -webkit-mask:
-      linear-gradient(var(--color-on-primary) 0 0) content-box,
-      linear-gradient(var(--color-on-primary) 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     background-color: var(--color-glass-opaque);
   }
@@ -131,20 +105,6 @@
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   backdrop-filter: blur(28px) saturate(200%);
   box-shadow: var(--wq-glass-depth);
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: var(--wq-glass-rim);
-    -webkit-mask:
-      linear-gradient(var(--color-on-primary) 0 0) content-box,
-      linear-gradient(var(--color-on-primary) 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     background-color: var(--color-glass-opaque);
   }
@@ -160,20 +120,6 @@
   -webkit-backdrop-filter: blur(28px) saturate(200%);
   backdrop-filter: blur(28px) saturate(200%);
   box-shadow: var(--wq-glass-depth);
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: var(--wq-glass-rim);
-    -webkit-mask:
-      linear-gradient(var(--color-on-primary) 0 0) content-box,
-      linear-gradient(var(--color-on-primary) 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     background-color: var(--color-glass-opaque);
   }
@@ -225,20 +171,6 @@
       0 12px 40px color-mix(in oklch, var(--color-primary-deep) 18%, transparent),
       inset 0 1px 0 color-mix(in oklch, var(--color-on-primary) 95%, transparent),
       inset 0 -1px 0 color-mix(in oklch, var(--color-on-primary) 40%, transparent);
-    /* Verlaufsrand: hell oben links und unten rechts. */
-    --wq-glass-rim: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--color-on-primary) 90%, transparent),
-      transparent 40%,
-      transparent 60%,
-      color-mix(in oklch, var(--color-on-primary) 70%, transparent)
-    );
-  }
-
-  /* Bezug fuer den Verlaufsrand (::before). :where() haelt die Spezifitaet bei 0,
-     damit absolute/fixed aus Utilities immer gewinnen. */
-  :where(.glass, .glass-clear, .glass-sheet, .glass-selected) {
-    position: relative;
   }
 
   * {
@@ -287,6 +219,34 @@
   button,
   [role='button'] {
     touch-action: manipulation;
+  }
+
+  /* Fortschrittsbalken (DESIGN.md progress-bar, progress-bar-fill): natives
+     <progress>, Spur und Fuellung fuer WebKit/Blink und Firefox getrennt. */
+  progress {
+    appearance: none;
+    display: block;
+    height: calc(var(--spacing) * 2);
+    border: 0;
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    background-color: var(--color-track);
+    color: var(--color-primary);
+  }
+
+  progress::-webkit-progress-bar {
+    background-color: var(--color-track);
+  }
+
+  progress::-webkit-progress-value {
+    background-color: var(--color-primary);
+    border-radius: var(--radius-full);
+    transition: width 500ms;
+  }
+
+  progress::-moz-progress-bar {
+    background-color: var(--color-primary);
+    border-radius: var(--radius-full);
   }
 
   /* Alle Tippziele mindestens 48 px - Leitplanke 3 des Konzepts. */

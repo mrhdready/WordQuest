@@ -30,3 +30,23 @@ test('Login: Token-Design, axe 0, Anmeldung per Enter', async ({ page }) => {
   await page.getByLabel('Passwort').press('Enter')
   await expect(page).toHaveURL(/\/verwalten$/)
 })
+
+test('Login: Tastatur mit sichtbarem Fokus', async ({ page }) => {
+  await page.goto('/login')
+  await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
+
+  const expected = [
+    page.getByLabel('E-Mail'),
+    page.getByLabel('Passwort'),
+    page.getByRole('button', { name: 'Anmelden' }),
+  ]
+  for (const target of expected) {
+    await page.keyboard.press('Tab')
+    await expect(target).toBeFocused()
+    const outline = await page.evaluate(() => {
+      const style = getComputedStyle(document.activeElement as Element)
+      return { style: style.outlineStyle, width: style.outlineWidth }
+    })
+    expect(outline).toEqual({ style: 'solid', width: '3px' })
+  }
+})
