@@ -194,6 +194,16 @@ Start 2026-10-16T20:28:58Z, Ende 2026-10-16T20:49:23Z, 3 Tasks, 18 Dateien.
 - **Bewusst ohne Sperre:** Zwei Eltern bearbeiten dasselbe Kind gleichzeitig: die letzte Speicherung gilt (Plan-Truth, kein Test).
 - `REQUIREMENTS.md` nicht angefasst (Vorgabe des Orchestrators); PAR-01, PAR-02 und QUAL-02 sind mit diesem Plan erfüllt.
 
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+Urteil FREIGABE mit drei MINOR-Befunden, alle vom Orchestrator behoben:
+- `Auth:RequestsPerMinute` < 1 bricht den Start jetzt ab (`Program.cs`), statt dass jeder Login erst zur Laufzeit mit 500 endet.
+- Bearbeiten-Seite zeigt die Ladefehler-Meldung nur beim Erstladen (`learners.isError && !learners.data`); ein gescheitertes Neuladen nach dem Speichern verwirft Formular und Erfolgsmeldung nicht mehr. Regressionstest in `ChildFormPage.test.tsx` (ohne Fix rot, mit Fix grün).
+- Grenze `avatarKey` = 50 Zeichen getestet: Integrationsfall 50 → 201, Unit-Theorie 50/51 und Trimmen in `AccountRulesTests`.
+Zur Kenntnis, außerhalb des Diffs: `ReviewState` hat keinen Fremdschlüssel auf Card/Learner (`LearningConfigurations.cs`) — gehört zu FIX-02 (Phase 2).
+Zusätzlich `npm audit fix` (nur Lockfile): `source-map-js` 1.2.1 → 1.2.2 (high, GHSA-68fv-2mgg-jv7q), `serialize-javascript` 7.1.1 → 7.1.2 (low, GHSA-gfhx-hw2g-v5hg); `npm audit` danach 0.
+Belege nach Nachbesserung: Backend-Build 0 Warnungen/0 Fehler, Api.Tests 130/130, Learning.Tests 104/104; vitest 100/100, lint/typecheck/build Exit 0, `design:check` errors 0, `design:classes` keine alten Klassen; e2e 23 passed, 1 skipped (first-run nur im Smoke).
+
 ## Self-Check: PASSED
 
 - Dateien vorhanden: RateLimitTests.cs, LearnerEndpointTests.cs, ChildFormPage.tsx, ChildFormPage.test.tsx, ChildrenPage.tsx, children.spec.ts, manage.spec.ts
