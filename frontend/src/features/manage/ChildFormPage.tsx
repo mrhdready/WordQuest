@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
+import { EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api, ApiError } from '@/lib/api'
 import type { CreateLearnerRequest, Learner, UpdateLearnerSettingsRequest } from '@/types'
 
@@ -21,8 +21,9 @@ interface Errors {
   pin?: string
 }
 
-// Name zaehlt wie auf dem Server nach dem Trimmen.
-function validate(name: string, limit: string, pin: string): Errors {
+// Name zaehlt wie auf dem Server nach dem Trimmen. Beim Bearbeiten ist eine
+// leere PIN gueltig (unveraendert), eine aus Leerzeichen nicht.
+function validate(name: string, limit: string, pin: string, editing: boolean): Errors {
   const errors: Errors = {}
   if (!name.trim()) errors.name = 'Wie soll das Kind heißen? Ein Spitzname genügt.'
   else if (name.trim().length > MAX_NAME_LENGTH)
@@ -30,8 +31,9 @@ function validate(name: string, limit: string, pin: string): Errors {
   const count = Number(limit)
   if (!limit.trim() || !Number.isInteger(count) || count < 3 || count > 15)
     errors.limit = 'Bitte gib eine Zahl von 3 bis 15 ein.'
-  if (!pin) errors.pin = 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'
-  else if (!PIN_PATTERN.test(pin)) errors.pin = 'Die PIN muss aus 4 bis 6 Ziffern bestehen.'
+  if (!pin) {
+    if (!editing) errors.pin = 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'
+  } else if (!PIN_PATTERN.test(pin)) errors.pin = 'Die PIN muss aus 4 bis 6 Ziffern bestehen.'
   return errors
 }
 
@@ -59,8 +61,11 @@ function EditChild() {
   })
 
   if (learners.isLoading) return <Spinner />
+  // Ladefehler ist nicht "gibt es nicht": sonst haelt man ein vorhandenes Kind fuer geloescht.
+  if (learners.isError) return <ErrorNote message={learners.error.message} />
   const learner = learners.data?.find((entry) => entry.id === learnerId)
-  if (!learner) return null
+  // Der Weg zurueck ist der Link "Alle Kinder" darueber.
+  if (!learner) return <EmptyState title="Dieses Kind gibt es nicht (mehr). Gehe zurück zur Liste." />
   return <ChildForm key={learner.id} learner={learner} />
 }
 
@@ -116,7 +121,7 @@ function ChildForm({ learner }: { learner?: Learner }) {
     if (busyRef.current) return
     setFailure(null)
     setSaved(null)
-    const found = learner ? {} : validate(name, limit, pin)
+    const found = validate(name, limit, pin, learner !== undefined)
     if (Object.keys(found).length > 0) {
       showErrors(found)
       return

@@ -64,6 +64,25 @@ describe('Kinderliste', () => {
     expect(new Set([...rows].map((row) => row.parentElement))).toHaveProperty('size', 1)
   })
 
+  it('jede Zeile ist ein Link auf das Kind, Name im zugaenglichen Namen', async () => {
+    stubLearners([learner(1), learner(2)])
+    render()
+    const first = await screen.findByRole('link', { name: /Kind 1/ })
+    expect(first.getAttribute('href')).toBe('/verwalten/kinder/kind-1')
+    expect(screen.getByRole('link', { name: /Kind 2/ }).getAttribute('href')).toBe('/verwalten/kinder/kind-2')
+    expect(first.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(1)
+  })
+
+  it('Ladefehler: Meldung statt leerer Liste', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 500 })),
+    )
+    render()
+    expect((await screen.findByRole('alert')).textContent).toBe('Das hat nicht geklappt. Versuche es noch einmal.')
+    expect(screen.queryByText('Noch kein Kinderprofil')).toBeNull()
+  })
+
   it('Erfolgsmeldung aus dem Router-State mit role="status"', async () => {
     stubLearners([learner(1)])
     render({ message: 'Das Kind ist angelegt. Es kann sich jetzt mit seiner PIN anmelden.' })

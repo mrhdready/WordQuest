@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { ListGroup, ListRow } from '@/components/ui/list'
-import { EmptyState, Spinner, SuccessNote } from '@/components/ui/misc'
+import { EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { avatarFor } from '@/lib/avatars'
 import type { Learner } from '@/types'
@@ -24,6 +24,7 @@ export function ChildrenPage() {
     <div className="flex flex-col gap-4">
       {message ? <SuccessNote message={message} /> : null}
       <h2 className="type-headline text-ink">Kinder</h2>
+      {learners.isError ? <ErrorNote message={learners.error.message} /> : null}
       {learners.data?.length === 0 ? (
         <EmptyState title="Noch kein Kinderprofil" hint="Lege das erste Kind an, damit es lernen kann." />
       ) : null}
