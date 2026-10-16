@@ -119,7 +119,7 @@ export function SetDetailPage() {
                 </span>
               ) : null}
               {/* Pfeil im selben Textknoten: allein gestellt kann axe seinen Kontrast nicht messen (nonBmp). */}
-              <p className="flex-1">
+              <p className="min-w-0 flex-1 break-words">
                 {entry.sourceText} → {entry.targetText}
               </p>
               <Button

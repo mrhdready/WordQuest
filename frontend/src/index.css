@@ -163,9 +163,12 @@
   /* body waechst mit dem Inhalt (min-height statt height): sonst endet seine Box
      bei Seiten knapp ueber Bildschirmhoehe mitten in der schwebenden Tab-Leiste,
      und axe meldet deren Kontrast als nicht messbar (elmPartiallyObscured).
-     grid laesst #root mit height: 100% trotzdem die volle Hoehe fuellen. */
+     grid laesst #root mit height: 100% trotzdem die volle Hoehe fuellen.
+     minmax(0, 1fr): sonst waechst die Spalte auf die min-content-Breite eines
+     langen Worts, und bei 320 px entsteht ein waagerechter Scrollbalken (WCAG 1.4.10). */
   body {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     min-height: 100%;
   }
 

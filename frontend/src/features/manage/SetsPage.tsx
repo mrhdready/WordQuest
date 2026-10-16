@@ -100,8 +100,8 @@ export function SetsPage() {
           {sets.data.map((set) => (
             <ListRow key={set.id} asChild>
               <Link to={`/verwalten/sets/${set.id}`}>
-                <div className="flex-1">
-                  <p className="type-body-lg">{set.title}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="break-words type-body-lg">{set.title}</p>
                   <p className="type-body-md text-ink-soft">
                     {set.entryCount} {set.entryCount === 1 ? 'Vokabel' : 'Vokabeln'} ·{' '}
                     {set.sourceLanguage.toUpperCase()} → {set.targetLanguage.toUpperCase()}

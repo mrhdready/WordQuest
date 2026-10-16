@@ -211,3 +211,46 @@ test('Fortschritt: axe 0', async ({ page }) => {
   await expect(page.getByText(/^Level \d+$/)).toBeVisible()
   await checkPage(page)
 })
+
+// WCAG 1.4.10 mit dem unguenstigsten Inhalt: ein langes Wort ohne Trennstelle als
+// Set-Titel, Vokabel und Kindername. Die API-Antwort wird nur im Feld ersetzt.
+const longWord = 'Donaudampfschifffahrtsgesellschaftskapitaensmuetze'
+
+type Items = Record<string, unknown>[]
+
+async function rewrite(page: Page, url: RegExp, change: (items: Items) => Items) {
+  await page.route(url, async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: change((await response.json()) as Items) })
+  })
+}
+
+test.describe(() => {
+  // Antworten ueber den Service Worker (localhost ist ein sicherer Kontext) sieht
+  // page.route nicht; ohne Worker geht jede Anfrage durch die Umschreibung.
+  test.use({ serviceWorkers: 'block' })
+
+  test('Reflow bei 320 px mit langem Wort ohne Trennstelle', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 })
+    const first = (field: string) => (items: Items) =>
+      items.map((item, index) => (index === 0 ? { ...item, [field]: longWord } : item))
+    await rewrite(page, /\/api\/v1\/sets$/, first('title'))
+    await rewrite(page, /\/api\/v1\/sets\/[^/]+\/entries$/, first('sourceText'))
+    // Namen stehen erst ab zwei Kindern als Auswahl da: ein zweites Kind anhaengen.
+    await rewrite(page, /\/api\/v1\/learners$/, (items) => [
+      ...items,
+      { ...items[0], id: '00000000-0000-0000-0000-000000000001', displayName: longWord },
+    ])
+    for (const path of ['/verwalten', 'set', '/verwalten/fortschritt']) {
+      if (path === 'set') await page.locator('main a[href^="/verwalten/sets/"]').first().click()
+      else await page.goto(path)
+      const word = page.getByText(longWord, { exact: false }).first()
+      await expect(word, path).toBeVisible()
+      // Das Wort selbst bricht um, statt nur unsichtbar abgeschnitten zu werden.
+      const fits = await word.evaluate((element) => element.scrollWidth <= element.clientWidth)
+      expect(fits, `${path}: Wort bricht nicht um`).toBe(true)
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
+      expect(scrollWidth, `${path}: waagerechter Scrollbalken`).toBeLessThanOrEqual(320)
+    }
+  })
+})

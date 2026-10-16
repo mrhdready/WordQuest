@@ -64,14 +64,14 @@ export function ProgressPage() {
               onClick={() => setSelected(learner.id)}
               aria-pressed={learner.id === learnerId}
               className={cn(
-                'flex min-h-touch-default items-center gap-2 rounded-full px-4 type-body-md-strong transition',
+                'flex min-h-touch-default min-w-0 items-center gap-2 rounded-full px-4 type-body-md-strong transition',
                 learner.id === learnerId ? 'glass-selected text-primary' : 'glass text-ink',
               )}
             >
               <span className="type-emoji" aria-hidden>
                 {avatarFor(learner.avatarKey)}
               </span>
-              {learner.displayName}
+              <span className="min-w-0 break-words">{learner.displayName}</span>
             </button>
           ))}
         </div>

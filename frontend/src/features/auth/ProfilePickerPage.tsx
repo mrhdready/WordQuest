@@ -163,7 +163,7 @@ export function ProfilePickerPage() {
             <span className="type-emoji" aria-hidden>
               {avatarFor(selected.avatarKey)}
             </span>
-            <h1 className="type-title">Hallo, {selected.displayName}!</h1>
+            <h1 className="w-full break-words type-title">Hallo, {selected.displayName}!</h1>
             <p className="type-body-md text-ink">Gib deine Zahlen ein.</p>
           </div>
 
