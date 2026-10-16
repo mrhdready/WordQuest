@@ -71,6 +71,7 @@ builder.Services.AddSingleton(sp => new AnswerEvaluator(sp.GetRequiredService<Sc
 
 builder.Services.AddScoped<LearningService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AccountService>();
 builder.Services.AddSingleton<JwtTokenService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -156,6 +157,7 @@ app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
 
 app.MapAuthEndpoints();
+app.MapAccountEndpoints();
 app.MapLearnerEndpoints();
 app.MapSetEndpoints();
 app.MapSessionEndpoints();

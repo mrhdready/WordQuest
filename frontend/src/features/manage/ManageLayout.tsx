@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard, LogOut, Plus } from 'lucide-react'
+import { BookOpen, KeyRound, LayoutDashboard, LogOut, Plus } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 const tabs = [
   { to: '/verwalten', end: true, label: 'Vokabeln', icon: BookOpen },
   { to: '/verwalten/fortschritt', end: false, label: 'Fortschritt', icon: LayoutDashboard },
+  { to: '/verwalten/konto', end: false, label: 'Konto', icon: KeyRound },
 ]
 
 // "+" neben der Tab-Leiste: Ziel und zugaenglicher Name je Seite; ohne Eintrag kein "+".

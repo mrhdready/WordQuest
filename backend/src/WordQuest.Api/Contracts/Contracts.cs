@@ -8,6 +8,8 @@ public sealed record LearnerLoginRequest(Guid LearnerId, string Pin);
 
 public sealed record RefreshRequest(string RefreshToken);
 
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
 public sealed record AuthUserDto(Guid Id, string DisplayName, string Role, Guid TenantId);
 
 public sealed record AuthResponse(

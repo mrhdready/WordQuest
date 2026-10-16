@@ -5,6 +5,7 @@ import { GuardianLoginPage } from '@/features/auth/GuardianLoginPage'
 import { ProfilePickerPage } from '@/features/auth/ProfilePickerPage'
 import { LearnHomePage } from '@/features/learn/LearnHomePage'
 import { SessionPage } from '@/features/learn/SessionPage'
+import { AccountPage } from '@/features/manage/AccountPage'
 import { ManageLayout } from '@/features/manage/ManageLayout'
 import { ProgressPage } from '@/features/manage/ProgressPage'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route index element={<SetsPage />} />
         <Route path="sets/:setId" element={<SetDetailPage />} />
         <Route path="fortschritt" element={<ProgressPage />} />
+        <Route path="konto" element={<AccountPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

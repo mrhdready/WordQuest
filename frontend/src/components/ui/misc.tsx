@@ -74,6 +74,14 @@ export function ErrorNote({ message }: { message: string }) {
   )
 }
 
+export function SuccessNote({ message }: { message: string }) {
+  return (
+    <p className="rounded-sm bg-surface-success p-4 type-body-md text-success-text" role="status">
+      {message}
+    </p>
+  )
+}
+
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="glass rounded-lg p-8 text-center">

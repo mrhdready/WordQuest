@@ -6,10 +6,11 @@ using WordQuest.Modules.Identity.Services;
 namespace WordQuest.Infrastructure;
 
 /// <summary>
-/// Elternkonto der Instanz anlegen und zuruecksetzen. Aufgerufen aus der CLI
-/// (setup.sh, reset-password) mit einem Kontext ohne Mandantenfilter; der
-/// Service selbst umgeht den Filter nicht. E-Mail und Passwort werden nie
-/// protokolliert.
+/// Elternkonto der Instanz anlegen, zuruecksetzen und das Passwort aendern.
+/// Anlegen und Zuruecksetzen ruft die CLI (setup.sh, reset-password) mit einem
+/// Kontext ohne Mandantenfilter auf, das Aendern die API mit dem normalen,
+/// mandantengefilterten Kontext; der Service selbst umgeht den Filter nicht.
+/// E-Mail und Passwort werden nie protokolliert.
 /// </summary>
 public sealed class AccountService(WordQuestDbContext db, TimeProvider clock)
 {
@@ -104,5 +105,46 @@ public sealed class AccountService(WordQuestDbContext db, TimeProvider clock)
         // Ein SaveChanges: Passwort und Widerruf gelten zusammen oder gar nicht.
         await db.SaveChangesAsync(ct);
         return password;
+    }
+
+    /// <summary>
+    /// Aendert das Passwort des angemeldeten Elternkontos. Die Id kommt nur aus
+    /// dem Token. Das neue Passwort wird genau so gehasht, wie es eingegeben
+    /// wurde (kein Trimmen). Andere Sitzungen bleiben bestehen (UI-SPEC
+    /// "Anmeldung bleibt bestehen").
+    /// </summary>
+    public async Task<PasswordChange> ChangePasswordAsync(
+        Guid userId, string currentPassword, string newPassword, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(currentPassword);
+        ArgumentNullException.ThrowIfNull(newPassword);
+
+        User? user = await db.Users.FirstOrDefaultAsync(
+            u => u.Id == userId && (u.Role == UserRole.Owner || u.Role == UserRole.Guardian),
+            ct);
+        if (user is null)
+        {
+            return PasswordChange.UnknownUser;
+        }
+
+        // Vorbedingung von PasswordHasher.Hash; sonst endete die Eingabe in einer Ausnahme (500).
+        if (string.IsNullOrWhiteSpace(newPassword))
+        {
+            return PasswordChange.NewPasswordBlank;
+        }
+
+        if (!AccountRules.IsValidPassword(newPassword))
+        {
+            return PasswordChange.NewPasswordTooShort;
+        }
+
+        if (!PasswordHasher.Verify(currentPassword, user.PasswordHash))
+        {
+            return PasswordChange.WrongCurrentPassword;
+        }
+
+        user.PasswordHash = PasswordHasher.Hash(newPassword);
+        await db.SaveChangesAsync(ct);
+        return PasswordChange.Changed;
     }
 }

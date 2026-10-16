@@ -171,6 +171,15 @@
     scroll-padding-bottom: var(--wq-tab-bar-clearance);
   }
 
+  /* Unter sm bricht die Leiste mit "+" daneben in zwei Zeilen um (320 px: drei
+     Tabs passen nicht neben das "+"). Zweite Zeile = Tab 52 px + Abstand 8 px,
+     Tailwind-Stufe 15. */
+  @media (width < 40rem) {
+    html {
+      --wq-tab-bar-clearance: calc(var(--spacing) * 16 + var(--spacing) * 12 + var(--spacing) * 15);
+    }
+  }
+
   /* Backdrop direkt auf body (kein Pseudo-Element): der Kontrastlauf ersetzt ihn
      per CSSOM durch je eine Blob-Farbe. */
   body {

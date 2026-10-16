@@ -7,6 +7,11 @@ export interface AuthUser {
   tenantId: string
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
 export interface AuthResponse {
   accessToken: string
   refreshToken: string
