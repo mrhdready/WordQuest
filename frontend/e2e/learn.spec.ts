@@ -11,7 +11,7 @@ const demoPin = '1234'
 test.use({ launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] } })
 
 // Rate-Limit "auth": 10 Aufrufe pro Minute je IP, GET /auth/profiles zaehlt mit.
-// Diese Datei bleibt bei hoechstens 6 Aufrufen: je Test ein Laden von / und eine Anmeldung.
+// Diese Datei bleibt bei hoechstens 8 Aufrufen: je Test ein Laden von / und eine Anmeldung.
 function expectNotRateLimited(response: Response) {
   expect(response.status(), 'Rate-Limit auth erreicht').not.toBe(429)
 }
@@ -127,6 +127,81 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
   await page.keyboard.press('1')
   await expect(status(page)).toHaveText('1 Ziffer eingegeben')
   expect(logins.count).toBe(1)
+})
+
+// Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen über HTTP"
+// unberuehrt (das Tagesbudget neuer Karten reicht fuer genau eine Runde).
+test('Schließen in einer angefangenen Runde', async ({ page }) => {
+  const item = {
+    itemId: 'item-1',
+    cardId: 'card-1',
+    prompt: 'dog',
+    promptType: 'text',
+    expectedAnswerType: 'text',
+    choices: null,
+    emoji: null,
+    exampleSentence: null,
+    isRetry: false,
+  }
+  const view = {
+    sessionId: 'session-1',
+    gameKey: 'classic',
+    totalItems: 2,
+    items: [item, { ...item, itemId: 'item-2' }],
+  }
+  const result = {
+    correct: false,
+    grade: 'Again',
+    correctAnswer: 'Hund',
+    message: null,
+    hadTypo: false,
+    xpAwarded: 0,
+    coinsAwarded: 0,
+    retryItem: null,
+  }
+  const summary = {
+    sessionId: 'session-1',
+    answered: 1,
+    correct: 0,
+    xpAwarded: 0,
+    coinsAwarded: 0,
+    totalXp: 0,
+    level: 1,
+    levelProgress: 0,
+    xpToNextLevel: 100,
+    coins: 0,
+    streak: 1,
+    streakSaverUsed: false,
+    leveledUp: false,
+  }
+  let completes = 0
+  await page.route(/\/api\/v1\/sessions$/, (route) => route.fulfill({ json: view }))
+  await page.route(/\/api\/v1\/sessions\/[^/]+\/answers$/, (route) => route.fulfill({ json: result }))
+  await page.route(/\/api\/v1\/sessions\/[^/]+\/complete$/, (route) => {
+    completes += 1
+    return route.fulfill({ json: summary })
+  })
+
+  await openPicker(page)
+  await loginByKeyboard(page)
+  const home = page.getByRole('heading', { name: 'Was möchtest du üben?' })
+  const close = page.getByRole('button', { name: 'Schließen' })
+
+  // Ohne beantwortete Karte: nur zurueck, kein Abschluss.
+  await goButton(page).click()
+  await expect(page.getByRole('textbox')).toBeVisible()
+  await close.click()
+  await expect(home).toBeVisible()
+  expect(completes).toBe(0)
+
+  // Nach einer Antwort schliesst "Schließen" die Runde regulaer ab (Entscheidung 2026-10-16).
+  await goButton(page).click()
+  await page.getByRole('textbox').fill('falsch')
+  await page.getByRole('textbox').press('Enter')
+  await expect(page.getByRole('button', { name: 'Weiter' })).toBeVisible()
+  await close.click()
+  await expect(home).toBeVisible()
+  expect(completes).toBe(1)
 })
 
 // FIX-07: Heimnetz-HTTP mit nicht-lokalem Hostnamen, also ohne Secure Context

@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import type { AnswerResult, SessionItem, SessionSummary, SessionView } from '@/types'
 
-type Phase = 'loading' | 'question' | 'feedback' | 'done' | 'empty' | 'error'
+type Phase = 'loading' | 'question' | 'feedback' | 'finishing' | 'done' | 'empty' | 'error'
 
 export function SessionPage() {
   const navigate = useNavigate()
@@ -85,34 +85,56 @@ export function SessionPage() {
     },
   })
 
-  const finish = useCallback(async () => {
-    if (!session) return
-    try {
-      const done = await api<SessionSummary>(`/sessions/${session.sessionId}/complete`, {
-        method: 'POST',
-      })
-      setSummary(done)
-      setPhase('done')
-      void queryClient.invalidateQueries({ queryKey: ['overview'] })
-    } catch (caught) {
-      setErrorMessage(caught instanceof Error ? caught.message : 'Abschluss fehlgeschlagen')
-      setPhase('error')
-    }
-  }, [session, queryClient])
+  // Eigene Phase waehrend des Abschlusses: sonst stuende kurz wieder das
+  // Antwortfeld der letzten Karte da, und "Weiter" liesse sich doppelt druecken.
+  const finish = useCallback(
+    async (goHome: boolean) => {
+      if (!session) return
+      setPhase('finishing')
+      try {
+        const done = await api<SessionSummary>(`/sessions/${session.sessionId}/complete`, {
+          method: 'POST',
+        })
+        void queryClient.invalidateQueries({ queryKey: ['overview'] })
+        if (goHome) {
+          navigate('/')
+          return
+        }
+        setSummary(done)
+        setPhase('done')
+      } catch (caught) {
+        setErrorMessage(caught instanceof Error ? caught.message : 'Abschluss fehlgeschlagen')
+        setPhase('error')
+      }
+    },
+    [session, queryClient, navigate],
+  )
 
-  function next() {
-    setResult(null)
-    setTyped('')
-    if (index + 1 >= queue.length) {
-      void finish()
+  // "Schliessen" mit mindestens einer beantworteten Karte schliesst die Runde
+  // regulaer ab (Serie, Bonus rechnet der Server); ohne Antwort nur zurueck.
+  // Entscheidung Dennis, 2026-10-16.
+  function close() {
+    if (index > 0 || phase === 'feedback') {
+      void finish(true)
       return
     }
+    navigate('/')
+  }
+
+  function next() {
+    if (index + 1 >= queue.length) {
+      void finish(false)
+      return
+    }
+    setResult(null)
+    setTyped('')
     setIndex(index + 1)
     setPhase('question')
     shownAt.current = Date.now()
   }
 
   if (phase === 'loading') return <Spinner label="Deine Quest wird vorbereitet …" />
+  if (phase === 'finishing') return <Spinner />
 
   if (phase === 'error') {
     return (
@@ -146,7 +168,14 @@ export function SessionPage() {
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
       {/* Quiz-Kopf (DESIGN.md "Quiz"): Schliessen neben der Fortschritts-Kapsel. */}
       <div className="mb-6 flex items-center gap-2">
-        <Button variant="round" size="icon" aria-label="Schließen" onClick={() => navigate('/')}>
+        {/* Waehrend eine Antwort unterwegs ist, wuerde der Abschluss sie ueberholen. */}
+        <Button
+          variant="round"
+          size="icon"
+          aria-label="Schließen"
+          disabled={answer.isPending}
+          onClick={close}
+        >
           <X className="size-6" />
         </Button>
         <div className="glass flex min-w-0 flex-1 items-center gap-4 rounded-full px-4 py-2">
