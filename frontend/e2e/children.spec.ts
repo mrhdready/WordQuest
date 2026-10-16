@@ -1,4 +1,4 @@
-import { expect, test, type Browser } from '@playwright/test'
+import { expect, test, type Browser, type Page } from '@playwright/test'
 import { checkPage, expectReflow } from './axe'
 import { guardianStorageState } from './global-setup'
 
@@ -129,12 +129,40 @@ test('Kinder barrierefrei', async ({ page }) => {
   await expect(page.getByLabel('Name', { exact: true })).toBeFocused()
   await checkPage(page)
 
-  // Tab-Reihenfolge in <main> bei 320 px, kein Ziel unter der Tab-Leiste (WCAG 2.4.11).
+  await expectFormTabOrder(page, ['Alle Kinder', 'Name', 'Neue Karten pro Tag', 'PIN', 'Kind anlegen'])
+})
+
+// Kein Aufruf im Rate-Limit "auth": nur Lesen und Client-Pruefung, das Demo-Kind bleibt unveraendert.
+test('Kind bearbeiten barrierefrei', async ({ page }) => {
+  await page.goto('/verwalten/kinder')
+  await page.locator('main a[href^="/verwalten/kinder/"]:not([href$="/neu"])').first().click()
+  await expect(page.getByRole('heading', { name: 'Kind bearbeiten' })).toBeVisible()
+  await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue('')
+  await checkPage(page)
+
+  await page.getByLabel('Name', { exact: true }).fill('')
+  await page.getByRole('button', { name: 'Änderungen speichern' }).click()
+  const name = page.getByLabel('Name', { exact: true })
+  await expect(name).toHaveAttribute('aria-invalid', 'true')
+  await expect(name).toHaveAccessibleDescription('Wie soll das Kind heißen? Ein Spitzname genügt.')
+  await expect(name).toBeFocused()
+  await checkPage(page)
+
+  await expectFormTabOrder(page, ['Alle Kinder', 'Name', 'Neue Karten pro Tag', 'Neue PIN', 'Änderungen speichern'])
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/verwalten/kinder/00000000-0000-0000-0000-000000000000')
+  await expect(page.getByText('Dieses Kind gibt es nicht (mehr).')).toBeVisible()
+  await checkPage(page)
+})
+
+// Tab-Reihenfolge in <main> bei 320 px, kein Ziel unter der Tab-Leiste (WCAG 2.4.11).
+async function expectFormTabOrder(page: Page, expected: string[]) {
   await page.setViewportSize({ width: 320, height: 568 })
   // Start im Kopf: Tab fuehrt von "Abmelden" in den Inhalt.
   await page.getByRole('button', { name: 'Abmelden' }).focus()
   const steps: { name: string; bottom: number; barTop: number }[] = []
-  for (let index = 0; index < 20 && steps.length < 5; index += 1) {
+  for (let index = 0; index < 20 && steps.length < expected.length; index += 1) {
     await page.keyboard.press('Tab')
     const step = await page.evaluate(() => {
       const element = document.activeElement
@@ -149,14 +177,8 @@ test('Kinder barrierefrei', async ({ page }) => {
     })
     if (step) steps.push(step)
   }
-  expect(steps.map((step) => step.name)).toEqual([
-    'Alle Kinder',
-    'Name',
-    'Neue Karten pro Tag',
-    'PIN',
-    'Kind anlegen',
-  ])
+  expect(steps.map((step) => step.name)).toEqual(expected)
   for (const step of steps) {
     expect(step.bottom, `"${step.name}" unter der Tab-Leiste`).toBeLessThanOrEqual(step.barTop)
   }
-})
+}

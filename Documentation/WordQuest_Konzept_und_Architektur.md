@@ -79,7 +79,7 @@ Fünf Leitplanken, an denen jede spätere Feature-Entscheidung gemessen wird:
 
 Im Code haben `Owner` und `Guardian` dieselben Rechte (Policy `Guardian` = Rollen `Owner` oder `Guardian`, `Program.cs`).
 
-**Zum Kinder-Login:** Ein Kind soll kein Passwort tippen müssen — das ist die häufigste Abbruchstelle bei Lern-Apps. Stattdessen: Startbildschirm zeigt Avatar-Kacheln, ein Tipp auf den eigenen Avatar, dann eine PIN über ein großes Ziffernfeld. Die PIN schützt nicht gegen Angreifer, sondern gegen das Geschwisterkind — das ist das realistische Bedrohungsmodell im Wohnzimmer. Technisch wird für das Kind ein Refresh-Token (30 Tage, rotierend) auf dem Gerät hinterlegt, sodass die PIN nur bei Profilwechsel oder nach 30 Tagen ohne Nutzung nötig ist. Beim Anlegen eines Kindes ist die PIN Pflicht, und der Server prüft sie auf 4–6 Ziffern 0–9 (`PAR-02`); beim Ändern über `PATCH /learners/{id}/settings` ist diese Prüfung **geplant, nicht umgesetzt** (`PAR-01`).
+**Zum Kinder-Login:** Ein Kind soll kein Passwort tippen müssen — das ist die häufigste Abbruchstelle bei Lern-Apps. Stattdessen: Startbildschirm zeigt Avatar-Kacheln, ein Tipp auf den eigenen Avatar, dann eine PIN über ein großes Ziffernfeld. Die PIN schützt nicht gegen Angreifer, sondern gegen das Geschwisterkind — das ist das realistische Bedrohungsmodell im Wohnzimmer. Technisch wird für das Kind ein Refresh-Token (30 Tage, rotierend) auf dem Gerät hinterlegt, sodass die PIN nur bei Profilwechsel oder nach 30 Tagen ohne Nutzung nötig ist. Beim Anlegen eines Kindes ist die PIN Pflicht, und der Server prüft sie auf 4–6 Ziffern 0–9 (`PAR-02`); dieselbe Prüfung gilt beim Ändern über `PATCH /learners/{id}/settings` (`PAR-01`). Dort bleibt die PIN bei leerer Eingabe unverändert, und eine neue PIN hebt eine Sperre nach Fehlversuchen sofort auf.
 
 Auf einem Familientablet ist „Gerät ist vertrauenswürdig" die richtige Annahme. Auf einem Schul-Tablet später nicht — dort würde die PIN pro Session erzwungen. Das Feld `Tenant.RequirePinEverySession` existiert im Code, wird aber nicht ausgewertet (**geplant, nicht umgesetzt**; Schulen außer Scope).
 
@@ -569,8 +569,8 @@ POST   /auth/logout
 POST   /account/password                currentPassword, newPassword → 204 (Elternkonto)
 
 GET    /learners                        Kinder des Mandanten
-POST   /learners                        displayName, pin (Pflicht, 4–6 Ziffern), dailyNewLimit? (3–15, Standard 5), avatarKey?
-PATCH  /learners/{id}/settings          dailyNewLimit, speed, soundEnabled, pin
+POST   /learners                        displayName, pin (Pflicht, 4–6 Ziffern), dailyNewLimit? (3–15, Standard 5), avatarKey? (höchstens 50 Zeichen)
+PATCH  /learners/{id}/settings          displayName?, dailyNewLimit?, speed?, soundEnabled?, pin? (4–6 Ziffern, leer = unverändert)
 GET    /learners/{id}/overview          Level, XP, Streak, fällig, gefestigt
 GET    /learners/{id}/traffic-light?setId=
 
@@ -594,7 +594,7 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 
-Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen pro Minute pro IP auf allen `/auth`-Routen, einschließlich `refresh`, und auf `/account/password`. Weil im Heimnetz hinter dem Proxy alle Geräte dieselbe IP haben, kann ein Familienmitglied die anderen aussperren (bekannter Fehler, `FIX-01`). PIN: nach 10 Fehlversuchen in Folge wird das Profil 15 Minuten gesperrt.
+Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen pro Minute pro IP auf allen `/auth`-Routen, einschließlich `refresh`, und auf `/account/password`. Der Wert kommt aus `Auth:RequestsPerMinute` (Standard 10 in `appsettings.json`); nur der e2e-Teststack (`frontend/e2e/docker-compose.e2e.yml`) erhöht ihn. Weil im Heimnetz hinter dem Proxy alle Geräte dieselbe IP haben, kann ein Familienmitglied die anderen aussperren (bekannter Fehler, `FIX-01`). PIN: nach 10 Fehlversuchen in Folge wird das Profil 15 Minuten gesperrt.
 
 ---
 
@@ -639,7 +639,7 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 |---|---|
 | Passwörter | PBKDF2-HMAC-SHA256, 210 000 Iterationen, eigene Implementierung (`PasswordHasher.cs`), kein ASP.NET Core Identity |
 | Passwort ändern | `POST /api/v1/account/password` (`AccountEndpoints.cs`, nur Elternkonten, Rate-Limit wie `/auth`) prüft das aktuelle Passwort; die Konto-Id kommt nur aus dem Token. Falsches aktuelles Passwort ergibt 400 mit Feldfehler, nicht 401. Neue Passwörter brauchen mindestens 8 Zeichen; Passwörter nur aus Leerzeichen werden abgelehnt, Leerzeichen am Rand bleiben Teil des Passworts. Andere Sitzungen bleiben angemeldet. **Bekannte Lücke:** neue Passwörter werden nicht gegen Listen häufiger Passwörter geprüft (v1, D-18) |
-| PIN | 4 bis 6 Ziffern 0–9, serverseitig geprüft (beim Anlegen; beim Ändern geplant, `PAR-01`); separat gehasht (gleiches Verfahren), 10 Fehlversuche in Folge, dann 15 Minuten Sperre |
+| PIN | 4 bis 6 Ziffern 0–9, serverseitig geprüft beim Anlegen und beim Ändern; separat gehasht (gleiches Verfahren), 10 Fehlversuche in Folge, dann 15 Minuten Sperre |
 | Token | Access 15 min, Refresh 30 Tage rotierend, Reuse-Detection; gespeichert wird nur der Hash des Refresh-Tokens. `reset-password` widerruft alle Refresh-Tokens des Kontos; bereits ausgegebene Access-Tokens bleiben bis zu ihrem Ablauf gültig (höchstens 15 Minuten, `Auth:AccessTokenMinutes`) |
 | Transport | HSTS außerhalb von Development; TLS nur in der Domain-Variante. Keine Cookies: Tokens liegen im `localStorage` und gehen im `Authorization`-Header (bewusst akzeptiertes Risiko) |
 | Autorisierung | `tenant_id` über einen EF-Core-Global-Query-Filter — nicht pro Query von Hand; zusätzlich darf ein Kind nur für sich selbst lernen (`MayActFor`, Geschwister teilen den Mandanten) |

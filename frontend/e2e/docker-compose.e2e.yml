@@ -37,6 +37,10 @@ services:
       WQ_AI_PROVIDER: none
       # Demo-Seed bleibt Entwickler-/Test-Option (D-16).
       WQ_SEED_DEMO_DATA: "true"
+      # NUR FUER DEN TESTSTACK: alle Browser-Anfragen kommen ueber nginx mit einer IP,
+      # ein Gesamtlauf aller Specs braucht mehr als 10 Auth-Aufrufe pro Minute.
+      # Betrieb (docker-compose.quick.yml, docker-compose.yml) bleibt beim Standard 10.
+      Auth__RequestsPerMinute: "1000"
     depends_on:
       db:
         condition: service_healthy

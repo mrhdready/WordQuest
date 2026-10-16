@@ -91,7 +91,11 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Guardian", policy => policy.RequireRole("Owner", "Guardian"))
     .AddPolicy("Learner", policy => policy.RequireRole("Learner"));
 
-// Begrenzt Rateversuche auf Login und PIN (Konzept §12).
+// Begrenzt Rateversuche auf Login und PIN (Konzept §12). Standard 10 pro Minute;
+// nur der e2e-Teststack setzt einen hoeheren Wert, weil dort alle Anfragen ueber
+// nginx mit einer IP kommen. Die Ursache "eine IP fuer alle Geraete" behebt FIX-01
+// in Phase 2.
+int authRequestsPerMinute = builder.Configuration.GetValue("Auth:RequestsPerMinute", 10);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -99,7 +103,7 @@ builder.Services.AddRateLimiter(options =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 10,
+            PermitLimit = authRequestsPerMinute,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
         }));
