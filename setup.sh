@@ -34,9 +34,14 @@ gen_secret() {
 for name in db_password jwt_key; do
   f="secrets/${name}.txt"
   if [[ -f "$f" ]]; then
+    [[ -s "$f" ]] || die "secrets/${name}.txt ist leer. Lösche die Datei und starte setup.sh erneut."
     say "✓ secrets/${name}.txt existiert bereits — unverändert."
   else
-    printf '%s' "$(gen_secret)" > "$f"
+    # Eigene Zuweisung: ein Fehler in $(...) als printf-Argument loest set -e nicht aus.
+    secret="$(gen_secret)"
+    (( ${#secret} >= 32 )) || die "Konnte kein Secret erzeugen. Ist openssl oder /dev/urandom verfügbar?"
+    printf '%s' "$secret" > "$f"
+    unset secret
     say "✓ secrets/${name}.txt erzeugt."
   fi
   # Einzelne read-only Dateimounts muessen fuer den Non-Root-Container lesbar sein.
@@ -48,16 +53,21 @@ done
 if [[ -f .env ]]; then
   say "✓ .env existiert bereits — unverändert."
 else
-  cp .env.example .env
-  read -rp "Image-Präfix (ghcr.io/<account>/wordquest): " prefix || die "Eingabe beendet, bevor .env fertig war."
-  while [[ -z "$prefix" ]]; do
-    warn "Ohne Image-Präfix weiß docker compose nicht, was es laden soll."
+  # Erst fragen, dann .env in einem Schritt schreiben: ein Abbruch hinterlaesst keine halbe .env.
+  while true; do
     read -rp "Image-Präfix (ghcr.io/<account>/wordquest): " prefix || die "Eingabe beendet, bevor .env fertig war."
+    [[ "$prefix" =~ ^[a-z0-9._/:-]+$ ]] && break
+    warn "Das Image-Präfix besteht aus Kleinbuchstaben, Ziffern und . _ / : - (z. B. ghcr.io/mein-account/wordquest)."
   done
 
   # BSD/GNU sed kompatibel: temporaere Datei statt -i.
-  sed -e "s|^WQ_IMAGE_PREFIX=.*|WQ_IMAGE_PREFIX=${prefix}|" .env > .env.tmp && mv .env.tmp .env
+  sed -e "s|^WQ_IMAGE_PREFIX=.*|WQ_IMAGE_PREFIX=${prefix}|" .env.example > .env.tmp && mv .env.tmp .env
   say "✓ .env angelegt."
+fi
+
+# Aeltere .env-Vorlagen hatten Demo-Daten an: dann gaebe es ein Konto mit bekanntem Passwort.
+if [[ "$(env_value WQ_SEED_DEMO_DATA)" == "true" ]]; then
+  die "In .env steht WQ_SEED_DEMO_DATA=true. Damit entsteht ein Demo-Konto mit bekanntem Passwort. Setze den Wert in .env auf false und starte setup.sh erneut."
 fi
 
 # --- Start -------------------------------------------------------------------
@@ -92,7 +102,7 @@ status=0
 cli has-owner </dev/null >/dev/null || status=$?
 case "$status" in
   0) say "✓ Elternkonto ist schon angelegt — unverändert." ;;
-  1)
+  10)
     while true; do
       read -rp "E-Mail-Adresse für dein Elternkonto: " email || die "Eingabe beendet, bevor das Elternkonto angelegt war."
       if [[ ! "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then

@@ -14,6 +14,9 @@ public static class AccountCommands
 {
     private const int UsageError = 64;
 
+    // Eigener Code statt 1: docker compose exec meldet eigene Fehler ebenfalls mit 1.
+    private const int NoOwner = 10;
+
     public static bool IsCommand(string[] args) =>
         args is ["has-owner", ..] or ["create-owner", ..];
 
@@ -36,7 +39,7 @@ public static class AccountCommands
         switch (args)
         {
             case ["has-owner"]:
-                return await accounts.HasOwnerAsync() ? 0 : 1;
+                return await accounts.HasOwnerAsync() ? 0 : NoOwner;
 
             case ["create-owner", string email]:
                 string password = await input.ReadLineAsync() ?? string.Empty;

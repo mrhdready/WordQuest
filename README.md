@@ -129,7 +129,8 @@ gar nicht erst.
 Demo-Daten (Elternkonto, Kind, Beispielset) gibt es nur noch als
 Entwickler-Option: `WQ_SEED_DEMO_DATA=true` legt sie beim Start auf einer
 leeren Datenbank an. In beiden Compose-Dateien und in `.env.example` steht der
-Wert auf `false`.
+Wert auf `false`. Steht in einer älteren `.env` noch `true`, bricht `setup.sh`
+mit einem Hinweis ab, denn das Demo-Konto hat ein bekanntes Passwort.
 
 #### Aktualisieren
 

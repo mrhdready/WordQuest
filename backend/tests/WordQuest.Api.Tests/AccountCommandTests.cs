@@ -35,9 +35,9 @@ public sealed class AccountCommandTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task HasOwner_is_1_on_empty_database_and_0_after_create_owner()
+    public async Task HasOwner_is_10_on_empty_database_and_0_after_create_owner()
     {
-        Assert.Equal(1, (await RunAsync(string.Empty, "has-owner")).Code);
+        Assert.Equal(10, (await RunAsync(string.Empty, "has-owner")).Code);
 
         Assert.Equal(0, (await CreateOwnerAsync("eltern@example.de", "geheim-123")).Code);
 
