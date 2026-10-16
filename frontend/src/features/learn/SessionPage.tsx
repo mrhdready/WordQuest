@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ArrowUp, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { ErrorNote, Progress, Spinner } from '@/components/ui/misc'
+import { Card } from '@/components/ui/card'
+import { Badge, ErrorNote, Progress, Spinner } from '@/components/ui/misc'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -115,23 +116,23 @@ export function SessionPage() {
 
   if (phase === 'error') {
     return (
-      <div className="mx-auto w-full max-w-lg px-5 py-8">
+      <main className="mx-auto w-full max-w-lg px-screen-margin pt-screen-top pb-8">
         <ErrorNote message={errorMessage ?? 'Etwas ist schiefgegangen.'} />
         <Button className="mt-4 w-full" size="lg" onClick={() => navigate('/')}>
           Zurück
         </Button>
-      </div>
+      </main>
     )
   }
 
   if (phase === 'empty') {
     return (
-      <div className="mx-auto w-full max-w-lg px-5 py-8 text-center">
-        <p className="mb-6 text-lg font-semibold">Für heute ist alles erledigt. 🎉</p>
+      <main className="mx-auto w-full max-w-lg px-screen-margin pt-screen-top pb-8 text-center">
+        <p className="mb-6 type-headline">Für heute ist alles erledigt. 🎉</p>
         <Button size="lg" className="w-full" onClick={() => navigate('/')}>
           Zurück
         </Button>
-      </div>
+      </main>
     )
   }
 
@@ -142,32 +143,41 @@ export function SessionPage() {
   if (!current) return <Spinner />
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-lg flex-col px-5 py-6 safe-top safe-bottom">
-      <div className="mb-6">
-        <Progress value={total === 0 ? 0 : index / total} />
-        <p className="mt-2 text-center text-sm text-ink-soft">
-          {index + 1} von {total}
-        </p>
+    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
+      {/* Quiz-Kopf (DESIGN.md "Quiz"): Schliessen neben der Fortschritts-Kapsel. */}
+      <div className="mb-6 flex items-center gap-2">
+        <Button variant="round" size="icon" aria-label="Schließen" onClick={() => navigate('/')}>
+          <X className="size-6" />
+        </Button>
+        <div className="glass flex min-w-0 flex-1 items-center gap-4 rounded-full px-4 py-2">
+          <Progress
+            value={total === 0 ? 0 : index / total}
+            label="Fortschritt in dieser Runde"
+            className="flex-1"
+          />
+          <p className="shrink-0 type-body-sm text-ink">
+            {index + 1} von {total}
+          </p>
+        </div>
       </div>
 
-      <Card className="animate-pop mb-6">
-        <CardContent className="flex min-h-44 flex-col items-center justify-center gap-3 py-10 text-center">
-          {current.emoji ? (
-            <span className="text-6xl" aria-hidden>
-              {current.emoji}
-            </span>
-          ) : null}
-          <p className="text-3xl font-black">{current.prompt}</p>
-          {current.isRetry ? (
-            <p className="text-sm font-semibold text-warn">Noch einmal — du schaffst das!</p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {/* card-quiz */}
+      <div className="animate-pop glass mb-6 flex min-h-44 flex-col items-center justify-center gap-4 rounded-xl p-12 text-center">
+        {current.emoji ? (
+          <span className="type-emoji" aria-hidden>
+            {current.emoji}
+          </span>
+        ) : null}
+        <p className="w-full break-words type-display">{current.prompt}</p>
+        {current.isRetry ? (
+          <p className="type-body-md-strong text-warn-text">Noch einmal — du schaffst das!</p>
+        ) : null}
+      </div>
 
       {phase === 'feedback' && result ? (
         <FeedbackPanel result={result} onNext={next} />
       ) : current.expectedAnswerType === 'choice' && current.choices ? (
-        <div className="mt-auto grid gap-3">
+        <div className="mt-auto grid gap-4">
           {current.choices.map((choice) => (
             <Button
               key={choice}
@@ -182,7 +192,7 @@ export function SessionPage() {
         </div>
       ) : (
         <form
-          className="mt-auto flex flex-col gap-3"
+          className="mt-auto flex items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault()
             if (!answer.isPending) {
@@ -194,18 +204,27 @@ export function SessionPage() {
             autoFocus
             value={typed}
             onChange={(event) => setTyped(event.target.value)}
+            aria-label="Deine Antwort"
             placeholder="Deine Antwort"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="send"
+            className="min-w-0 flex-1"
           />
-          <Button type="submit" size="xl" disabled={answer.isPending || typed.trim().length === 0}>
-            Antworten
+          <Button
+            type="submit"
+            variant="roundPrimary"
+            size="icon"
+            className="size-13 shrink-0"
+            aria-label="Antwort senden"
+            disabled={answer.isPending || typed.trim().length === 0}
+          >
+            <ArrowUp className="size-6" />
           </Button>
         </form>
       )}
-    </div>
+    </main>
   )
 }
 
@@ -214,30 +233,41 @@ function FeedbackPanel({ result, onNext }: { result: AnswerResult; onNext: () =>
   const buttonRef = useRef<HTMLButtonElement>(null)
   useEffect(() => buttonRef.current?.focus(), [])
 
+  // Rueckmeldung als Sheet von unten; "Fast!" ruhig in warn, nie als Fehler.
   return (
-    <div className={cn('mt-auto flex flex-col gap-4', result.correct ? '' : 'animate-nudge')}>
+    <div
+      className={cn(
+        'glass-sheet mt-auto flex flex-col gap-4 rounded-sheet p-6',
+        result.correct ? '' : 'animate-nudge',
+      )}
+    >
       <div
         className={cn(
-          'rounded-[var(--radius-card)] p-5 text-center',
-          result.correct ? 'bg-success-soft' : 'bg-warn-soft',
+          'rounded-lg p-4 text-center',
+          result.correct ? 'bg-surface-success' : 'bg-surface-warn',
         )}
       >
-        <p className={cn('text-lg font-bold', result.correct ? 'text-success' : 'text-warn')}>
+        <p
+          className={cn(
+            'type-headline',
+            result.correct ? 'text-success-text' : 'text-warn-text',
+          )}
+        >
           {result.correct ? 'Richtig!' : 'Fast!'}
         </p>
 
         {!result.correct || result.hadTypo ? (
-          <p className="mt-1 text-base text-ink">
+          <p className="mt-1 type-body-lg text-ink">
             {result.hadTypo ? result.message : `Es heißt: ${result.correctAnswer}`}
           </p>
         ) : null}
 
         {result.xpAwarded > 0 ? (
-          <p className="mt-2 text-sm font-bold text-brand-strong">+{result.xpAwarded} XP</p>
+          <p className="mt-2 type-body-md-strong text-ink">+{result.xpAwarded} XP</p>
         ) : null}
       </div>
 
-      <Button ref={buttonRef} size="xl" onClick={onNext}>
+      <Button ref={buttonRef} size="lg" className="w-full" onClick={onNext}>
         Weiter
       </Button>
     </div>
@@ -246,46 +276,47 @@ function FeedbackPanel({ result, onNext }: { result: AnswerResult; onNext: () =>
 
 function SummaryView({ summary, onClose }: { summary: SessionSummary; onClose: () => void }) {
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-center px-5 py-8 safe-top safe-bottom">
-      <Card className="animate-pop">
-        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
-          <span className="text-6xl" aria-hidden>
-            {summary.leveledUp ? '🎉' : '⭐'}
-          </span>
+    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-center px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
+      <Card className="animate-pop flex flex-col items-center gap-4 text-center">
+        <span className="type-emoji" aria-hidden>
+          {summary.leveledUp ? '🎉' : '⭐'}
+        </span>
 
-          <h1 className="text-2xl font-black">
-            {summary.leveledUp ? `Level ${summary.level} erreicht!` : 'Geschafft!'}
-          </h1>
+        <h1 className="type-large-title">
+          {summary.leveledUp ? `Level ${summary.level} erreicht!` : 'Geschafft!'}
+        </h1>
 
-          <p className="text-ink-soft">
-            {summary.correct} von {summary.answered} richtig
+        <p className="type-body-lg text-ink-soft">
+          {summary.correct} von {summary.answered} richtig
+        </p>
+
+        <div className="w-full">
+          <Progress value={summary.levelProgress} label="Fortschritt bis zum nächsten Level" />
+          <p className="mt-2 type-body-sm text-ink-soft">
+            Level {summary.level} · noch {summary.xpToNextLevel} XP
           </p>
+        </div>
 
-          <div className="w-full">
-            <Progress value={summary.levelProgress} />
-            <p className="mt-2 text-sm text-ink-soft">
-              Level {summary.level} · noch {summary.xpToNextLevel} XP
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <span className="type-headline text-ink">+{summary.xpAwarded} XP</span>
+          {/* coin-label: deckende Flaeche, coin auf Glas haelt 4,5:1 nicht ueberall. */}
+          <span className="rounded-full bg-glass-opaque px-2 py-1 type-body-sm text-coin">
+            {`+${summary.coinsAwarded} 🪙`}
+          </span>
+        </div>
 
-          <div className="flex gap-6 text-lg font-bold">
-            <span className="text-brand-strong">+{summary.xpAwarded} XP</span>
-            <span className="text-coin">+{summary.coinsAwarded} 🪙</span>
-          </div>
-
-          {summary.streakSaverUsed ? (
-            <p className="text-sm text-ink-soft">
-              Gestern war nichts — deine Serie läuft trotzdem weiter. 🔥 {summary.streak}
-            </p>
-          ) : (
-            <p className="text-sm font-semibold text-warn">🔥 {summary.streak} Tage in Folge</p>
-          )}
-        </CardContent>
+        {summary.streakSaverUsed ? (
+          <p className="type-body-sm text-ink-soft">
+            Gestern war nichts — deine Serie läuft trotzdem weiter. 🔥 {summary.streak}
+          </p>
+        ) : (
+          <Badge tone="yellow">{`🔥 ${summary.streak} Tage in Folge`}</Badge>
+        )}
       </Card>
 
-      <Button size="xl" className="mt-6 w-full" onClick={onClose}>
+      <Button size="lg" className="mt-6 w-full" onClick={onClose}>
         Fertig
       </Button>
-    </div>
+    </main>
   )
 }

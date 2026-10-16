@@ -5,6 +5,10 @@ import { checkPage } from './axe'
 const childName = 'Max'
 const demoPin = '1234'
 
+// Fuer den Block "ohne Secure Context" unten: Browser-Optionen gehen nur auf
+// Dateiebene (eigener Worker), localhost bleibt davon unberuehrt.
+test.use({ launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] } })
+
 // Rate-Limit "auth": 10 Aufrufe pro Minute je IP, GET /auth/profiles zaehlt mit.
 // Diese Datei bleibt bei hoechstens 6 Aufrufen: je Test ein Laden von / und eine Anmeldung.
 function expectNotRateLimited(response: Response) {
@@ -118,4 +122,44 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
   await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()
   await expect(status(page)).toHaveText('0 Ziffern eingegeben')
   expect(logins.count).toBe(1)
+})
+
+// FIX-07: Heimnetz-HTTP mit nicht-lokalem Hostnamen, also ohne Secure Context
+// (kein crypto.randomUUID, kein Service Worker). Der Hostname zeigt auf den Teststack.
+test.describe('ohne Secure Context', () => {
+  test.use({ baseURL: 'http://wordquest.test:18080' })
+
+  const isAnswer = (url: string) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(url)
+  const sendButton = (page: Page) => page.getByRole('button', { name: /^Antwort(en| senden)$/ })
+
+  async function answer(page: Page, action: () => Promise<void>) {
+    const [response] = await Promise.all([
+      page.waitForResponse((candidate) => isAnswer(candidate.url())),
+      action(),
+    ])
+    expect(response.status()).toBe(200)
+    await expect(page.getByRole('button', { name: 'Weiter' })).toBeVisible()
+  }
+
+  test('Lernen über HTTP', async ({ page }) => {
+    await openPicker(page)
+    expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
+    await loginByKeyboard(page)
+
+    await page.getByRole('button', { name: "Los geht's" }).click()
+    await expect(page).toHaveURL(/\/lernen$/)
+    await expect(page.getByRole('textbox')).toBeVisible()
+    await checkPage(page)
+
+    // Antwort per Enter.
+    await page.getByRole('textbox').fill('falsch')
+    await answer(page, () => page.getByRole('textbox').press('Enter'))
+    await checkPage(page)
+
+    // Naechste Karte, Antwort per Klick auf den Senden-Button.
+    await page.getByRole('button', { name: 'Weiter' }).click()
+    await expect(page.getByRole('textbox')).toHaveValue('')
+    await page.getByRole('textbox').fill('falsch')
+    await answer(page, () => sendButton(page).click())
+  })
 })
