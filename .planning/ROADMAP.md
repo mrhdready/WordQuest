@@ -29,7 +29,17 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Parent changes their password in the app and can then log in only with the new one; an operator who lost it resets it with one command inside the container and logs in with the result
   4. Parent edits a child's name, daily new-card limit and PIN, and the child logs in with the new PIN; a PIN that is not 4-6 digits is rejected by the server with a readable message, also when sent directly to the API
   5. The password-change and edit-child forms have frontend tests covering the full edge-case matrix (one wrong field at a time, exact error texts, Enter-submit path, happy path last), axe reports 0 WCAG 2.2 AA violations on both pages, and a keyboard walkthrough plus 200 % zoom pass
-**Plans**: TBD
+**Plans**: 8 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen, Playwright/axe einrichten (mit Paket-Freigabe)
+- [ ] 01-02-PLAN.md — setup.sh im Heimnetz-Modus: eigenes Elternkonto, erzeugte Secrets, kein Demo-Konto; Integrationstest-Projekt
+- [ ] 01-03-PLAN.md — Verwalten-Seiten (Vokabeln, Set, Fortschritt) auf DESIGN.md, Field-Baustein, Vitest
+- [ ] 01-04-PLAN.md — Kinder-Anmeldung per Tastatur mit PIN 4–6, Lernseiten auf DESIGN.md, Lernen über HTTP belegt
+- [ ] 01-05-PLAN.md — Passwort-Reset per Befehl, Secret-Prüfung beim Start, tägliche Sicherung
+- [ ] 01-06-PLAN.md — Passwort ändern in der App, Formular-Matrix, Frontend-Schritte im CI-Gate
+- [ ] 01-07-PLAN.md — Kind anlegen mit serverseitiger PIN-Regel und Namensgrenze
+- [ ] 01-08-PLAN.md — Kind bearbeiten inklusive neuer PIN, Phasen-Abschluss-Gate
 **UI hint**: yes
 
 ### Phase 2: Reliable Learning & Clean Family Data
@@ -65,6 +75,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safe Home-Network Install | 0/TBD | Not started | - |
+| 1. Safe Home-Network Install | 0/8 | Planned | - |
 | 2. Reliable Learning & Clean Family Data | 0/TBD | Not started | - |
 | 3. Installable 1.0.0 Release | 0/TBD | Not started | - |

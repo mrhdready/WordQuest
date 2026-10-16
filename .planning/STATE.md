@@ -3,7 +3,7 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
-status: planning
+status: planned
 stopped_at: Quick 261006-r7l — FIX-07 umgesetzt und über HTTP belegt; axe-Lauf offen
 last_updated: "2026-10-15T17:00:00Z"
 last_activity: 2026-10-15
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 1 of 3 (Safe Home-Network Install)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
+Plan: 0 of 8 in current phase
+Status: Planned — Codex-Review der Pläne vor Ausführung
 Last activity: 2026-10-15 — Quick 261006-r7l: FIX-07 umgesetzt und über HTTP belegt; axe-Lauf offen
 
 Progress: [░░░░░░░░░░] 0%
