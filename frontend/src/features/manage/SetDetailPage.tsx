@@ -104,11 +104,11 @@ export function SetDetailPage() {
 
       {entries.isLoading ? <Spinner /> : null}
 
-      {entries.data?.length === 0 ? (
-        <EmptyState title="Noch keine Vokabeln in diesem Set" />
-      ) : (
+      {entries.data?.length === 0 ? <EmptyState title="Noch keine Vokabeln in diesem Set" /> : null}
+
+      {entries.data && entries.data.length > 0 ? (
         <ListGroup>
-          {entries.data?.map((entry) => (
+          {entries.data.map((entry) => (
             <ListRow key={entry.id} className="py-2">
               {entry.emoji ? (
                 <span className="type-title" aria-hidden>
@@ -130,7 +130,7 @@ export function SetDetailPage() {
             </ListRow>
           ))}
         </ListGroup>
-      )}
+      ) : null}
     </div>
   )
 }
