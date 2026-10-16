@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-10-16T11:55:53.668Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-10-16T12:15:36.067Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: c7008bc83f789ebe12800f7f95fc2eac2d329630
+state_head: 650538e0e190c3eb3ec9cc13c74f598041e37af4
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 1 (Safe Home-Network Install) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 1 execution started
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 1 P01 | 15min | 3 tasks | 20 files |
+| Phase 01 P02 | 17min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Recent decisions affecting current work:
 - [Phase 1]: 01-01: 1,5-px-Verlaufsrand der Glasflaechen entfaellt (::before blockiert axe-Kontrastberechnung)
 - [Phase 1]: 01-01: playwright-core per npm overrides auf 1.64.0 gepinnt
 - [Phase 1]: 01-01: tailwind-merge kennt type-* nicht; Schriftstufen nicht per className ueberschreiben
+- [Phase 01]: Npgsql-Verbindung aus WQ_DB_* mit GSS Encryption Mode=Disable (libgssapi-Fehler im Alpine-Image)
+- [Phase 01]: ApiFactory migriert selbst; WebApplicationFactory haelt Program.cs bei Build an
+- [Phase 01]: Api.Tests: je Testfall eigene ApiFactory/Datenbank, wenn Erwartung vom DB-Stand abhaengt
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T11:55:53.648Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-10-16T12:15:36.026Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
