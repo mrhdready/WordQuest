@@ -44,7 +44,7 @@ public sealed class AuthService(
 
         if (user is null || !ok || !user.IsActive || user.Role == UserRole.Learner)
         {
-            logger.LogWarning("Fehlgeschlagener Login fuer {Email}.", normalized);
+            logger.LogWarning("Fehlgeschlagener Login fuer ein Elternkonto.");
             throw new AuthFailedException("E-Mail-Adresse oder Passwort stimmt nicht.");
         }
 
