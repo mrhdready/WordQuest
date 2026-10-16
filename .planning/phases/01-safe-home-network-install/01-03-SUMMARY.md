@@ -196,3 +196,42 @@ completed: 2026-10-16
 
 - FOUND: frontend/src/components/ui/list.tsx, frontend/src/components/ui/field.tsx, frontend/src/components/ui/field.test.tsx, frontend/src/lib/api.test.ts, frontend/src/test/render.tsx, frontend/src/test/render.test.tsx, frontend/src/features/manage/SetsPage.test.tsx, frontend/e2e/global-setup.ts, frontend/e2e/manage.spec.ts
 - FOUND: 4af1992, 62a0d2f, dbfbe77, 4ca1530 (Vorfahren von HEAD)
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+**Urteil: NACHBESSERN.** Ein Befund war MAJOR (Tab-Leiste), dazu kleinere Befunde zu Tests, Formularen und dem axe-Helfer. Behoben ist alles, was das Review zur Änderung vorgesehen hat. Abweichung 1 oben („Tab-Leiste im Fluss“) und der zugehörige Eintrag in `key-decisions` sind damit überholt.
+
+### Behoben
+
+| Befund | Fix | Commit |
+|---|---|---|
+| MAJOR: Tab-Leiste schwebt nicht (`float-bottom`), `scroll-padding-bottom` fehlt (DESIGN.md Layout, UI-SPEC Navigation) | Leiste `sticky bottom-float-bottom`, `<main>` mit `pb-(--wq-tab-bar-clearance)`, `html { scroll-padding-bottom }` im selben Wert. Der Wert ist `calc(var(--spacing) * 16 + var(--spacing) * 12)` = 3xl + 2xl = 112 px (Leiste 68 px + `float-bottom` 32 px). Die benannten Stufen `--spacing-3xl/2xl` sind in `index.css` zurückgesetzt und stehen nicht im CSS, deshalb die Tailwind-Stufen. `checkPage` scrollt vor dem axe-Lauf ans Seitenende. „Fokus nicht verdeckt“ verlangt jetzt mindestens ein Ziel, das bei Scroll 0 unter der Leiste beginnt (`/verwalten?neu=1` und Set-Detail, 320 × 568). | `787dd4e` |
+| `expectOpaqueFallback`: `finish()` auf endlosen Animationen wirft `InvalidStateError` | nur `CSSTransition` abschließen | `ed3f4a2` |
+| Set-Detail zeigt beim Laden/Fehler eine leere `ListGroup` | Liste nur bei mindestens einem Eintrag; Vitest `SetDetailPage.test.tsx` (rot: `expected <div …> to be null`, danach grün) | `e315d21` |
+| Abbrechen behält alten Titel und Serverfehler | `closeForm` ruft `create.reset()` und `setTitle('')`; Vitest-Fall 5 (rot: alter Fehlertext `titel-fehler` noch da, danach grün) | `78b013b` |
+| Matrix-Lücken | SetsPage-Fälle 1/2 prüfen „kein POST“ nach einem Tick, Fall 3 den Fokus im Feld. Eintrag-Formular: Deutsch bzw. Englisch nur Leerzeichen über den Knopf „Hinzufügen“, Happy Path per Enter und per Knopf (Endzahl 2 POST). CSV-Vorschau: Fehler von `runPreview` im `ErrorNote` (`ApiError.message`), e2e mit 500 auf `/sets/import/preview` plus `checkPage` (rot: `getByRole('alert')` nicht gefunden, danach grün). | `6f98775` |
+| Eintrag-Formular ohne `Field` | auf `Field` umgestellt, IDs `eintrag-deutsch`/`eintrag-englisch` bleiben | `33a8afa` |
+| Einrückung `ProgressPage` | korrigiert | `c7b871a` |
+
+Beobachtung beim Fix der Tab-Leiste: Der erste Lauf mit `var(--spacing-3xl)` war wirkungslos (`scroll-padding-bottom` berechnet `auto`, `padding-bottom` 0 px), weil die benannte Stufe zurückgesetzt ist. Erst mit gültigem Wert scrollt Chromium beim Tab-Fokus das Ziel über die Leiste (`Hinzufügen` unten 470 → 456 px, Leiste oben 468 px).
+
+### Gate nach der Nachbesserung (beobachtet)
+
+- `npm run lint` Exit 0, `npm run typecheck` Exit 0
+- `npx vitest run`: `Test Files 6 passed (6)`, `Tests 23 passed (23)`
+- `npm run build` Exit 0
+- `npm run design:check`: `errors: 0, warnings: 0`, Export-Diff leer, Exit 0
+- `npm run design:classes -- src/components/ui src/features/manage src/features/auth/GuardianLoginPage.tsx`: `keine alten Klassen`
+- `npm run e2e:stack && npx playwright test`: `10 passed` (2 login, 8 manage), darin `checkPage` (axe 0, je Backdrop-Farbe, deckender Fallback, 320-px-Reflow) auf `/verwalten`, `/verwalten?neu=1`, Set-Detail (inkl. Import geöffnet, Vorschau-Fehler, Vorschau, Import-Fehler) und `/verwalten/fortschritt`. Stack danach mit `down -v` entfernt.
+- Während der Arbeit je einmal rot, im Gate-Lauf nicht wiederholt: `globalSetup` (`toHaveURL` nach der Anmeldung, direkt nach dem Stackstart) und `Fortschritt: axe 0` (`getByText(/^Level \d+$/)` nicht sichtbar). Ursache nicht ermittelt (UNBEKANNT), einzeln nachgelaufen grün.
+- Der Teststack baut das Backend aus dem Arbeitsbaum; dort lagen zu der Zeit nicht committete Änderungen aus 01-05.
+
+### Offen (nicht geändert)
+
+- `api.ts:162`: Bei einer leeren 4xx-Antwort mit JSON-Körper nur aus `title` kann ein englischer Standard-Titel durchkommen. Nicht gemessen.
+- `Stat` rendert `<dd>` vor `<dt>` (Bestand).
+- 429-Text „Versuche es noch einmal“ lädt bei der PIN zum Wiederholen ein → Thema für 01-04.
+- Eintrag-Formular zeigt Fehler von `addEntry`/`removeEntry` nicht an (Bestand, v2-Kandidat). Ebenso zeigt Set-Detail keinen Hinweis, wenn das Laden der Einträge scheitert; die Seite bleibt dann unter dem Formular leer.
+- `scroll-padding-bottom` steht auf `html` und gilt damit auch auf Seiten ohne Tab-Leiste (wie in `4af1992`).
+- Kein eigener Test für den `CSSTransition`-Fix in `axe.ts`: ein Spinner im Moment des Fallback-Laufs lässt sich im Stack nicht verlässlich herstellen.
+- Abnahme am Ende der Phase bleibt: Tab-Leiste bei 200 % Zoom, leere Zustände, Glas-Wirkung auf dem Tablet.
