@@ -47,6 +47,24 @@ public sealed class AccountEndpointTests : IAsyncLifetime
         return (owner, child);
     }
 
+    // Zweites Elternteil (Rolle Guardian, nicht Owner) in derselben Familie wie der Owner.
+    private async Task<User> SeedGuardianAsync()
+    {
+        (User owner, _) = await SeedFamilyAsync();
+        var guardian = new User
+        {
+            TenantId = owner.TenantId,
+            Role = UserRole.Guardian,
+            DisplayName = "Zweites Elternteil",
+            Email = "zweites@example.de",
+            PasswordHash = PasswordHasher.Hash(OldPassword),
+        };
+        await using var db = _factory.CreateSystemDbContext();
+        db.Users.Add(guardian);
+        await db.SaveChangesAsync();
+        return guardian;
+    }
+
     private async Task<string> PasswordHashAsync(Guid userId)
     {
         await using var db = _factory.CreateSystemDbContext();
@@ -159,6 +177,36 @@ public sealed class AccountEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(HttpStatusCode.OK, await LoginStatusAsync(owner.Email!, withSpaces));
+    }
+
+    [Fact]
+    public async Task Guardian_account_can_change_its_password()
+    {
+        User guardian = await SeedGuardianAsync();
+        using HttpClient client = _factory.CreateClientFor(guardian);
+
+        HttpResponseMessage response = await ChangeAsync(client, OldPassword, "neues-passwort-1");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.True(PasswordHasher.Verify("neues-passwort-1", await PasswordHashAsync(guardian.Id)));
+    }
+
+    [Fact]
+    public async Task Token_of_a_deleted_account_returns_404()
+    {
+        User guardian = await SeedGuardianAsync();
+        using HttpClient client = _factory.CreateClientFor(guardian);
+
+        // Das Token bleibt bis zu seinem Ablauf gueltig, auch wenn das Konto inzwischen geloescht ist.
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            db.Users.Remove(await db.Users.SingleAsync(u => u.Id == guardian.Id));
+            await db.SaveChangesAsync();
+        }
+
+        HttpResponseMessage response = await ChangeAsync(client, OldPassword, "neues-passwort-1");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
