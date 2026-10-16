@@ -68,4 +68,13 @@ describe('api() Fehlerform', () => {
     expect(error.status).toBe(404)
     expect(error.message).toBe('Nicht da.')
   })
+
+  // Rate-Limit "auth" antwortet ohne Koerper; "Versuche es noch einmal" luede
+  // an der PIN-Eingabe zum sofortigen Wiederholen ein.
+  it('429 ergibt den Hinweis, eine Minute zu warten', async () => {
+    respond(429, '')
+    const error = await caught()
+    expect(error.status).toBe(429)
+    expect(error.message).toBe('Zu viele Versuche. Bitte in einer Minute nochmal probieren.')
+  })
 })

@@ -9,6 +9,9 @@ const USER_KEY = 'wq.user'
 const UNREACHABLE =
   'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
 const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
+// Rate-Limit "auth" (Program.cs) antwortet ohne Koerper, das Zeitfenster ist eine
+// Minute. Wortlaut wie die PIN-Sperre in AuthService.
+const TOO_MANY = 'Zu viele Versuche. Bitte in einer Minute nochmal probieren.'
 
 export class ApiError extends Error {
   constructor(
@@ -147,6 +150,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 async function readError(response: Response): Promise<ApiError> {
   // 5xx-Koerper koennen Technikdetails enthalten; die zeigen wir nicht an.
   if (response.status >= 500) return new ApiError(GENERIC, response.status)
+  if (response.status === 429) return new ApiError(TOO_MANY, response.status)
   try {
     const problem = (await response.json()) as {
       detail?: string
