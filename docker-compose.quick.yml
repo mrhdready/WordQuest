@@ -1,21 +1,20 @@
-# WordQuest — Schnelltest auf einem beliebigen Docker-Host.
+# WordQuest — Betrieb im Heimnetz ueber HTTP (Standard).
 #
-#   curl -O https://raw.githubusercontent.com/<account>/WordQuest/master/docker-compose.quick.yml
-#   WQ_IMAGE_PREFIX=ghcr.io/<account>/wordquest docker compose -f docker-compose.quick.yml up -d
+# Eingerichtet wird aus dem Repo-Klon mit:
 #
-# Danach: http://<host>:8080
+#   ./setup.sh
 #
-# Diese Datei ist ABSICHTLICH anspruchslos: kein Traefik, kein Zertifikat,
-# keine Secret-Dateien. Sie ist zum Ausprobieren gedacht, nicht zum Betrieb.
+# setup.sh erzeugt DB-Passwort und JWT-Schluessel als Dateien in ./secrets,
+# legt .env an (COMPOSE_FILE zeigt auf diese Datei) und fragt nach dem
+# Elternkonto. Danach: http://<host>:8080
 #
 # Was damit NICHT geht:
 #   - Die App laesst sich nicht als PWA aufs Tablet legen. Service Worker
 #     brauchen HTTPS (Ausnahme: localhost). Im Browser laeuft alles, aber
 #     ohne Installation und ohne Offlinebetrieb.
-#   - Die Passwoerter stehen im Klartext in dieser Datei.
-# Fuer den echten Einsatz: docker-compose.yml plus setup.sh.
+# Mit Domain und Zertifikat (fuer Fortgeschrittene): docker-compose.yml.
 
-name: wordquest-quick
+name: wordquest
 
 services:
   db:
@@ -23,9 +22,11 @@ services:
     environment:
       POSTGRES_DB: wordquest
       POSTGRES_USER: wordquest
-      POSTGRES_PASSWORD: ${WQ_DB_PASSWORD:-wordquest}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     volumes:
       - pgdata:/var/lib/postgresql/data
+    secrets:
+      - db_password
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wordquest -d wordquest"]
       interval: 10s
@@ -42,16 +43,18 @@ services:
       WQ_DB_HOST: db
       WQ_DB_NAME: wordquest
       WQ_DB_USER: wordquest
-      WQ_DB_PASSWORD: ${WQ_DB_PASSWORD:-wordquest}
-      # Mindestens 32 Zeichen. Fuer einen Testlauf genuegt dieser Wert;
-      # im Echtbetrieb kommt er als Datei aus ./secrets (docker-compose.yml).
-      WQ_JWT_SIGNING_KEY: ${WQ_JWT_SIGNING_KEY:-nur-zum-ausprobieren-bitte-nicht-im-echtbetrieb-verwenden}
+      WQ_DB_PASSWORD_FILE: /run/secrets/db_password
+      WQ_JWT_SIGNING_KEY_FILE: /run/secrets/jwt_key
       WQ_TIMEZONE: ${WQ_TIMEZONE:-Europe/Berlin}
       WQ_AI_PROVIDER: none
-      WQ_SEED_DEMO_DATA: "true"
+      # Demo-Daten nur fuer Entwicklung und Tests.
+      WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-false}
     depends_on:
       db:
         condition: service_healthy
+    secrets:
+      - db_password
+      - jwt_key
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
       interval: 15s
@@ -70,3 +73,9 @@ services:
 
 volumes:
   pgdata:
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_key:
+    file: ./secrets/jwt_key.txt

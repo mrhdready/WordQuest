@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# WordQuest — Ersteinrichtung
-# Erzeugt Secrets und .env und faehrt den Stack hoch.
+# WordQuest — Ersteinrichtung im Heimnetz
+# Erzeugt Secrets und .env, faehrt den Stack hoch und legt das Elternkonto an.
+# Ein zweiter Lauf aendert nichts an Secrets, .env oder Konto.
 #
 set -euo pipefail
 
@@ -11,8 +12,11 @@ say()  { printf '\033[1;36m%s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m%s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
 
+# Letzter Wert einer Variable aus .env, leer wenn nicht gesetzt.
+env_value() { grep -E "^$1=" .env 2>/dev/null | tail -n 1 | cut -d= -f2- || true; }
+
 command -v docker >/dev/null || die "Docker ist nicht installiert."
-docker compose version >/dev/null 2>&1 || die "'docker compose' ist nicht verfuegbar."
+docker compose version >/dev/null 2>&1 || die "'docker compose' ist nicht verfügbar."
 
 # --- Secrets -----------------------------------------------------------------
 mkdir -p secrets
@@ -30,7 +34,7 @@ gen_secret() {
 for name in db_password jwt_key; do
   f="secrets/${name}.txt"
   if [[ -f "$f" ]]; then
-    say "✓ secrets/${name}.txt existiert bereits — unveraendert."
+    say "✓ secrets/${name}.txt existiert bereits — unverändert."
   else
     printf '%s' "$(gen_secret)" > "$f"
     say "✓ secrets/${name}.txt erzeugt."
@@ -42,56 +46,108 @@ done
 
 # --- .env --------------------------------------------------------------------
 if [[ -f .env ]]; then
-  say "✓ .env existiert bereits — unveraendert."
+  say "✓ .env existiert bereits — unverändert."
 else
   cp .env.example .env
-  read -rp "Unter welchem Hostnamen soll WordQuest erreichbar sein? [wordquest.local] " host
-  host="${host:-wordquest.local}"
-  read -rp "E-Mail-Adresse fuer Let's Encrypt? [admin@example.com] " acme
-  acme="${acme:-admin@example.com}"
-  read -rp "Image-Praefix (ghcr.io/<account>/wordquest): " prefix
+  read -rp "Image-Präfix (ghcr.io/<account>/wordquest): " prefix || die "Eingabe beendet, bevor .env fertig war."
   while [[ -z "$prefix" ]]; do
-    warn "Ohne Image-Praefix weiss docker compose nicht, was es ziehen soll."
-    read -rp "Image-Praefix (ghcr.io/<account>/wordquest): " prefix
+    warn "Ohne Image-Präfix weiß docker compose nicht, was es laden soll."
+    read -rp "Image-Präfix (ghcr.io/<account>/wordquest): " prefix || die "Eingabe beendet, bevor .env fertig war."
   done
 
   # BSD/GNU sed kompatibel: temporaere Datei statt -i.
-  sed -e "s|^WQ_HOST=.*|WQ_HOST=${host}|" \
-      -e "s|^WQ_ACME_EMAIL=.*|WQ_ACME_EMAIL=${acme}|" \
-      -e "s|^WQ_IMAGE_PREFIX=.*|WQ_IMAGE_PREFIX=${prefix}|" \
-      .env > .env.tmp && mv .env.tmp .env
-  say "✓ .env angelegt fuer ${host}."
-  warn "  TLS: Ohne gueltiges Zertifikat ist die App NICHT als PWA installierbar."
-  warn "  Trage in .env deinen DNS-Provider und API-Token ein (WQ_ACME_DNS_PROVIDER)."
+  sed -e "s|^WQ_IMAGE_PREFIX=.*|WQ_IMAGE_PREFIX=${prefix}|" .env > .env.tmp && mv .env.tmp .env
+  say "✓ .env angelegt."
 fi
 
 # --- Start -------------------------------------------------------------------
+# stdin aus /dev/null: sonst lesen docker-Befehle die folgenden Antworten mit.
 say ""
-say "Hole Images …"
-if ! docker compose pull; then
-  die "Images konnten nicht geladen werden. Stimmt WQ_IMAGE_PREFIX in .env, und sind die Pakete oeffentlich?"
+say "Lade Images …"
+if ! docker compose pull --ignore-buildable </dev/null; then
+  die "Images konnten nicht geladen werden. Stimmt WQ_IMAGE_PREFIX in .env, und sind die Pakete öffentlich?"
 fi
 
-say "Starte den Stack …"
-docker compose up -d
+say "Starte WordQuest …"
+docker compose up -d </dev/null
 
 say ""
 say "Warte auf die API …"
+ready=0
 for _ in $(seq 1 60); do
-  if docker compose exec -T api wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1; then
+  if docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null 2>&1; then
+    ready=1
     say "✓ API ist bereit."
     break
   fi
   sleep 2
 done
+[[ "$ready" == 1 ]] || die "Die API ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs api\` nach, was fehlt."
 
-host="$(grep -E '^WQ_HOST=' .env | cut -d= -f2-)"
+# --- Elternkonto -------------------------------------------------------------
+cli() { docker compose exec -T api dotnet WordQuest.Api.dll "$@"; }
+
+email=""
+status=0
+cli has-owner </dev/null >/dev/null || status=$?
+case "$status" in
+  0) say "✓ Elternkonto ist schon angelegt — unverändert." ;;
+  1)
+    while true; do
+      read -rp "E-Mail-Adresse für dein Elternkonto: " email || die "Eingabe beendet, bevor das Elternkonto angelegt war."
+      if [[ ! "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+        warn "Das sieht nicht nach einer E-Mail-Adresse aus. Bitte noch einmal."
+        continue
+      fi
+
+      # IFS= : sonst entfernt read fuehrende und abschliessende Leerzeichen still;
+      # das Passwort gilt genau so, wie es eingegeben wurde.
+      while true; do
+        IFS= read -rsp "Passwort für dein Elternkonto (mindestens 8 Zeichen, die Eingabe bleibt unsichtbar): " password \
+          || die "Eingabe beendet, bevor das Elternkonto angelegt war."
+        [[ -t 0 ]] && echo
+        if (( ${#password} < 8 )); then
+          warn "Das Passwort muss mindestens 8 Zeichen lang sein."
+          continue
+        fi
+        IFS= read -rsp "Passwort wiederholen: " repeat || die "Eingabe beendet, bevor das Elternkonto angelegt war."
+        [[ -t 0 ]] && echo
+        if [[ "$password" != "$repeat" ]]; then
+          warn "Die beiden Passwörter stimmen nicht überein. Bitte noch einmal."
+          continue
+        fi
+        break
+      done
+
+      # Passwort per stdin (printf ist ein Bash-Builtin): nie in der Prozessliste.
+      status=0
+      printf '%s\n' "$password" | cli create-owner "$email" || status=$?
+      case "$status" in
+        0) say "✓ Elternkonto angelegt."; break ;;
+        2) continue ;;
+        3) email=""; say "✓ Elternkonto ist schon angelegt — unverändert."; break ;;
+        *) die "Das Elternkonto konnte nicht angelegt werden. Sieh mit \`docker compose logs api\` nach." ;;
+      esac
+    done
+    unset password repeat
+    ;;
+  *) die "Konnte nicht prüfen, ob es schon ein Elternkonto gibt. Sieh mit \`docker compose logs api\` nach." ;;
+esac
+
+# --- Abschluss ---------------------------------------------------------------
+compose_file="${COMPOSE_FILE:-$(env_value COMPOSE_FILE)}"
+if [[ "$compose_file" == docker-compose.yml* ]]; then
+  url="https://$(env_value WQ_HOST)"
+else
+  host="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  host="${host:-$(hostname)}"
+  port="${WQ_PORT:-$(env_value WQ_PORT)}"
+  url="http://${host}:${port:-8080}"
+fi
+
 say ""
-say "Fertig. WordQuest laeuft unter: https://${host}"
-say ""
-say "Demo-Zugang (nur wenn WQ_SEED_DEMO_DATA=true):"
-say "  Eltern:  demo@wordquest.local / demo1234"
-say "  Kind:    Profil 'Max', PIN 1234"
-warn ""
-warn "Setze WQ_SEED_DEMO_DATA=false in .env, sobald du eigene Konten angelegt hast,"
-warn "und aendere das Demo-Passwort."
+if [[ -n "$email" ]]; then
+  say "Fertig. WordQuest läuft unter: ${url} — Melde dich dort mit ${email} und deinem Passwort an."
+else
+  say "Fertig. WordQuest läuft unter: ${url} — Melde dich dort mit deinem Elternkonto an."
+fi

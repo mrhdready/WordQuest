@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using WordQuest.Api;
 using WordQuest.Api.Auth;
 using WordQuest.Api.Endpoints;
 using WordQuest.Infrastructure;
@@ -106,6 +107,14 @@ if (builder.Environment.IsDevelopment())
 
 WebApplication app = builder.Build();
 
+// Wartungsverben (setup.sh) laufen vor dem Start-Block: keine Migration, kein
+// Kestrel. Der Container laeuft dabei schon und hat das Schema migriert.
+if (AccountCommands.IsCommand(args))
+{
+    Environment.ExitCode = await AccountCommands.RunAsync(app.Services, args, Console.In, Console.Out);
+    return;
+}
+
 // --- Pipeline ---------------------------------------------------------------
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -185,7 +194,9 @@ static string BuildConnectionString(IConfiguration configuration)
     string user = Environment.GetEnvironmentVariable("WQ_DB_USER") ?? "wordquest";
     string password = ReadSecret("WQ_DB_PASSWORD", "devpassword")!;
 
-    return $"Host={host};Port={port};Database={name};Username={user};Password={password}";
+    // GSS aus: Npgsql versucht sonst libgssapi zu laden, die das Alpine-Image
+    // nicht hat, und schreibt bei jedem Verbindungsaufbau einen Fehler nach stderr.
+    return $"Host={host};Port={port};Database={name};Username={user};Password={password};GSS Encryption Mode=Disable";
 }
 
 /// <summary>Erlaubt Integrationstests via WebApplicationFactory.</summary>
