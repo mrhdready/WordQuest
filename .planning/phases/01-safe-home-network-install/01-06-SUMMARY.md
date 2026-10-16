@@ -177,3 +177,33 @@ completed: 2026-10-16
 
 - Dateien vorhanden: AccountEndpoints.cs, PasswordChange.cs, AccountEndpointTests.cs, AccountPage.tsx, AccountPage.test.tsx, account.spec.ts
 - Commits in HEAD: 90811a1, a8a850d, 59e651a
+
+## Review (Subagent, 2026-10-16) und Nachbesserung
+
+**Urteil des Reviewers: NACHBESSERN.**
+
+### Behoben
+
+- **MAJOR Reflow (WCAG 1.4.10), `8b99aef`:** `body { display: grid }` liess die Spalte auf die min-content-Breite eines langen Worts wachsen. Fix: `grid-template-columns: minmax(0, 1fr)` am `body` (frontend/src/index.css). Dazu `break-words` bzw. `min-w-0` an Set-Titel (SetsPage), Vokabel (SetDetailPage), Kindername in der Auswahl (ProgressPage) und an der Begruessung „Hallo, …!“ (ProfilePickerPage). Prompt (SessionPage) und Profilname in der Auswahl hatten `break-words` schon.
+  - Neuer e2e-Fall `manage.spec.ts` „Reflow bei 320 px mit langem Wort ohne Trennstelle“: per `page.route` ein 50 Zeichen langes Wort als Set-Titel, Vokabel und zweites Kind, Service Worker im Fall blockiert (sonst sieht `page.route` die Anfragen nicht).
+  - Rot vorher: `/verwalten: waagerechter Scrollbalken`, `Received: 515`. Nur mit dem Grid-Fix weiter rot: `Received: 447` (Titel ohne Umbruch). Danach `1 passed`.
+  - Nicht per e2e abgedeckt: die Begruessung im Profil-Login (Login-Fluss verbraucht Rate-Limit-Aufrufe) und der Elternname im Kopf von ManageLayout (nicht angefasst, ohne `break-words`).
+- **Backend-Tests, `2789f74`:** `Guardian_account_can_change_its_password` (204, neuer Hash gilt) und `Token_of_a_deleted_account_returns_404` (Token eines danach geloeschten Guardian-Kontos, Endpoint-Zweig `UnknownUser`). Beide sofort gruen, es sind Abdeckungsluecken, keine Bugs.
+- **Vitest AccountPage, `db1945f`:** Fall 12 Serverfehler `newPassword` am Feld, Fall 13 429 mit exaktem Text in `role="alert"`, Fall 14 Enter im ersten Feld. Sofort gruen, Happy Path bleibt zuletzt.
+
+### Gate nach der Nachbesserung (beobachtet)
+
+- Frontend: lint 0, typecheck 0, vitest `Test Files 7 passed (7)`, `Tests 38 passed (38)`, build 0, design:check `errors: 0, warnings: 0` (Exit 0), design:classes `keine alten Klassen` (Exit 0).
+- e2e am frischen Stack: `account.spec.ts manage.spec.ts login.spec.ts` `13 passed`, nach Neustart der API (Rate-Limit `auth`) `learn.spec.ts` `4 passed`. 17 von 17 in zwei Durchgaengen.
+- Backend im SDK-Container gegen eigenes postgres:17-alpine: build `/warnaserror` `0 Warning(s)`, `0 Error(s)`. Learning.Tests `Passed: 104`, Api.Tests `Passed: 50` (48 plus 2 neue).
+- Aufgeraeumt: e2e-Stack `down -v`, Container, Netz und Volume des Testlaufs entfernt.
+
+### An 01-08 uebergeben
+
+- e2e-Gate deterministisch (ein Durchgang ohne API-Neustart).
+- 429-Test fuer `/account/password`.
+- Tab-Leiste bei 640 px.
+
+### Offen
+
+- 200 % Zoom und Tastatur-Durchgang auf `/verwalten/konto` manuell am Ende der Phase.
