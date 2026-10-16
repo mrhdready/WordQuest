@@ -88,12 +88,12 @@ export function ProgressPage() {
 
           {/* Unter sm untereinander: drei Kennzahlen in display-Groesse passen bei 320 px nicht nebeneinander. */}
           <dl className="mt-4 grid gap-4 text-center sm:grid-cols-3">
-              <Stat label="heute fällig" value={overview.data.dueToday} />
-              <Stat label="neue Wörter frei" value={overview.data.newRemainingToday} />
-              <Stat
-                label="sitzen sicher"
-                value={`${overview.data.cardsMastered}/${overview.data.cardsTotal}`}
-              />
+            <Stat label="heute fällig" value={overview.data.dueToday} />
+            <Stat label="neue Wörter frei" value={overview.data.newRemainingToday} />
+            <Stat
+              label="sitzen sicher"
+              value={`${overview.data.cardsMastered}/${overview.data.cardsTotal}`}
+            />
           </dl>
         </Card>
       ) : null}
