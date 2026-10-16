@@ -119,6 +119,17 @@ export async function checkPage(page: Page) {
   // also ueber Leerraum. Weiter oben verdeckt sie je nach Scrollposition Ziele, die
   // man per Scrollen frei bekommt; axe target-size misst nur die aktuelle Lage.
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  // Einblend-Animationen (animate-pop) abwarten: mitten im Uebergang misst axe den
+  // halbtransparenten Zwischenstand. Endlose Animationen (Spinner) zaehlen nicht.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (animation) =>
+          animation.playState !== 'running' ||
+          animation.effect?.getTiming().iterations === Infinity,
+      ),
+  )
   await expectNoAxeViolations(page)
   await expectGlassContrast(page)
   await expectOpaqueFallback(page)

@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Response } from '@playwright/test'
-import type { AnswerResult } from '@/types'
-import { checkPage } from './axe'
+import type { AnswerResult, SessionItem, SessionView } from '@/types'
+import { checkPage, expectGlassContrast, expectNoAxeViolations, expectReflow } from './axe'
 
 // Demo-Kind aus DemoDataSeeder (Teststack laeuft mit WQ_SEED_DEMO_DATA).
 const childName = 'Max'
@@ -42,6 +42,14 @@ async function sendLogin(page: Page, action: () => Promise<void>) {
     action(),
   ])
   expectNotRateLimited(response)
+}
+
+// Seiten ohne Glasflaeche (Fehler, "alles erledigt"): der Fallback-Teil von
+// checkPage verlangt mindestens eine Glasflaeche und greift hier nicht.
+async function checkPageWithoutGlass(page: Page) {
+  await expectNoAxeViolations(page)
+  await expectGlassContrast(page)
+  await expectReflow(page)
 }
 
 const status = (page: Page) => page.getByRole('status').filter({ hasText: 'eingegeben' })
@@ -131,7 +139,7 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
 
 // Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen über HTTP"
 // unberuehrt (das Tagesbudget neuer Karten reicht fuer genau eine Runde).
-test('Schließen in einer angefangenen Runde', async ({ page }) => {
+test('Schließen in einer angefangenen Runde und Fehlerzustand', async ({ page }) => {
   const item = {
     itemId: 'item-1',
     cardId: 'card-1',
@@ -202,6 +210,13 @@ test('Schließen in einer angefangenen Runde', async ({ page }) => {
   await close.click()
   await expect(home).toBeVisible()
   expect(completes).toBe(1)
+
+  // Fehlerzustand: Start der Runde scheitert am Server.
+  await page.unroute(/\/api\/v1\/sessions$/)
+  await page.route(/\/api\/v1\/sessions$/, (route) => route.fulfill({ status: 500, body: '' }))
+  await goButton(page).click()
+  await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await checkPageWithoutGlass(page)
 })
 
 // FIX-07: Heimnetz-HTTP mit nicht-lokalem Hostnamen, also ohne Secure Context
@@ -238,20 +253,52 @@ test.describe('ohne Secure Context', () => {
     expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
     await loginByKeyboard(page)
 
-    await goButton(page).click()
+    // Reihenfolge der Karten wie im Client: Startliste plus nachgereichte Wiederholungen.
+    const [started] = await Promise.all([
+      page.waitForResponse((candidate) => candidate.url().endsWith('/api/v1/sessions')),
+      goButton(page).click(),
+    ])
+    const queue = ((await started.json()) as SessionView).items
+    const solutions = new Map<string, string>()
+    const record = (item: SessionItem, result: AnswerResult) => {
+      solutions.set(item.cardId, result.correctAnswer)
+      if (result.retryItem) queue.push(result.retryItem)
+    }
+
     await expect(page).toHaveURL(/\/lernen$/)
     await expect(page.getByRole('textbox')).toBeVisible()
     await checkPage(page)
 
     // Antwort per Enter.
     await page.getByRole('textbox').fill('falsch')
-    await answer(page, () => page.getByRole('textbox').press('Enter'))
+    record(queue[0]!, await answer(page, () => page.getByRole('textbox').press('Enter')))
     await checkPage(page)
 
     // Naechste Karte, Antwort per Klick auf den Senden-Button.
     await page.getByRole('button', { name: 'Weiter' }).click()
     await expect(page.getByRole('textbox')).toHaveValue('')
     await page.getByRole('textbox').fill('falsch')
-    await answer(page, () => sendButton(page).click())
+    record(queue[1]!, await answer(page, () => sendButton(page).click()))
+
+    // Rest der Runde: unbekannte Karten falsch, Wiederholungen richtig.
+    // Danach steht jede Karte in "Review", fuer heute ist nichts mehr faellig.
+    for (let index = 2; index < queue.length; index += 1) {
+      await page.getByRole('button', { name: 'Weiter' }).click()
+      const item = queue[index]!
+      await page.getByRole('textbox').fill(solutions.get(item.cardId) ?? 'falsch')
+      record(item, await answer(page, () => page.getByRole('textbox').press('Enter')))
+    }
+
+    await page.getByRole('button', { name: 'Weiter' }).click()
+    await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    await checkPage(page)
+
+    await page.getByRole('button', { name: 'Fertig' }).click()
+    await expect(page.getByText('Für heute ist alles erledigt. Morgen geht es weiter!')).toBeVisible()
+    await checkPage(page)
+
+    await page.goto('/lernen')
+    await expect(page.getByText('Für heute ist alles erledigt.')).toBeVisible()
+    await checkPageWithoutGlass(page)
   })
 })
