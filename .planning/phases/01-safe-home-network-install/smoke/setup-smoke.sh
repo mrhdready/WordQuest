@@ -89,4 +89,23 @@ printf '%s\n' 'anderes-456' \
 [[ "$status" == 3 ]] || fail "Zweites create-owner: Exit $status statt 3."
 [[ "$(tenants)" == 1 ]] || fail "Mehr als ein Mandant nach zweitem create-owner."
 
+echo "== Passwort zuruecksetzen (SETUP-04)"
+# Ausgabe nur in die Datei, nicht ins Log: sie enthaelt das neue Passwort.
+status=0
+docker compose exec -T api dotnet WordQuest.Api.dll reset-password eltern@example.de </dev/null >reset.log || status=$?
+[[ "$status" == 0 ]] || fail "reset-password: Exit $status statt 0."
+grep -qF 'Es wird nur dieses eine Mal angezeigt' reset.log || fail "reset-password: Hinweis 'nur dieses eine Mal' fehlt."
+# Fuer spaetere Schritte (01-07: seedfreier Erstdurchlauf); nie ausgeben.
+owner_password="$(sed -n 's/^Neues Passwort für eltern@example\.de: \([^ ]*\) — .*/\1/p' reset.log)"
+[[ ${#owner_password} == 16 ]] || fail "reset-password: kein Passwort mit 16 Zeichen in der Ausgabe."
+code="$(login eltern@example.de "$owner_password")"
+[[ "$code" == 200 ]] || fail "Login mit dem Reset-Passwort: HTTP $code statt 200."
+code="$(login eltern@example.de geheim-123)"
+[[ "$code" == 401 ]] || fail "Login mit dem alten Passwort: HTTP $code statt 401."
+status=0
+docker compose exec -T api dotnet WordQuest.Api.dll reset-password fremd@example.de </dev/null >reset-unknown.log || status=$?
+[[ "$status" == 1 ]] || fail "reset-password fuer unbekannte Adresse: Exit $status statt 1."
+grep -qF 'Es gibt kein Elternkonto mit dieser E-Mail-Adresse.' reset-unknown.log || fail "reset-password: Text fuer unbekannte Adresse fehlt."
+echo "RESET OK"
+
 echo "SMOKE OK"

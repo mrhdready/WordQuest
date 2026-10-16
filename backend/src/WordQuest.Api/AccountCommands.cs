@@ -5,10 +5,11 @@ using WordQuest.Modules.Identity.Services;
 namespace WordQuest.Api;
 
 /// <summary>
-/// Wartungsverben im API-Binary, aufgerufen von setup.sh per
+/// Wartungsverben im API-Binary, aufgerufen von setup.sh bzw. vom Betreiber per
 /// <c>docker compose exec -T api dotnet WordQuest.Api.dll &lt;verb&gt;</c>.
-/// Das Passwort kommt ueber stdin, damit es weder in der Prozessliste noch in
-/// der Shell-History steht, und wird nie ausgegeben.
+/// Das Passwort fuer create-owner kommt ueber stdin, damit es weder in der
+/// Prozessliste noch in der Shell-History steht, und wird nie ausgegeben;
+/// reset-password gibt das erzeugte Passwort genau einmal aus.
 /// </summary>
 public static class AccountCommands
 {
@@ -18,7 +19,7 @@ public static class AccountCommands
     private const int NoOwner = 10;
 
     public static bool IsCommand(string[] args) =>
-        args is ["has-owner", ..] or ["create-owner", ..];
+        args is ["has-owner", ..] or ["create-owner", ..] or ["reset-password", ..];
 
     public static async Task<int> RunAsync(
         IServiceProvider services, string[] args, TextReader input, TextWriter output)
@@ -34,7 +35,7 @@ public static class AccountCommands
 
         // Wartungscode wie der Start-Block: ohne Mandantenfilter, nie im Request-Pfad.
         await using var db = new WordQuestDbContext(options, new SystemTenantContext());
-        var accounts = new AccountService(db);
+        var accounts = new AccountService(db, scope.ServiceProvider.GetRequiredService<TimeProvider>());
 
         switch (args)
         {
@@ -46,9 +47,22 @@ public static class AccountCommands
                 OwnerCreation result = await accounts.CreateOwnerAsync(email, password);
                 return await ReportAsync(result, email, output);
 
+            case ["reset-password", string email]:
+                // Das Passwort steht genau einmal auf stdout und nirgends sonst (D-06).
+                string? newPassword = await accounts.ResetPasswordAsync(email);
+                if (newPassword is null)
+                {
+                    await output.WriteLineAsync("Es gibt kein Elternkonto mit dieser E-Mail-Adresse.");
+                    return 1;
+                }
+
+                await output.WriteLineAsync(
+                    $"Neues Passwort für {AccountRules.NormalizeEmail(email)}: {newPassword} — Es wird nur dieses eine Mal angezeigt. Melde dich damit an und ändere es unter \"Konto\".");
+                return 0;
+
             default:
                 await output.WriteLineAsync(
-                    "Aufruf: has-owner | create-owner <E-Mail-Adresse> (Passwort als eine Zeile über stdin)");
+                    "Aufruf: has-owner | create-owner <E-Mail-Adresse> (Passwort als eine Zeile über stdin) | reset-password <E-Mail-Adresse>");
                 return UsageError;
         }
     }
