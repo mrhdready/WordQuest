@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-10-16T15:04:01.078Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-10-16T15:33:00.971Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: ed3f4a2806df43af55a42c265a85127419d34f9d
+state_head: 033dbb45aeb9ca7cd2074ea4a562a92e41affcae
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 8
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 1 (Safe Home-Network Install) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 1 execution started
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P02 | 17min | 3 tasks | 19 files |
 | Phase 01 P03 | 29min | 3 tasks | 17 files |
 | Phase 01 P05 | 135min | 3 tasks | 11 files |
+| Phase 01 P04 | 25min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,10 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-03: Formularfelder ueber Field (Render-Prop), Serverfeldfehler aus ApiError.errors am Feld
 - [Phase 01]: 01-05: Reset setzt Hash und widerruft Refresh-Tokens in einem SaveChanges; Access-Tokens laufen regulaer ab (15 min)
 - [Phase 01]: 01-05: SecretCheck direkt nach CreateBuilder ausserhalb von Development, expliziter ConnectionStrings__Default ueber Passwort-Teil geprueft
+- [Phase 01]: 429 wird in api() zentral auf einen deutschen Wartehinweis gemappt (Wortlaut wie PIN-Sperre), nicht nur auf der Kinder-Anmeldung
+- [Phase 01]: Text direkt auf dem Backdrop in text-ink statt text-ink-soft (ink-soft auf backdrop-blue 4,14:1)
+- [Phase 01]: Zurueck zur Profilwahl als runder Knopf oben (button-round) statt Zelle im Ziffernfeld
+- [Phase 01]: Design-Migration abgeschlossen: --color/--text/--font-weight/--radius-* vor dem Token-Import geleert, design:classes ueber ganz src ins Gate
 
 ### Pending Todos
 
@@ -109,6 +114,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T15:04:01.041Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-10-16T15:33:00.938Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
