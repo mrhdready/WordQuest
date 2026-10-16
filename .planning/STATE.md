@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 Phase: 1 of 3 (Safe Home-Network Install)
 Plan: 0 of 8 in current phase
-Status: Planned — Codex-Review der Pläne vor Ausführung
+Status: Planned — Codex-Review eingearbeitet, Plan-Checker ohne Blocker
 Last activity: 2026-10-15 — Quick 261006-r7l: FIX-07 umgesetzt und über HTTP belegt; axe-Lauf offen
 
 Progress: [░░░░░░░░░░] 0%

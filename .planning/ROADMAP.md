@@ -32,14 +32,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 8 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen, Playwright/axe einrichten (mit Paket-Freigabe)
-- [ ] 01-02-PLAN.md — setup.sh im Heimnetz-Modus: eigenes Elternkonto, erzeugte Secrets, kein Demo-Konto; Integrationstest-Projekt
-- [ ] 01-03-PLAN.md — Verwalten-Seiten (Vokabeln, Set, Fortschritt) auf DESIGN.md, Field-Baustein, Vitest
-- [ ] 01-04-PLAN.md — Kinder-Anmeldung per Tastatur mit PIN 4–6, Lernseiten auf DESIGN.md, Lernen über HTTP belegt
-- [ ] 01-05-PLAN.md — Passwort-Reset per Befehl, Secret-Prüfung beim Start, tägliche Sicherung
+- [ ] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen (alte Theme-Namen als Übergang), Playwright/axe und Vitest einrichten (mit Paket-Freigabe)
+- [ ] 01-02-PLAN.md — setup.sh im Heimnetz-Modus: eigenes Elternkonto, erzeugte Secrets, kein Demo-Konto; Smoke gegen frisch gebautes Image; Integrationstest-Projekt
+- [ ] 01-03-PLAN.md — Verwalten-Seiten (Vokabeln, Set, Fortschritt) auf DESIGN.md, Field-Baustein, Testhilfe mit Parameterrouten, CSV-Import-Zustände belegt
+- [ ] 01-04-PLAN.md — Kinder-Anmeldung per Tastatur und Maus mit PIN 4–6, Lernseiten auf DESIGN.md, Lernen über HTTP belegt, Design-Migration abschließen
+- [ ] 01-05-PLAN.md — Passwort-Reset per Befehl, Secret-Prüfung beim Start (auch expliziter Connection-String), tägliche Sicherung
 - [ ] 01-06-PLAN.md — Passwort ändern in der App, Formular-Matrix, Frontend-Schritte im CI-Gate
-- [ ] 01-07-PLAN.md — Kind anlegen mit serverseitiger PIN-Regel und Namensgrenze
-- [ ] 01-08-PLAN.md — Kind bearbeiten inklusive neuer PIN, Phasen-Abschluss-Gate
+- [ ] 01-07-PLAN.md — Kind anlegen mit PIN- und Namensregel im Identity-Modul, seedfreier Erstdurchlauf bis zur ersten Lernantwort
+- [ ] 01-08-PLAN.md — Kind bearbeiten inklusive neuer PIN, Rate-Limit-robustes Phasen-Abschluss-Gate
 **UI hint**: yes
 
 ### Phase 2: Reliable Learning & Clean Family Data
