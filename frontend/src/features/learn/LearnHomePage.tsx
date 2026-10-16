@@ -122,7 +122,7 @@ export function LearnHomePage() {
             navigate(`/lernen${selectedSet ? `?set=${selectedSet}` : ''}`)
           }
         >
-          Los geht&apos;s
+          Los geht’s
         </Button>
       )}
     </main>

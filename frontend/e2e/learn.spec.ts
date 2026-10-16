@@ -150,7 +150,7 @@ test.describe('ohne Secure Context', () => {
     expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
     await loginByKeyboard(page)
 
-    await page.getByRole('button', { name: "Los geht's" }).click()
+    await goButton(page).click()
     await expect(page).toHaveURL(/\/lernen$/)
     await expect(page.getByRole('textbox')).toBeVisible()
     await checkPage(page)
