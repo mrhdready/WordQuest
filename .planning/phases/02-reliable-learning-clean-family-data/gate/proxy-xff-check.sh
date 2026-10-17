@@ -59,10 +59,11 @@ wait_ready() {
 }
 
 # Schickt aus einem Wegwerf-Container im Pruefnetz eine Anfrage mit dem Kopf $2
-# an $1; Ausgabe: Zeile 1 eigene Adresse, Zeile 2 der Kopf, den der Upstream sah.
+# an $1 (Pfad $3, Standard /api/xff); Ausgabe: Zeile 1 eigene Adresse, Zeile 2
+# der Kopf, den der Upstream sah.
 send() {
   docker run --rm --network "$NET" --entrypoint sh "$IMAGE" -c \
-    "hostname -i | awk '{print \$1}'; wget -q -O - --header 'X-Forwarded-For: $2' http://$1:8080/api/xff"
+    "hostname -i | awk '{print \$1}'; wget -q -O - --header 'X-Forwarded-For: $2' http://$1:8080${3:-/api/xff}"
 }
 
 wait_ready "$NET-api"
@@ -78,6 +79,13 @@ seen="$(sed -n 2p <<<"$out")"
 [[ -n "$sender" && "$seen" == "$sender" ]] \
   || fail "Heimnetz: die API sieht '$seen' statt der Absenderadresse '$sender'."
 echo "Heimnetz: Absender $sender, die API sieht $seen"
+# Jeder Proxy-Pfad, nicht nur /api/ (W-4).
+out="$(send "$NET-home" '203.0.113.9' /health/xff)"
+sender="$(sed -n 1p <<<"$out")"
+seen="$(sed -n 2p <<<"$out")"
+[[ -n "$sender" && "$seen" == "$sender" ]] \
+  || fail "Heimnetz /health/: die API sieht '$seen' statt der Absenderadresse '$sender'."
+echo "Heimnetz /health/: Absender $sender, die API sieht $seen"
 
 echo "== Traefik-Variante (zusaetzlich frontend/nginx-traefik-realip.conf)"
 [[ -f frontend/nginx-traefik-realip.conf ]] || fail "frontend/nginx-traefik-realip.conf fehlt."
