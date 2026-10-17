@@ -77,10 +77,15 @@ public sealed class MigrationTests : IAsyncLifetime
         var orphanSession = new LearningSession { TenantId = tenant, LearnerId = Guid.NewGuid(), GameKey = "classic" };
         var setlessSession = new LearningSession { TenantId = tenant, LearnerId = child, SetId = Guid.NewGuid(), GameKey = "classic" };
 
+        // ponytail: Inserts ueber das aktuelle EF-Modell, das heute genau dem
+        // Initial-Schema entspricht (ReferentialIntegrity aendert keine Spalte).
+        // Bekommt eine dieser Tabellen spaeter eine neue Spalte, scheitert der
+        // Seed hier laut; dann auf Roh-SQL mit den Spalten aus Initial.cs umstellen.
         await using var db = _factory.CreateSystemDbContext();
         db.ReviewStates.AddRange(
             new ReviewState { TenantId = tenant, LearnerId = child, CardId = card, DueAt = now },
-            new ReviewState { TenantId = tenant, LearnerId = child, CardId = Guid.NewGuid(), DueAt = now });
+            new ReviewState { TenantId = tenant, LearnerId = child, CardId = Guid.NewGuid(), DueAt = now },
+            new ReviewState { TenantId = tenant, LearnerId = Guid.NewGuid(), CardId = card, DueAt = now });
         db.LearningSessions.AddRange(session, orphanSession, setlessSession);
         db.SessionItems.AddRange(
             item,
@@ -88,6 +93,7 @@ public sealed class MigrationTests : IAsyncLifetime
         db.ReviewLogs.AddRange(
             log,
             new ReviewLog { TenantId = tenant, LearnerId = child, CardId = Guid.NewGuid(), GameKey = "classic" },
+            new ReviewLog { TenantId = tenant, LearnerId = Guid.NewGuid(), CardId = card, GameKey = "classic" },
             new ReviewLog { TenantId = tenant, LearnerId = child, CardId = card, SessionId = Guid.NewGuid(), GameKey = "classic" });
         db.GamificationProfiles.Add(new GamificationProfile { Id = Guid.NewGuid(), TenantId = tenant });
         db.RefreshTokens.AddRange(
@@ -127,18 +133,22 @@ public sealed class MigrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Wiederholte_Bereinigung_nach_der_Migration_aendert_nichts()
+    public async Task Wiederholte_Bereinigung_aendert_nichts_weder_vor_noch_nach_der_Migration()
     {
         await SeedLegacyDatabaseAsync();
+        await using var db = _factory.CreateSystemDbContext();
+        await OrphanCleanup.RunAsync(db);
+        Counts cleaned = await CountsAsync();
+
+        // Zweiter Lauf vor der Migration (Retry, Neustart nach Abbruch).
+        await OrphanCleanup.RunAsync(db);
+        Assert.Equal(cleaned, await CountsAsync());
+
         StartApi();
-        Counts before = await CountsAsync();
+        Assert.Equal(cleaned, await CountsAsync());
 
-        await using (var db = _factory.CreateSystemDbContext())
-        {
-            await OrphanCleanup.RunAsync(db);
-        }
-
-        Assert.Equal(before, await CountsAsync());
+        await OrphanCleanup.RunAsync(db);
+        Assert.Equal(cleaned, await CountsAsync());
     }
 
     [Fact]

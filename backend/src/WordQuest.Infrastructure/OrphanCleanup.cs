@@ -12,9 +12,14 @@ namespace WordQuest.Infrastructure;
 /// </summary>
 public static class OrphanCleanup
 {
+    // Die Migration, die die Fremdschluessel anlegt. Das SQL unten kennt nur
+    // das Schema davor; nach ihr laeuft es nie wieder, damit spaetere
+    // Migrationen Tabellen oder Spalten umbenennen koennen.
+    private const string ReferentialIntegrity = "20261017182305_ReferentialIntegrity";
+
     // Nur Anti-Joins auf fehlende Bezugszeilen, konstant und ohne Eingabe von
-    // aussen. Idempotent: Mit den Fremdschluesseln gibt es keine Waisen mehr,
-    // dann aendert das SQL nichts. Reihenfolge: zuerst Runden ohne Kind, damit
+    // aussen. Idempotent: Ein Abbruch vor der Migration (Retry, Neustart)
+    // fuehrt es gefahrlos noch einmal aus. Reihenfolge: zuerst Runden ohne Kind, damit
     // deren Aufgaben per bestehender Kaskade mitgehen und Protokolle danach
     // ihren Rundenbezug verlieren.
     private const string Sql = """
@@ -33,15 +38,17 @@ public static class OrphanCleanup
         """;
 
     /// <summary>
-    /// Fuehrt die Bereinigung aus. Ohne angewandte Migration (frische
-    /// Installation, Datenbank fehlt noch) gibt es die Tabellen nicht, dann
-    /// endet die Methode ohne Wirkung.
+    /// Fuehrt die Bereinigung aus, solange die Fremdschluessel noch fehlen.
+    /// Ohne angewandte Migration (frische Installation, Datenbank fehlt noch)
+    /// gibt es die Tabellen nicht; mit angewandter ReferentialIntegrity gibt es
+    /// keine Waisen mehr. In beiden Faellen endet die Methode ohne Wirkung.
     /// </summary>
     public static async Task RunAsync(WordQuestDbContext db, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(db);
 
-        if (!(await db.Database.GetAppliedMigrationsAsync(ct)).Any())
+        List<string> applied = (await db.Database.GetAppliedMigrationsAsync(ct)).ToList();
+        if (applied.Count == 0 || applied.Contains(ReferentialIntegrity))
         {
             return;
         }
