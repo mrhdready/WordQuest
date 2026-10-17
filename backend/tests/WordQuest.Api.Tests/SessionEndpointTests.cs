@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using WordQuest.Api.Contracts;
 using WordQuest.Infrastructure;
+using WordQuest.Modules.Content.Entities;
 using WordQuest.Modules.Gamification.Entities;
 using WordQuest.Modules.Gamification.Services;
 using WordQuest.Modules.Identity.Entities;
@@ -307,10 +308,10 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
     }
 
     /// <summary>
-    /// Wartet, bis zwei Backends dieser Datenbank auf eine Sperre warten: Dann
-    /// haben beide Anfragen gelesen und stehen vor dem Schreiben.
+    /// Wartet, bis <paramref name="expected"/> Backends dieser Datenbank auf eine
+    /// Sperre warten: Dann haben die Anfragen gelesen und stehen vor dem Schreiben.
     /// </summary>
-    private async Task WaitForTwoBlockedAsync()
+    private async Task WaitForBlockedAsync(int expected)
     {
         await using var db = _factory.CreateSystemDbContext();
         for (int attempt = 0; attempt < 200; attempt++)
@@ -318,7 +319,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
             int waiting = await db.Database
                 .SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'")
                 .SingleAsync();
-            if (waiting >= 2)
+            if (waiting >= expected)
             {
                 return;
             }
@@ -326,7 +327,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
             await Task.Delay(50);
         }
 
-        Assert.Fail("Nach 10 Sekunden warteten keine zwei Anfragen auf die Sperre.");
+        Assert.Fail($"Nach 10 Sekunden warteten keine {expected} Anfragen auf die Sperre.");
     }
 
     [Fact]
@@ -457,7 +458,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         var held = await LockRowsAsync(("session_item", item.ItemId));
         Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, item.ItemId, answer);
         Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, item.ItemId, answer);
-        await WaitForTwoBlockedAsync();
+        await WaitForBlockedAsync(2);
         await ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
@@ -492,7 +493,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         var held = await LockRowsAsync(("session_item", item.ItemId));
         Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, item.ItemId, answer);
         Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, item.ItemId, answer);
-        await WaitForTwoBlockedAsync();
+        await WaitForBlockedAsync(2);
         await ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
@@ -515,7 +516,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         var held = await LockRowsAsync(("learning_session", session.SessionId), ("gamification_profile", family.Child.Id));
         Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, first.ItemId, set.AnswerFor(first.Prompt));
         Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, second.ItemId, set.AnswerFor(second.Prompt));
-        await WaitForTwoBlockedAsync();
+        await WaitForBlockedAsync(2);
         await ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
@@ -543,7 +544,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         var held = await LockRowsAsync(("learning_session", session.SessionId));
         Task<HttpResponseMessage> one = child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
         Task<HttpResponseMessage> two = child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
-        await WaitForTwoBlockedAsync();
+        await WaitForBlockedAsync(2);
         await ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
@@ -623,5 +624,45 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal(before.XpAwarded, after.XpAwarded);
         Assert.Equal(profileBefore.Xp, profileAfter.Xp);
         Assert.Equal(profileBefore.Coins, profileAfter.Coins);
+    }
+
+    // IN-02: Karte oder Kind wird geloescht, waehrend die Antwort schon gelesen hat
+    // und vor dem Schreiben steht. Das Speichern scheitert dann am Fremdschluessel
+    // (23503) oder trifft die per Kaskade geloeschte Aufgabe nicht mehr (0 Zeilen).
+    // Beides ist "nicht mehr da" (404), kein Serverfehler und keine Doppel-Antwort.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Waehrend_der_Antwort_geloeschte_Karte_oder_Kind_ergibt_404(bool deleteChild, bool withState)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory, dailyNewLimit: withState ? 3 : 20);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        Card card = set.Cards[0];
+        if (withState)
+        {
+            DateTimeOffset past = DateTimeOffset.UtcNow.AddDays(-2);
+            await SeedStateAsync(family.Child, card.Id, ReviewCardState.Review, past, past);
+        }
+
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = Assert.Single(session.Items, i => i.CardId == card.Id);
+
+        // Loeschen in offener Transaktion: Die Antwort liest noch alles (MVCC) und
+        // wartet beim Schreiben auf die Zeilensperren; erst danach wird committet.
+        await using WordQuestDbContext db = _factory.CreateSystemDbContext();
+        await using IDbContextTransaction delete = await db.Database.BeginTransactionAsync();
+        string sql = deleteChild
+            ? "DELETE FROM app_user WHERE id = {0}"
+            : "DELETE FROM vocabulary_entry WHERE id = {0}";
+        await db.Database.ExecuteSqlRawAsync(sql, deleteChild ? family.Child.Id : card.EntryId);
+
+        Task<HttpResponseMessage> answer = AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt));
+        await WaitForBlockedAsync(1);
+        await delete.CommitAsync();
+
+        Assert.Equal(deleteChild ? SessionGone : CardGone, await DetailAsync(await answer, HttpStatusCode.NotFound));
     }
 }

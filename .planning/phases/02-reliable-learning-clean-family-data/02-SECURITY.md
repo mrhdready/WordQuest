@@ -102,6 +102,7 @@ created: "2026-10-17"
 | R-13 | T-02-25 | Wo Docker die Absenderadresse nicht durchreicht (userland-proxy, Docker Desktop, Rootless, IPv6 auf ein reines IPv4-Netz), teilen sich alle Geräte wieder einen Topf. Spoofing ist nicht möglich, die PIN-Sperre pro Profil bleibt | `02-06-PLAN.md`; Konzept `:604` | 2026-10-17 |
 | R-14 | T-02-30 | Übersicht und Ampel laden Karten und Lernstände einer Familie in den Speicher; bei einigen hundert Wörtern auf dem Pi 5 unkritisch | `02-07-PLAN.md`; `02-RESEARCH.md:228` | 2026-10-17 |
 | R-15 | T-02-SC (02-01 bis 02-07) | Keine neue Dependency (D-15); Werkzeuge (`dotnet-ef`, `node:22`, nginx-Basisimage) laufen nur als Wegwerf-Container | jeweiliges Threat-Register; `git diff --stat c3534f1..3f55d4f` ohne Treffer auf `*.csproj`, `package.json`, `package-lock.json`, Dockerfiles | 2026-10-17 |
+| R-16 | IN-02 (Restrisiko) | Antwort und Sync bilden das Löschen von Karte oder Kind während des Speicherns auf 404 ab (Fremdschlüssel 23503 bzw. per Kaskade gelöschte Aufgabe, `SessionEndpoints.GoneOrConflictAsync`, Test `SessionEndpointTests.Waehrend_der_Antwort_geloeschte_Karte_oder_Kind_ergibt_404`). Beim Rundenstart bleibt es wie bei R-11: Wird eine ausgewählte Karte oder das Kind zwischen Auswahl und Speichern gelöscht, scheitert das Speichern am Fremdschlüssel (500 mit generischem Text). Das Fenster ist sehr schmal, ein neuer Start gelingt | `02-REVIEW.md` IN-02 | 2026-10-17 |
 
 *Akzeptierte Risiken tauchen in späteren Audits nicht erneut auf.*
 

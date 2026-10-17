@@ -99,9 +99,9 @@ public static class SessionEndpoints
 
             return result is null ? NotFound(CardGone) : Results.Ok(result);
         }
-        catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict))
+        catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict) || IsForeignKeyViolation(conflict))
         {
-            return Conflict();
+            return await GoneOrConflictAsync(db, sessionId, [request.ItemId], ct);
         }
         catch (SessionCompletedException)
         {
@@ -191,9 +191,9 @@ public static class SessionEndpoints
                 ? NotFound(SessionGone)
                 : Results.Ok(new { accepted, summary });
         }
-        catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict))
+        catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict) || IsForeignKeyViolation(conflict))
         {
-            return Conflict();
+            return await GoneOrConflictAsync(db, request.SessionId, itemIds, ct);
         }
         catch (SessionCompletedException)
         {
@@ -216,6 +216,27 @@ public static class SessionEndpoints
     private static bool IsDuplicateAnswer(DbUpdateException exception) =>
         exception is DbUpdateConcurrencyException
         || exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
+
+    /// <summary>
+    /// Karte oder Kind wurde geloescht, waehrend die Antwort schon gelesen hatte
+    /// (IN-02): Das Speichern scheitert am Fremdschluessel, oder die per Kaskade
+    /// geloeschte Aufgabe trifft 0 Zeilen und sieht wie eine Doppel-Antwort aus.
+    /// Erst nachsehen, ob Runde und Aufgaben noch da sind; nur dann ist es ein Doppel.
+    /// </summary>
+    private static async Task<IResult> GoneOrConflictAsync(
+        WordQuestDbContext db, Guid sessionId, IReadOnlyCollection<Guid> itemIds, CancellationToken ct)
+    {
+        if (await ResolveLearnerAsync(db, sessionId, ct) == Guid.Empty)
+        {
+            return NotFound(SessionGone);
+        }
+
+        int remaining = await db.SessionItems.CountAsync(i => i.SessionId == sessionId && itemIds.Contains(i.Id), ct);
+        return remaining == itemIds.Count ? Conflict() : NotFound(CardGone);
+    }
+
+    private static bool IsForeignKeyViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation };
 
     private static async Task<Guid> ResolveLearnerAsync(
         WordQuestDbContext db, Guid sessionId, CancellationToken ct)
