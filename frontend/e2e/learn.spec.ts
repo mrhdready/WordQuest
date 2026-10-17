@@ -221,6 +221,43 @@ test('Schließen in einer angefangenen Runde und Fehlerzustand', async ({ page }
   await checkPageWithoutGlass(page)
 })
 
+// FIX-04: gleichzeitige Doppel-Antwort, Server antwortet 409. Sitzungs-Endpunkte
+// gemockt, Max' Lernstand bleibt unberuehrt.
+test('Fehleransicht bei gleichzeitiger Doppel-Antwort', async ({ page }) => {
+  const detail = 'Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.'
+  const item = {
+    itemId: 'item-1',
+    cardId: 'card-1',
+    prompt: 'dog',
+    promptType: 'text',
+    expectedAnswerType: 'text',
+    choices: null,
+    emoji: null,
+    exampleSentence: null,
+    isRetry: false,
+  }
+  await page.route(/\/api\/v1\/sessions$/, (route) =>
+    route.fulfill({ json: { sessionId: 'session-1', gameKey: 'classic', totalItems: 1, items: [item] } }),
+  )
+  await page.route(/\/api\/v1\/sessions\/[^/]+\/answers$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ title: 'Schon beantwortet', status: 409, detail }),
+    }),
+  )
+
+  await openPicker(page)
+  await loginByKeyboard(page)
+  await goButton(page).click()
+  await page.getByRole('textbox').fill('Hund')
+  await page.getByRole('textbox').press('Enter')
+
+  await expect(page.getByRole('alert')).toHaveText(detail)
+  await expect(page.getByRole('button', { name: 'Zurück' })).toBeFocused()
+  await checkPageWithoutGlass(page)
+})
+
 // FIX-03/FIX-09 im gebauten Stack: eigenes Kind, damit das Tagesbudget des
 // Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt.
 test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, browser, baseURL }) => {

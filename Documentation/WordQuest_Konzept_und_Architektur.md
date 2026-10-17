@@ -279,6 +279,8 @@ Eine Quest enthält maximal 15 Items, zusammengestellt in dieser Reihenfolge:
 
 Zusätzlich wird eine falsch beantwortete Karte sofort als Wiederholungs-Item an die laufende Session angehängt.
 
+**Wann eine neue Karte zählt.** Neue Karten zählen für das Tageslimit erst mit der ersten Antwort. Der Start einer Runde legt keinen Lernstand an; die erste Antwort legt ihn an und setzt `first_seen_at` auf den Antwortzeitpunkt. Eine gezeigte, nicht beantwortete Karte kommt deshalb in der nächsten Runde wieder, und ein Abbruch kostet kein Tageslimit (`FIX-03`, `FIX-09`). Rundenstart und Übersicht (`newRemainingToday`) zählen dieselbe Menge: beantwortete Lernstände mit `first_seen_at` ab Beginn des lokalen Tages. Bewusste Restgrenze: Ansehen ohne Antwort ist unbegrenzt, ein Kind kann neue Karten beliebig oft aufdecken, ohne zu antworten.
+
 Die Deckelung bei 5 neuen Karten pro Tag ist der wichtigste Parameter des ganzen Systems. Wer 40 neue Vokabeln an einem Abend einspeist, erzeugt in den Folgetagen eine Wiederholungslawine, die das Kind sicher zum Abbruch bringt. Der Wert ist pro Lernendem konfigurierbar (`daily_new_limit`, Default 5, Bereich 3–15) und wird im Eltern-Dashboard erklärt, nicht nur als Zahl angeboten.
 
 **Rückstandsbremse.** Das Tagesbudget allein genügt nicht. Es begrenzt den Zufluss, aber nicht das Verhältnis von Zufluss zu Abfluss: Wer nur eine Einheit am Tag schafft, bekommt trotzdem jeden Tag fünf neue Wörter dazu, und der Berg fälliger Wiederholungen wächst über Monate. Deshalb gilt zusätzlich:
@@ -442,9 +444,9 @@ Ampeleinstufung pro Vokabel (`VocabularyEntry`, aggregiert über beide Richtunge
 | Ampel | Kriterium |
 |---|---|
 | 🟢 sicher | beide Karten `repetitions ≥ 3` und `ease ≥ 2.1` und `lapses ≤ 1` |
-| 🟡 unsicher | mindestens eine Karte schon vorgelegt, aber weder 🟢 noch 🔴 erfüllt |
+| 🟡 unsicher | mindestens eine Karte schon beantwortet, aber weder 🟢 noch 🔴 erfüllt |
 | 🔴 schwierig | `lapses ≥ 3` oder `ease < 1.8` (bei einer der beiden Karten) |
-| ⚪ neu | noch nie vorgelegt |
+| ⚪ neu | noch nie beantwortet |
 
 Dieselbe Schwelle (`ease ≥ 2.1`) gilt für „gefestigte Karten" in der Übersicht. Heute steht die Regel an zwei Stellen in `LearnerEndpoints.cs`; sie soll einmal definiert werden (`FIX-06`).
 
@@ -591,6 +593,8 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 ```
 
 `/sessions/sync` existiert serverseitig, wird vom Frontend aber nicht aufgerufen (Offline-Lernen ist v2, `LRN2-02`).
+
+Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409; eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP).
 
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 

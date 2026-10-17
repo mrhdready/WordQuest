@@ -33,6 +33,9 @@ export function SessionPage() {
   // Effekt, damit das Rendern frei von Seiteneffekten bleibt.
   const shownAt = useRef<number>(0)
   const started = useRef(false)
+  // Ref statt nur isPending: das greift erst nach dem naechsten Rendern, ein
+  // zweiter Tipp oder ein zweites Enter kaeme vorher noch durch.
+  const sending = useRef(false)
 
   const current = queue[index]
   const total = Math.max(queue.length, session?.totalItems ?? 0)
@@ -83,7 +86,17 @@ export function SessionPage() {
       setErrorMessage(caught instanceof Error ? caught.message : 'Antwort kam nicht an')
       setPhase('error')
     },
+    onSettled: () => {
+      sending.current = false
+    },
   })
+
+  // Gemeinsamer Weg fuer Auswahl, Senden-Button und Enter.
+  function send(itemId: string, givenAnswer: string) {
+    if (sending.current) return
+    sending.current = true
+    answer.mutate({ itemId, givenAnswer })
+  }
 
   // Eigene Phase waehrend des Abschlusses: sonst stuende kurz wieder das
   // Antwortfeld der letzten Karte da, und "Weiter" liesse sich doppelt druecken.
@@ -140,7 +153,8 @@ export function SessionPage() {
     return (
       <main className="mx-auto w-full max-w-lg px-screen-margin pt-screen-top pb-8">
         <ErrorNote message={errorMessage ?? 'Etwas ist schiefgegangen.'} />
-        <Button className="mt-4 w-full" size="lg" onClick={() => navigate('/')}>
+        {/* Das Antwortfeld verschwindet mit dem Fehler, der Fokus geht sonst verloren. */}
+        <Button autoFocus className="mt-4 w-full" size="lg" onClick={() => navigate('/')}>
           Zurück
         </Button>
       </main>
@@ -213,7 +227,7 @@ export function SessionPage() {
               variant="outline"
               size="xl"
               disabled={answer.isPending}
-              onClick={() => answer.mutate({ itemId: current.itemId, givenAnswer: choice })}
+              onClick={() => send(current.itemId, choice)}
             >
               {choice}
             </Button>
@@ -224,9 +238,7 @@ export function SessionPage() {
           className="mt-auto flex items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault()
-            if (!answer.isPending) {
-              answer.mutate({ itemId: current.itemId, givenAnswer: typed })
-            }
+            send(current.itemId, typed)
           }}
         >
           <Input
