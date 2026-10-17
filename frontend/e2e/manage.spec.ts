@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
-import { checkPage } from './axe'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+import { checkPage, expectDialogContrast, expectNoAxeViolations } from './axe'
 import { guardianStorageState } from './global-setup'
 
 test.use({ storageState: guardianStorageState })
@@ -266,6 +266,63 @@ test('Set löschen', async ({ page }) => {
   await expect(page).toHaveURL(/\/verwalten$/)
   await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
   await expect(page.getByRole('link').filter({ hasText: title })).toHaveCount(0)
+})
+
+// D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.
+test('Set-Dialoge barrierefrei', async ({ page }) => {
+  const title = `Zz E2E Barrierefrei ${Date.now()}`
+  await createAndOpenSet(page, title)
+  await checkPage(page)
+
+  await page.getByRole('button', { name: 'Umbenennen' }).click()
+  const rename = page.getByRole('dialog', { name: 'Set umbenennen' })
+  await rename.getByLabel('Titel').fill('')
+  await rename.getByRole('button', { name: 'Speichern' }).click()
+  await expect(rename.getByText('Ein Set braucht einen Titel.')).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.keyboard.press('Escape')
+  await expect(rename).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Set löschen' }).click()
+  const confirm = page.getByRole('alertdialog', { name: `Set „${title}“ löschen?` })
+  await expect(confirm).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await confirm.getByRole('button', { name: 'Endgültig löschen' }).click()
+
+  await expect(page).toHaveURL(/\/verwalten$/)
+  await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
+  await checkPage(page)
+})
+
+// Text bricht um statt abgeschnitten zu werden, kein waagerechtes Scrollen (WCAG 1.4.10).
+async function expectWraps(page: Page, locator: Locator, text: string) {
+  await expect(locator).toBeVisible()
+  expect(await locator.textContent()).toBe(text)
+  expect(await locator.evaluate((element) => element.scrollWidth <= element.clientWidth), text).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+}
+
+// Unguenstigster Fall (UI-SPEC long-text): 200 Zeichen ohne Leerzeichen in Kopf, Dialogtitel und Erfolgsmeldung.
+test('Langer Set-Titel bei 320 px', async ({ page }) => {
+  const stamp = `ZzE2E${Date.now()}`
+  const long = stamp + 'x'.repeat(200 - stamp.length)
+  await createAndOpenSet(page, `Zz E2E Lang ${Date.now()}`)
+  await page.getByRole('button', { name: 'Umbenennen' }).click()
+  await page.getByLabel('Titel').fill(long)
+  await page.getByLabel('Titel').press('Enter')
+  const heading = page.getByRole('heading', { level: 2, name: long })
+  await expect(heading).toBeVisible()
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await expectWraps(page, heading, long)
+  await page.getByRole('button', { name: 'Set löschen' }).click()
+  const dialog = page.getByRole('alertdialog', { name: `Set „${long}“ löschen?` })
+  await expectWraps(page, dialog.getByRole('heading', { level: 2 }), `Set „${long}“ löschen?`)
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(page).toHaveURL(/\/verwalten$/)
+  await expectWraps(page, page.getByRole('status').filter({ hasText: 'ist gelöscht.' }), `Das Set „${long}“ ist gelöscht.`)
 })
 
 test('Fortschritt: axe 0', async ({ page }) => {

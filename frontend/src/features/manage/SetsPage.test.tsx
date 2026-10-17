@@ -139,3 +139,17 @@ describe('Set-Formular "Neues Set"', () => {
     expect(posts).toEqual([{ title: 'Unit 9' }])
   })
 })
+
+// UI-SPEC empty: nach dem Loeschen des letzten Sets steht die Meldung ueber dem Leerzustand.
+it('Erfolgsmeldung nach "Set löschen" steht über "Noch keine Vokabelsets"', async () => {
+  stubApi(async () => Response.json(createdSet, { status: 201 }))
+  renderWithProviders(<SetsPage />, {
+    route: '/verwalten',
+    path: '/verwalten',
+    state: { message: 'Das Set „Zz E2E“ ist gelöscht.' },
+  })
+  const empty = await screen.findByText('Noch keine Vokabelsets')
+  const note = screen.getByRole('status')
+  expect(note.textContent).toBe('Das Set „Zz E2E“ ist gelöscht.')
+  expect(note.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})

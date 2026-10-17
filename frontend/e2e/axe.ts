@@ -53,6 +53,32 @@ export async function expectGlassContrast(page: Page) {
   })
 }
 
+// Offener Dialog (Dialog und ConfirmDialog tragen aria-modal). Hinter dem Sheet liegt
+// je Textzeile anderer Seiteninhalt; axe misst dann nicht ("elmPartiallyObscuring"). Gemessen wird deshalb der Dialog allein: ueber jeder
+// Backdrop-Farbe und ueber primary-deep, der dunkelsten Flaeche der Seite darunter.
+export async function expectDialogContrast(page: Page) {
+  await page.evaluate(() => document.getElementById('root')?.style.setProperty('visibility', 'hidden'))
+  await expectGlassContrast(page)
+  await page.evaluate(() => {
+    document.body.style.backgroundImage = 'none'
+    document.body.style.backgroundColor = 'var(--color-primary-deep)'
+  })
+  const result = await new AxeBuilder({ page }).include('[aria-modal="true"]').withRules(['color-contrast']).analyze()
+  expect(result.violations, 'color-contrast ueber primary-deep').toEqual([])
+  // Wie in expectGlassContrast: nur getoente Buttons (eigener Verlauf, z. B. "Speichern") duerfen offen bleiben.
+  const unmeasured = result.incomplete
+    .flatMap((entry) => entry.nodes)
+    .filter((node) => node.any[0]?.data?.messageKey !== 'bgGradient')
+    .map((node) => node.target.join(' '))
+  expect(unmeasured, 'nicht gemessener Kontrast ueber primary-deep').toEqual([])
+  expect(result.passes.flatMap((entry) => entry.nodes).length).toBeGreaterThan(0)
+  await page.evaluate(() => {
+    document.body.style.backgroundImage = ''
+    document.body.style.backgroundColor = ''
+    document.getElementById('root')?.style.removeProperty('visibility')
+  })
+}
+
 // Alle Glas-Utilities, auch die blur-freien (exakte Klassennamen, keine Farbklassen).
 const glassUtilities = [
   'glass',

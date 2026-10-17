@@ -1,6 +1,5 @@
-import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Browser, type Page } from '@playwright/test'
-import { checkPage, expectGlassContrast, expectNoAxeViolations, expectReflow } from './axe'
+import { checkPage, expectDialogContrast, expectNoAxeViolations, expectReflow } from './axe'
 import { guardianStorageState } from './global-setup'
 
 test.use({ storageState: guardianStorageState })
@@ -235,27 +234,6 @@ test('Kind bearbeiten barrierefrei', async ({ page }) => {
   await expect(page.getByText('Dieses Kind gibt es nicht (mehr).')).toBeVisible()
   await checkPage(page)
 })
-
-// Hinter dem Sheet liegt je Textzeile anderer Seiteninhalt; axe misst dann nicht
-// ("elmPartiallyObscuring"). Gemessen wird deshalb der Dialog allein: ueber jeder
-// Backdrop-Farbe und ueber primary-deep, der dunkelsten Flaeche der Seite darunter.
-async function expectDialogContrast(page: Page) {
-  await page.evaluate(() => document.getElementById('root')?.style.setProperty('visibility', 'hidden'))
-  await expectGlassContrast(page)
-  await page.evaluate(() => {
-    document.body.style.backgroundImage = 'none'
-    document.body.style.backgroundColor = 'var(--color-primary-deep)'
-  })
-  const result = await new AxeBuilder({ page }).include('[role="alertdialog"]').withRules(['color-contrast']).analyze()
-  expect(result.violations, 'color-contrast ueber primary-deep').toEqual([])
-  expect(result.incomplete, 'nicht gemessener Kontrast ueber primary-deep').toEqual([])
-  expect(result.passes.flatMap((entry) => entry.nodes).length).toBeGreaterThan(0)
-  await page.evaluate(() => {
-    document.body.style.backgroundImage = ''
-    document.body.style.backgroundColor = ''
-    document.getElementById('root')?.style.removeProperty('visibility')
-  })
-}
 
 // Tab-Reihenfolge in <main> bei 320 px, kein Ziel unter der Tab-Leiste (WCAG 2.4.11).
 async function expectFormTabOrder(page: Page, expected: string[]) {
