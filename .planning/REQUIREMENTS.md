@@ -19,13 +19,13 @@
 - [ ] **PAR-01**: Parent can edit a child (name, reset PIN, daily new-card limit)
 - [ ] **PAR-02**: PIN must be 4–6 digits (validated server-side)
 - [ ] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
-- [ ] **PAR-03**: Parent can delete a child including all learning history
+- [x] **PAR-03**: Parent can delete a child including all learning history
 - [ ] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
 
 ### Bug Fixes
 
 - [ ] **FIX-01**: One family member mistyping cannot lock the others out of login (rate limit per real client IP; token refresh does not consume the login budget)
-- [ ] **FIX-02**: Deleting a set or entry removes its learning data; no orphaned cards show up in sessions
+- [x] **FIX-02**: Deleting a set or entry removes its learning data; no orphaned cards show up in sessions
 - [x] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
 - [ ] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
 - [ ] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
@@ -98,10 +98,10 @@
 | PAR-02 | Phase 1 | Pending |
 | PAR-05 | Phase 1 | Pending |
 | DESIGN-01 | Phase 1 | Pending |
-| PAR-03 | Phase 2 | Pending |
+| PAR-03 | Phase 2 | Complete |
 | PAR-04 | Phase 2 | Pending |
 | FIX-01 | Phase 2 | Pending |
-| FIX-02 | Phase 2 | Pending |
+| FIX-02 | Phase 2 | Complete |
 | FIX-03 | Phase 2 | Complete |
 | FIX-04 | Phase 2 | Pending |
 | FIX-05 | Phase 2 | Pending |
