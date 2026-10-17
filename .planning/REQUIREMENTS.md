@@ -24,7 +24,7 @@
 
 ### Bug Fixes
 
-- [ ] **FIX-01**: One family member mistyping cannot lock the others out of login (rate limit per real client IP; token refresh does not consume the login budget)
+- [x] **FIX-01**: One family member mistyping cannot lock the others out of login (rate limit per real client IP; token refresh does not consume the login budget)
 - [x] **FIX-02**: Deleting a set or entry removes its learning data; no orphaned cards show up in sessions
 - [x] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
 - [ ] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
@@ -100,7 +100,7 @@
 | DESIGN-01 | Phase 1 | Pending |
 | PAR-03 | Phase 2 | Complete |
 | PAR-04 | Phase 2 | Complete |
-| FIX-01 | Phase 2 | Pending |
+| FIX-01 | Phase 2 | Complete |
 | FIX-02 | Phase 2 | Complete |
 | FIX-03 | Phase 2 | Complete |
 | FIX-04 | Phase 2 | Pending |
