@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: verifying
-stopped_at: Completed 01-08-PLAN.md
-last_updated: "2026-10-16T20:50:40.466Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-10-17T18:18:07.237Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 4f95cee7b152516bd51bc49464930116925bf7f5
+state_head: 27b7da46267cbec351520bfc754bd35dd82c0c27
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 15
+  completed_plans: 9
 ---
 
 # Project State
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P06 | 23min | 3 tasks | 19 files |
 | Phase 01 P07 | 18min | 3 tasks | 19 files |
 | Phase 01 P08 | 20min | 3 tasks | 18 files |
+| Phase 02 P01 | 23min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ Recent decisions affecting current work:
 - [Phase 01]: 01-07: Kinderliste ohne Card, weil ListGroup/EmptyState selbst Glas sind (DESIGN.md: kein Glas auf Glas)
 - [Phase 01]: 01-08: Auth-Limit aus Auth:RequestsPerMinute (Standard 10), nur der e2e-Teststack hebt es an; Produktion unveraendert
 - [Phase 01]: 01-08: Bearbeiten-Seite liest das Kind aus ['learners']; Ladefehler (ErrorNote) getrennt von unbekannter ID (EmptyState)
+- [Phase 02]: 02-01: AnsweredAt als Concurrency-Token statt xmin, keine Migration
+- [Phase 02]: 02-01: Neue Karte gilt erst mit der ersten Antwort als eingefuehrt (LastReviewedAt gesetzt, FirstSeenAt = Antwortzeit); Altbestand ohne Antwort kostet kein Budget
+- [Phase 02]: 02-01: Gutschrift XP/Muenzen nur per ExecuteUpdateAsync in Transaktion ueber CreateExecutionStrategy; Abschluss atomar beansprucht
 
 ### Pending Todos
 
@@ -124,6 +128,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-16T20:50:40.441Z
-Stopped at: Completed 01-08-PLAN.md
+Last session: 2026-10-17T18:18:07.181Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

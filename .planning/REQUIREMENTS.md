@@ -26,11 +26,11 @@
 
 - [ ] **FIX-01**: One family member mistyping cannot lock the others out of login (rate limit per real client IP; token refresh does not consume the login budget)
 - [ ] **FIX-02**: Deleting a set or entry removes its learning data; no orphaned cards show up in sessions
-- [ ] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
+- [x] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
 - [ ] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
 - [ ] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
 - [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace, Enter), not only by tapping
-- [ ] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
+- [x] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
 - [ ] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
 - [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart
 
@@ -102,12 +102,12 @@
 | PAR-04 | Phase 2 | Pending |
 | FIX-01 | Phase 2 | Pending |
 | FIX-02 | Phase 2 | Pending |
-| FIX-03 | Phase 2 | Pending |
+| FIX-03 | Phase 2 | Complete |
 | FIX-04 | Phase 2 | Pending |
 | FIX-05 | Phase 2 | Pending |
 | FIX-06 | Phase 2 | Pending |
 | FIX-08 | Phase 1 | Pending |
-| FIX-09 | Phase 2 | Pending |
+| FIX-09 | Phase 2 | Complete |
 | FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
 | QUAL-01 | Phase 2 | Pending |
 | QUAL-02 | Phase 1 | Pending |
