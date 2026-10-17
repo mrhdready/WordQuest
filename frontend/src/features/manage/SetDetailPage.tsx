@@ -287,9 +287,10 @@ function RenameSet({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
-  // Der gesperrte "Speichern" gibt den Fokus an body ab (WR-03); nach einem Fehler ohne Feldbezug zurueck in den Dialog.
+  // Der gesperrte "Speichern" gibt den Fokus an body ab (WR-03); nach einem Fehler ohne Feldbezug
+  // zurueck in den Dialog. Nach Enter steht er noch im Feld und bleibt dort.
   useEffect(() => {
-    if (error) cancelRef.current?.focus()
+    if (error && document.activeElement === document.body) cancelRef.current?.focus()
   }, [error])
 
   function changeOpen(next: boolean) {
@@ -413,9 +414,9 @@ function EditEntry({
   const sourceRef = useRef<HTMLInputElement>(null)
   const targetRef = useRef<HTMLInputElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
-  // Wie RenameSet (WR-03): nach einem Fehler ohne Feldbezug steht der Fokus auf "Abbrechen".
+  // Wie RenameSet (WR-03): war der Fokus verloren, steht er nach einem Fehler auf "Abbrechen".
   useEffect(() => {
-    if (error) cancelRef.current?.focus()
+    if (error && document.activeElement === document.body) cancelRef.current?.focus()
   }, [error])
 
   function changeOpen(next: boolean) {

@@ -223,9 +223,7 @@ describe('Set umbenennen', () => {
   })
 
   it('Server nicht erreichbar: Hinweis im Dialog, Eingabe bleibt', async () => {
-    stubSets(async () => {
-      throw new TypeError('Failed to fetch')
-    })
+    stubSets(offlineAfterBlur)
     const { input } = await openRename()
     await replaceTitle(input, 'Unit 4')
     await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
@@ -234,6 +232,16 @@ describe('Set umbenennen', () => {
     expect((screen.getByRole('button', { name: 'Speichern' }) as HTMLButtonElement).disabled).toBe(false)
     // WR-03: der gesperrte "Speichern" verliert den Fokus, nach dem Fehler steht er auf "Abbrechen".
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' })))
+  })
+
+  it('Enter im Feld, Server nicht erreichbar: Fokus bleibt im Feld', async () => {
+    stubSets(offline)
+    const { input } = await openRename()
+    await replaceTitle(input, 'Unit 4')
+    await userEvent.type(input, '{Enter}')
+    expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
+    await settle()
+    expect(document.activeElement).toBe(input)
   })
 
   it('5: Enter im Feld sendet genau ein PATCH', async () => {
@@ -467,6 +475,13 @@ const entryNotFound = async () => Response.json({ title: 'Nicht gefunden', detai
 const offline = async (): Promise<Response> => {
   throw new TypeError('Failed to fetch')
 }
+// jsdom kennt die Focus-Fixup-Regel nicht: wie Chromium beim Sperren des geklickten
+// Buttons faellt der Fokus auf body (gemessen im e2e-Stack, WR-03).
+const offlineAfterBlur = async (): Promise<Response> => {
+  const active = document.activeElement as HTMLElement | null
+  active?.blur()
+  return offline()
+}
 
 /**
  * fetch-Stub der Set-Seite mit Vokabeln. GET /sets liefert [unit]; GET der
@@ -619,7 +634,7 @@ describe('Vokabel bearbeiten', () => {
   })
 
   it('Server nicht erreichbar: Hinweis im Dialog, Eingaben bleiben', async () => {
-    stubEntries(offline)
+    stubEntries(offlineAfterBlur)
     const { german, english } = await openEdit()
     await replaceTitle(german, 'Hund')
     await replaceTitle(english, 'dog')
@@ -628,6 +643,15 @@ describe('Vokabel bearbeiten', () => {
     expect([german.value, english.value]).toEqual(['Hund', 'dog'])
     expect(screen.getByText('Hnud → dgo')).toBeTruthy()
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' })))
+  })
+
+  it('Enter im Feld Englisch, Server nicht erreichbar: Fokus bleibt im Feld', async () => {
+    stubEntries(offline)
+    const { english } = await openEdit()
+    await userEvent.type(english, '{Enter}')
+    expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
+    await settle()
+    expect(document.activeElement).toBe(english)
   })
 
   it('Doppelklick auf "Speichern": genau ein PUT, gesperrt, Esc schließt nicht', async () => {
