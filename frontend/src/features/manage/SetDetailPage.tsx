@@ -1,15 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Trash2, Upload } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { ArrowLeft, Pencil, Trash2, Upload } from 'lucide-react'
+import { useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Dialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
 import { Input, Textarea } from '@/components/ui/input'
 import { ListGroup, ListRow } from '@/components/ui/list'
-import { Badge, EmptyState, ErrorNote, Spinner } from '@/components/ui/misc'
-import { api } from '@/lib/api'
-import type { ImportPreview, VocabularyEntry } from '@/types'
+import { Badge, EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
+import { api, ApiError } from '@/lib/api'
+import type { ImportPreview, VocabularyEntry, VocabularySet } from '@/types'
+
+// Spiegelt ContentRules.MaxTextLength (Spalte Titel); massgeblich bleibt der Server.
+const MAX_TITLE_LENGTH = 200
+const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
 
 export function SetDetailPage() {
   const { setId = '' } = useParams()
@@ -18,6 +23,16 @@ export function SetDetailPage() {
   const [source, setSource] = useState('')
   const [target, setTarget] = useState('')
   const [showImport, setShowImport] = useState(false)
+  const [saved, setSaved] = useState<string | null>(null)
+  // Fokusziel, wenn das Set schon weg war und die Buttons im Kopf mit ihm verschwinden.
+  const backRef = useRef<HTMLAnchorElement>(null)
+
+  // Kein Einzelabruf: der Titel kommt aus der Liste ['sets'] (Muster ChildFormPage).
+  const sets = useQuery({
+    queryKey: ['sets'],
+    queryFn: () => api<VocabularySet[]>('/sets'),
+  })
+  const set = sets.data?.find((entry) => entry.id === setId)
 
   const entries = useQuery({
     queryKey: ['entries', setId],
@@ -52,14 +67,46 @@ export function SetDetailPage() {
     if (source.trim() && target.trim()) addEntry.mutate()
   }
 
+  const back = (
+    <Link ref={backRef} to="/verwalten" className="flex items-center gap-2 self-start type-body-md-strong text-ink">
+      <span className="glass-clear flex size-12 items-center justify-center rounded-full">
+        <ArrowLeft className="size-5" aria-hidden />
+      </span>
+      Alle Sets
+    </Link>
+  )
+
+  // Ohne Set nur der Kopf: Erfassung, Import und Liste erst, wenn das Set feststeht.
+  if (!set) {
+    return (
+      <div className="flex flex-col gap-4">
+        {back}
+        {sets.isLoading ? (
+          <Spinner />
+        ) : sets.isError && !sets.data ? (
+          // Ladefehler ist nicht "gibt es nicht": sonst haelt man ein vorhandenes Set fuer geloescht.
+          <ErrorNote message={sets.error.message} />
+        ) : (
+          <EmptyState title="Dieses Set gibt es nicht (mehr)." hint="Gehe zurück zu allen Sets." />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/verwalten" className="flex items-center gap-2 self-start type-body-md-strong text-ink">
-        <span className="glass-clear flex size-12 items-center justify-center rounded-full">
-          <ArrowLeft className="size-5" aria-hidden />
-        </span>
-        Alle Sets
-      </Link>
+      {back}
+
+      <div className="flex flex-col gap-2">
+        <h2 tabIndex={-1} className="type-headline break-words text-ink">
+          {set.title}
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <RenameSet key={set.id} set={set} backRef={backRef} onSaved={setSaved} />
+        </div>
+      </div>
+
+      {saved ? <SuccessNote message={saved} /> : null}
 
       {/* Schnellerfassung: zwei Felder, Enter, weiter. Alles andere ist
           optional und wuerde das Abtippen eines Vokabelhefts nur bremsen. */}
@@ -135,6 +182,129 @@ export function SetDetailPage() {
         </ListGroup>
       ) : null}
     </div>
+  )
+}
+
+function titleError(title: string): string | undefined {
+  if (!title.trim()) return 'Ein Set braucht einen Titel.'
+  if (title.trim().length > MAX_TITLE_LENGTH) return 'Der Titel darf höchstens 200 Zeichen lang sein.'
+  return undefined
+}
+
+// Umbenennen an Ort und Stelle (PAR-04, D-08): gleiche Set-ID, der Lernstand bleibt.
+function RenameSet({
+  set,
+  backRef,
+  onSaved,
+}: {
+  set: VocabularySet
+  backRef: RefObject<HTMLAnchorElement | null>
+  onSaved: (message: string) => void
+}) {
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState(set.title)
+  const [fieldError, setFieldError] = useState<string | undefined>()
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  // 404: das Set ist schon weg (anderer Tab). Dann verschwindet "Umbenennen" mit dem Kopf.
+  const [gone, setGone] = useState(false)
+  const busyRef = useRef(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function changeOpen(next: boolean) {
+    // Waehrend der Anfrage schliessen weder Esc noch "Abbrechen".
+    if (busyRef.current) return
+    if (next) {
+      setTitle(set.title)
+      setFieldError(undefined)
+      setError(null)
+      setGone(false)
+    } else if (gone) {
+      // Erst beim Schliessen neu laden: ein Neuladen bei offenem Dialog nimmt das Set
+      // aus der Liste, und Kopf, Dialog und Eingaben verschwinden.
+      void queryClient.invalidateQueries({ queryKey: ['sets'] })
+    }
+    setOpen(next)
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    // Ref statt nur disabled: ein zweiter Klick kann vor dem naechsten Rendern ankommen.
+    if (busyRef.current) return
+    setError(null)
+    const found = titleError(title)
+    setFieldError(found)
+    if (found) {
+      inputRef.current?.focus()
+      return
+    }
+    busyRef.current = true
+    setBusy(true)
+    try {
+      await api<VocabularySet>(`/sets/${set.id}`, { method: 'PATCH', body: { title: title.trim() } })
+      busyRef.current = false
+      setOpen(false)
+      onSaved('Der neue Titel ist gespeichert.')
+      void queryClient.invalidateQueries({ queryKey: ['sets'] })
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 404) setGone(true)
+      // Feldfehler des Servers am Feld, alles andere im Hinweis ueber den Buttons.
+      const fieldMessage = caught instanceof ApiError ? caught.errors?.title?.[0] : undefined
+      if (fieldMessage) {
+        setFieldError(fieldMessage)
+        inputRef.current?.focus()
+      } else setError(caught instanceof Error ? caught.message : GENERIC)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Button ref={triggerRef} type="button" variant="secondary" size="sm" onClick={() => changeOpen(true)}>
+        <Pencil className="size-4" aria-hidden />
+        Umbenennen
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={changeOpen}
+        title="Set umbenennen"
+        description="Der Lernstand der Kinder bleibt erhalten."
+        returnFocusRef={gone ? backRef : triggerRef}
+      >
+        <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+          <Field id="set-titel" label="Titel" error={fieldError}>
+            {(control) => (
+              <Input
+                {...control}
+                ref={inputRef}
+                autoComplete="off"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            )}
+          </Field>
+          {error ? <ErrorNote message={error} /> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-auto"
+              disabled={busy}
+              onClick={() => changeOpen(false)}
+            >
+              Abbrechen
+            </Button>
+            <Button type="submit" className="flex-auto" disabled={busy}>
+              {busy ? 'Einen Moment …' : 'Speichern'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   )
 }
 

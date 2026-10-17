@@ -20,6 +20,7 @@ public static class SetEndpoints
         group.MapGet("/{setId:guid}/entries", ListEntriesAsync);
 
         group.MapPost("/", CreateAsync).RequireAuthorization("Guardian");
+        group.MapPatch("/{setId:guid}", UpdateAsync).RequireAuthorization("Guardian");
         group.MapDelete("/{setId:guid}", DeleteAsync).RequireAuthorization("Guardian");
         group.MapPost("/{setId:guid}/entries", AddEntryAsync).RequireAuthorization("Guardian");
         group.MapDelete("/{setId:guid}/entries/{entryId:guid}", DeleteEntryAsync).RequireAuthorization("Guardian");
@@ -44,12 +45,9 @@ public static class SetEndpoints
         HttpContext http,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Title))
+        if (TitleProblem(request.Title) is { } problem)
         {
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["title"] = ["Ein Set braucht einen Titel."],
-            });
+            return problem;
         }
 
         var set = new VocabularySet
@@ -69,6 +67,52 @@ public static class SetEndpoints
             new VocabularySetDto(set.Id, set.Title, set.Description,
                 set.SourceLanguage, set.TargetLanguage, 0));
     }
+
+    /// <summary>
+    /// Benennt das Set an Ort und Stelle um (D-08): Set-, Eintrags- und
+    /// Karten-IDs bleiben, damit der Lernstand der Kinder erhalten bleibt.
+    /// </summary>
+    private static async Task<IResult> UpdateAsync(
+        Guid setId, UpdateSetRequest request, WordQuestDbContext db, CancellationToken ct)
+    {
+        if (TitleProblem(request.Title) is { } problem)
+        {
+            return problem;
+        }
+
+        // Mandantenfilter: ein Set einer anderen Familie ist hier "nicht gefunden".
+        VocabularySet? set = await db.VocabularySets.FirstOrDefaultAsync(s => s.Id == setId, ct);
+        if (set is null)
+        {
+            return SetNotFound();
+        }
+
+        set.Title = request.Title!.Trim();
+        await db.SaveChangesAsync(ct);
+
+        int entryCount = await db.VocabularyEntries.CountAsync(e => e.SetId == setId, ct);
+        return Results.Ok(new VocabularySetDto(set.Id, set.Title, set.Description,
+            set.SourceLanguage, set.TargetLanguage, entryCount));
+    }
+
+    // Eine Regel fuer Anlegen und Umbenennen; die Texte stehen hier, die Grenze in ContentRules.
+    private static IResult? TitleProblem(string? title) =>
+        ContentRules.CheckText(title) switch
+        {
+            ContentTextProblem.Missing => TitleError("Ein Set braucht einen Titel."),
+            ContentTextProblem.TooLong => TitleError("Der Titel darf höchstens 200 Zeichen lang sein."),
+            _ => null,
+        };
+
+    private static IResult TitleError(string message) =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { ["title"] = [message] });
+
+    // Mit Text: die Set-Seite zeigt ihn im Dialog, wenn das Set in einem anderen Tab schon geloescht wurde.
+    private static IResult SetNotFound() =>
+        Results.Problem(
+            title: "Nicht gefunden",
+            detail: "Dieses Set gibt es nicht (mehr).",
+            statusCode: StatusCodes.Status404NotFound);
 
     private static async Task<IResult> DeleteAsync(
         Guid setId, WordQuestDbContext db, CancellationToken ct)

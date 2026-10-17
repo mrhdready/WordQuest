@@ -9,10 +9,12 @@ afterEach(() => {
 
 // Ohne Daten (Laden, Fehler) keine leere Glas-Gruppe; ListGroup traegt divide-y.
 it('Set-Detail zeigt beim Laden und nach einem Fehler keine leere Liste', async () => {
-  let fail: (response: Response) => void = () => {}
+  // Beide Abfragen (/sets und /sets/{id}/entries) haengen, bis fail() sie beantwortet.
+  const pending: ((response: Response) => void)[] = []
+  const fail = () => pending.forEach((resolve) => resolve(new Response('', { status: 500 })))
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => new Promise<Response>((resolve) => (fail = resolve))),
+    vi.fn(() => new Promise<Response>((resolve) => pending.push(resolve))),
   )
   const { container } = renderWithProviders(<SetDetailPage />, {
     route: '/verwalten/sets/set-1',
@@ -21,7 +23,8 @@ it('Set-Detail zeigt beim Laden und nach einem Fehler keine leere Liste', async 
   await screen.findByRole('status')
   expect(container.querySelector('.divide-y')).toBeNull()
 
-  fail(new Response('', { status: 500 }))
+  expect(pending).toHaveLength(2)
+  fail()
   await vi.waitFor(() => expect(screen.queryByRole('status')).toBeNull())
   expect(container.querySelector('.divide-y')).toBeNull()
 })

@@ -57,6 +57,8 @@ public sealed record CreateSetRequest(
     string? SourceLanguage,
     string? TargetLanguage);
 
+public sealed record UpdateSetRequest(string? Title);
+
 public sealed record VocabularyEntryDto(
     Guid Id,
     string SourceText,

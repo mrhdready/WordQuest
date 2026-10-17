@@ -208,6 +208,38 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await expect(page.getByText(`house${stamp}`)).toBeVisible()
 })
 
+// Eigene Sets beginnen mit "Zz E2E": sie stehen am Ende der sortierten Liste,
+// openFirstSet und die anderen Specs oeffnen weiter ein Demo-Set.
+async function createAndOpenSet(page: Page, title: string) {
+  await page.goto('/verwalten?neu=1')
+  await page.getByLabel('Titel').fill(title)
+  await page.getByRole('button', { name: 'Anlegen' }).click()
+  await page.getByRole('link').filter({ hasText: title }).click()
+  await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+}
+
+test('Set umbenennen', async ({ page }) => {
+  const title = `Zz E2E Umbenennen ${Date.now()}`
+  const renamed = `${title} neu`
+  await createAndOpenSet(page, title)
+
+  const trigger = page.getByRole('button', { name: 'Umbenennen' })
+  await trigger.click()
+  const dialog = page.getByRole('dialog', { name: 'Set umbenennen' })
+  const field = dialog.getByLabel('Titel')
+  await expect(field).toBeFocused()
+  await expect(field).toHaveValue(title)
+  await field.fill(renamed)
+  await field.press('Enter')
+
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 2, name: renamed })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Der neue Titel ist gespeichert.' })).toBeVisible()
+  await expect(trigger).toBeFocused()
+  await page.goto('/verwalten')
+  await expect(page.getByRole('link').filter({ hasText: renamed })).toBeVisible()
+})
+
 test('Fortschritt: axe 0', async ({ page }) => {
   await page.goto('/verwalten/fortschritt')
   await expect(page.getByText(/^Level \d+$/)).toBeVisible()
