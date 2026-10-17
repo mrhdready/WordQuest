@@ -180,7 +180,7 @@ Labels „Deutsch“/„Englisch“ wie im Erfassungsformular (`SetDetailPage.ts
 
 Serverschlüssel der Feldfehler (`Results.ValidationProblem`): `title`, `sourceText`, `targetText`; Texte exakt wie oben. Die Clientprüfung spiegelt sie (Grenze 200 aus `ContentConfigurations.cs:14,35-36`), maßgeblich ist der Server.
 
-Erfassungsformular (Bestand, `SetDetailPage.tsx:66-90`): bleibt ohne Clientprüfung (leere Eingabe schickt weiter nichts ab). Neu: Server- und Netzfehler von „Hinzufügen“ erscheinen als `ErrorNote` unter dem Formular (`ApiError.message`; bei zu langen Wörtern also „Das Wort darf höchstens 200 Zeichen lang sein.“). Behebt die offene Phase-1-Notiz (CONTEXT Specifics).
+Erfassungsformular (Bestand, `SetDetailPage.tsx:66-90`): bekommt Clientprüfung mit Feldfehlern (Review 02-REVIEWS 02-05: leere Eingabe blieb bisher stumm; Texte und Matrix in 02-05-PLAN). Neu: Server- und Netzfehler von „Hinzufügen“ erscheinen als `ErrorNote` unter dem Formular (`ApiError.message`; bei zu langen Wörtern also „Das Wort darf höchstens 200 Zeichen lang sein.“). Behebt die offene Phase-1-Notiz (CONTEXT Specifics).
 
 ### Lernrunde (FIX-04), Texte für Kinder
 

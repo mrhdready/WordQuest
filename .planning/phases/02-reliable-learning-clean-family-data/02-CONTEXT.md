@@ -25,7 +25,7 @@ Nicht in dieser Phase: Release, GHCR, upgrade.sh/restore.sh (Phase 3), alles aus
 - **D-05:** FIX-06: Die Meisterschaftsregel (ease ≥ 2.1, wie in REQUIREMENTS.md) wird genau einmal im Domänenmodul definiert und von Eltern-Übersicht und Ampel benutzt. Die Recherche prüft, welche weiteren Bedingungen die heutigen Stellen haben (z. B. nur gesehene Karten), damit neue Karten mit Start-Ease nicht als gemeistert zählen; die bestehende Semantik bleibt, nur die doppelte Definition verschwindet.
 
 ### Familie und Daten (FIX-02, PAR-03, PAR-04)
-- **D-06:** Datenintegrität in der Datenbank (AGENTS.md): Fremdschlüssel mit `ON DELETE CASCADE` statt handgeschriebener Löschlisten. Der Phase-1-Review hat gezeigt, dass `ReviewState` keinen Fremdschlüssel auf Card/Learner hat (`LearningConfigurations.cs`). Migration per `dotnet ef migrations add`, nie von Hand ändern. Vor dem Anlegen der FKs müssen vorhandene Waisen in Altinstallationen bereinigt werden (in der Migration), sonst scheitert sie.
+- **D-06:** Datenintegrität in der Datenbank (AGENTS.md): Fremdschlüssel mit `ON DELETE CASCADE` statt handgeschriebener Löschlisten. Der Phase-1-Review hat gezeigt, dass `ReviewState` keinen Fremdschlüssel auf Card/Learner hat (`LearningConfigurations.cs`). Migration per `dotnet ef migrations add`, nie von Hand ändern. Vor dem Anlegen der FKs müssen vorhandene Waisen in Altinstallationen bereinigt werden, sonst scheitert sie — wo, regelt D-18 (beim Start vor `MigrateAsync`, nicht in der Migration).
 - **D-07:** PAR-03: Kind löschen löscht hart, inklusive aller Lerndaten (Review-States, Sitzungen, XP/Serie, Refresh-Tokens). Bestätigungsdialog Pflicht. Dialog mit dem bereits installierten `@radix-ui/react-dialog` als neuer Baustein in `components/ui/` nach DESIGN.md (Glas-Sheet), keine neue Dependency.
 - **D-08:** PAR-04: Set umbenennen und Eintrag korrigieren ändern den Datensatz an Ort und Stelle (gleiche IDs), damit der Lernstand am Wort bleibt. Kein Löschen-und-neu-Anlegen.
 - **D-09:** Neue Formulare (Set umbenennen, Eintrag bearbeiten, Kind-löschen-Dialog) folgen der Edge-Case-Matrix (ein Feld falsch, rotieren; exakte Fehlertexte; Enter-Submit eigener Pfad; Happy Path zuletzt) plus axe 0 Verstöße, Tastatur-Durchgang und 200 % Zoom (Muster: `frontend/e2e/keyboard-zoom.spec.ts`, falls aus der Phase-1-Nachbesserung vorhanden).
@@ -43,11 +43,11 @@ Nicht in dieser Phase: Release, GHCR, upgrade.sh/restore.sh (Phase 3), alles aus
 ### Nach der Recherche (2026-10-17, Orchestrator-Entscheidungen im autonomen Lauf; Dennis kann vor der Ausführung widersprechen)
 - **D-16:** FIX-06: Eltern-Übersicht und Ampel zählen dieselbe Einheit, nämlich **Wörter** (Erfolgskriterium 3: „count the same words as mastered“). Die Kartenregel (ease ≥ 2.1 plus die bestehenden Zusatzbedingungen) steht einmal im Domänenmodul; die Wort-Aggregation ebenfalls einmal. Das präzisiert D-05: „bestehende Semantik bleibt“ gilt für die Kartenregel, nicht für die Zähleinheit der Übersicht.
 - **D-17:** Bestätigungsdialog für alle drei Löschungen (Kind, Set, Eintrag) mit demselben Dialog-Baustein. Set löschen bekommt eine Oberfläche (heute fehlt sie), weil Erfolgskriterium 4 das Löschen eines Sets durch Eltern verlangt.
-- **D-18:** Die Bereinigung verwaister Zeilen vor den neuen Fremdschlüsseln steht als `migrationBuilder.Sql(...)` am Anfang von `Up()` der per `dotnet ef migrations add` erzeugten Migration. Das ist die einzige Hand-Ergänzung; generierte Operationen und Snapshot/Designer bleiben unverändert. Annahme A1 aus der Recherche — offen zur Bestätigung durch Dennis; Alternative wäre eine Bereinigung beim Start.
+- **D-18:** Entscheidung Dennis (2026-10-17): Die Migrationsdatei bleibt unberührt (AGENTS.md „Migrationen nie von Hand ändern“). Verwaiste Zeilen räumt die API beim Start **vor** `MigrateAsync` per SQL auf (idempotent, nur wenn die Tabellen existieren; nach den FKs gibt es keine Waisen mehr, der Schritt ist dann ein No-op). Gilt auch für den CLI-Pfad, falls der vor der Migration läuft. Mit Test gegen eine Datenbank mit Waisen.
 - **D-19:** QUAL-01-Beleg ist ein lokaler Lauf mit denselben Befehlen wie `.github/workflows/ci.yml` (kein Push in diesem Lauf, CI läuft nur auf `master`).
 
 ### Claude's Discretion
-- Schnitt und Reihenfolge der Pläne, exakte Fehlertexte im Stil des Bestands (ganze deutsche Sätze), Form der Migration für Altdaten-Waisen.
+- Schnitt und Reihenfolge der Pläne, exakte Fehlertexte im Stil des Bestands (ganze deutsche Sätze), Form der Startbereinigung für Altdaten-Waisen (D-18).
 
 </decisions>
 
