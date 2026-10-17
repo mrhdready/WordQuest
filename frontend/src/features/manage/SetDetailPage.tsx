@@ -740,10 +740,11 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
             {preview.rows.map((row) => (
               <div key={row.lineNumber} className="flex items-center gap-2 px-4 py-2 type-body-md">
                 <span className="w-8 shrink-0 text-ink-soft">{row.lineNumber}</span>
+                {/* min-w-0 und break-words: ein langes Wort bricht um, statt die Liste waagerecht scrollen zu lassen (WCAG 1.4.10). */}
                 {row.problem ? (
-                  <span className="text-danger-text">{row.problem}</span>
+                  <span className="min-w-0 flex-1 break-words text-danger-text">{row.problem}</span>
                 ) : (
-                  <span>
+                  <span className="min-w-0 flex-1 break-words">
                     {row.source} → {row.target} {row.emoji ?? ''}
                   </span>
                 )}

@@ -208,6 +208,22 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await expect(page.getByText(`house${stamp}`)).toBeVisible()
 })
 
+// WCAG 1.4.10: die Vorschau-Liste scrollt bei 320 px nur senkrecht. Gueltige Zeile
+// und Problemzeile (201 Zeichen) je mit einem Wort ohne Trennstelle.
+test('CSV-Vorschau bei 320 px mit langem Wort ohne Trennstelle', async ({ page }) => {
+  await openFirstSet(page)
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()
+  const tooLong = 'x'.repeat(201)
+  await page.locator('textarea').fill(`${longWord};${longWord}\n${tooLong};dog`)
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  const region = page.getByRole('region', { name: 'Vorschau' })
+  await expect(region.getByText('Ein Wort darf höchstens 200 Zeichen lang sein.')).toBeVisible()
+  expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth), 'Vorschau scrollt waagerecht').toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  await checkPage(page)
+})
+
 // Eigene Sets beginnen mit "Zz E2E": sie stehen am Ende der sortierten Liste,
 // openFirstSet und die anderen Specs oeffnen weiter ein Demo-Set.
 async function createAndOpenSet(page: Page, title: string) {
