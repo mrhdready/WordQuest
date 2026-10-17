@@ -227,6 +227,23 @@ public sealed class SetDeleteTests : IClassFixture<ApiFactory>
         Assert.True(await db.VocabularyEntries.AnyAsync(e => e.Id == foreignEntry));
     }
 
+    // T-02-17: Die Set-ID im Pfad muss zur Vokabel passen, auch wenn beide Sets der eigenen Familie gehoeren.
+    [Fact]
+    public async Task Vokabel_aus_anderem_eigenen_Set_ergibt_404_und_bleibt()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet first = await SeedSetAsync(_factory, family, entries: 1);
+        SeededSet second = await SeedSetAsync(_factory, family, entries: 1);
+        Guid entryOfSecond = second.Entries[0].Id;
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.DeleteAsync($"/api/v1/sets/{first.Set.Id}/entries/{entryOfSecond}");
+
+        Assert.Equal(EntryGone, await DetailAsync(response, HttpStatusCode.NotFound));
+        await using var db = _factory.CreateSystemDbContext();
+        Assert.True(await db.VocabularyEntries.AnyAsync(e => e.Id == entryOfSecond && e.SetId == second.Set.Id));
+    }
+
     [Fact]
     public async Task Vokabel_loeschen_mit_Kinder_Token_ergibt_403()
     {
