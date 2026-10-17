@@ -18,6 +18,7 @@ public static class SessionEndpoints
     private const string SizeInvalid = "Eine Runde hat 1 bis 50 Karten.";
     private const string AnswersMissing = "Es fehlen die Antworten.";
     private const string AlreadyAnswered = "Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.";
+    private const string SessionCompleted = "Diese Runde ist schon beendet. Starte eine neue Runde.";
     private const int MaxSessionSize = 50;
 
     public static void MapSessionEndpoints(this IEndpointRouteBuilder app)
@@ -101,6 +102,10 @@ public static class SessionEndpoints
         catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict))
         {
             return Conflict();
+        }
+        catch (SessionCompletedException)
+        {
+            return Results.Problem(title: "Runde beendet", detail: SessionCompleted, statusCode: StatusCodes.Status409Conflict);
         }
     }
 
@@ -189,6 +194,10 @@ public static class SessionEndpoints
         catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict))
         {
             return Conflict();
+        }
+        catch (SessionCompletedException)
+        {
+            return Results.Problem(title: "Runde beendet", detail: SessionCompleted, statusCode: StatusCodes.Status409Conflict);
         }
     }
 

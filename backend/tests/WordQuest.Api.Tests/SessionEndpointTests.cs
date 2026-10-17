@@ -32,6 +32,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
     private const string ChildGone = "Dieses Kind gibt es nicht (mehr).";
     private const string SizeInvalid = "Eine Runde hat 1 bis 50 Karten.";
     private const string AlreadyAnswered = "Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.";
+    private const string SessionCompleted = "Diese Runde ist schon beendet. Starte eine neue Runde.";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -586,5 +587,41 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         Assert.All(stored.Items, i => Assert.Null(i.AnsweredAt));
         Assert.Equal(0, await ReviewLogCountAsync(family.Child.Id, item.CardId));
         Assert.Null(stored.CompletedAt);
+    }
+
+    // IN-01: Nach dem Abschluss (auch "Schliessen" mit offenen Aufgaben, D-03) wird
+    // keine neue Antwort mehr gewertet. Eine Wiederholung bleibt 200 ohne XP (Konzept §13).
+    [Fact]
+    public async Task Antwort_auf_abgeschlossene_Runde_ergibt_409_ohne_Wertung()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView first = session.Items[0];
+        SessionItemView open = session.Items[1];
+        Guid firstAnswerId = Guid.NewGuid();
+        await ReadAnswerAsync(await AnswerAsync(child, session.SessionId, first.ItemId, set.AnswerFor(first.Prompt), firstAnswerId));
+        Assert.Equal(HttpStatusCode.OK, (await child.PostAsync($"{Sessions}/{session.SessionId}/complete", null)).StatusCode);
+        (LearningSession before, GamificationProfile profileBefore) = await CountersAsync(session.SessionId, family.Child.Id);
+
+        HttpResponseMessage late = await AnswerAsync(child, session.SessionId, open.ItemId, set.AnswerFor(open.Prompt));
+        HttpResponseMessage lateSync = await child.PostAsJsonAsync($"{Sessions}/sync", new
+        {
+            sessionId = session.SessionId,
+            answers = new[] { new { itemId = open.ItemId, givenAnswer = set.AnswerFor(open.Prompt), answerMs = 2000, clientAnswerId = Guid.NewGuid(), hintUsed = false } },
+        });
+        AnswerResult replay = await ReadAnswerAsync(
+            await AnswerAsync(child, session.SessionId, first.ItemId, set.AnswerFor(first.Prompt), firstAnswerId));
+
+        Assert.Equal(SessionCompleted, await DetailAsync(late, HttpStatusCode.Conflict));
+        Assert.Equal(SessionCompleted, await DetailAsync(lateSync, HttpStatusCode.Conflict));
+        Assert.Equal(0, replay.XpAwarded);
+        (LearningSession after, GamificationProfile profileAfter) = await CountersAsync(session.SessionId, family.Child.Id);
+        Assert.Null(after.Items.Single(i => i.Id == open.ItemId).AnsweredAt);
+        Assert.Equal(0, await ReviewLogCountAsync(family.Child.Id, open.CardId));
+        Assert.Equal(before.XpAwarded, after.XpAwarded);
+        Assert.Equal(profileBefore.Xp, profileAfter.Xp);
+        Assert.Equal(profileBefore.Coins, profileAfter.Coins);
     }
 }

@@ -138,7 +138,8 @@ public sealed class LearningService(
 
     /// <summary>
     /// Wertet eine Antwort; <c>null</c>, wenn Runde, Aufgabe oder Karte nicht
-    /// (mehr) existieren. Eine gleichzeitige zweite Antwort auf dieselbe
+    /// (mehr) existieren; <see cref="SessionCompletedException"/>, wenn die Runde
+    /// schon abgeschlossen ist. Eine gleichzeitige zweite Antwort auf dieselbe
     /// Aufgabe endet in einer <see cref="DbUpdateException"/> (Concurrency-Token
     /// AnsweredAt bzw. Unique-Index), ohne dass etwas gespeichert wird.
     /// </summary>
@@ -190,6 +191,15 @@ public sealed class LearningService(
                 XpAwarded: 0,
                 CoinsAwarded: 0,
                 RetryItem: null);
+        }
+
+        // Nach dem Abschluss (auch "Schliessen" mit offenen Aufgaben, D-03) wird
+        // nichts mehr gewertet; eine Wiederholung oben bleibt erlaubt (IN-01).
+        // ponytail: Pruefung beim Lesen, nicht atomar mit dem Abschluss; ein
+        // gleichzeitiger Abschluss kann eine letzte Antwort noch durchlassen.
+        if (session.CompletedAt is not null)
+        {
+            throw new SessionCompletedException();
         }
 
         AnswerEvaluation evaluation = evaluator.Evaluate(givenAnswer, expected, answerMs, hintUsed);

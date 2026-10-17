@@ -597,7 +597,7 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 
 `/sessions/sync` existiert serverseitig, wird vom Frontend aber nicht aufgerufen (Offline-Lernen ist v2, `LRN2-02`).
 
-Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; eine unbekannte oder fremde `setId` beim Start ergibt 404 („Dieses Set gibt es nicht (mehr).“); `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409; eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP).
+Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; eine unbekannte oder fremde `setId` beim Start ergibt 404 („Dieses Set gibt es nicht (mehr).“); `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409; eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP); eine neue Antwort auf eine schon abgeschlossene Runde ergibt 409 („Diese Runde ist schon beendet. Starte eine neue Runde.“), auch per `/sessions/sync`.
 
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 
