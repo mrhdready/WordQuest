@@ -245,8 +245,10 @@ public static class LearnerEndpoints
                 c.EntryId,
                 c.Entry!.SourceText,
                 c.Entry.TargetText,
+                // Nie beantwortete Lernstaende (Altbestand aus dem frueheren
+                // Rundenstart) gelten als neu, wie beim Tagesbudget (FIX-09).
                 State = db.ReviewStates
-                    .Where(r => r.LearnerId == learnerId && r.CardId == c.Id)
+                    .Where(r => r.LearnerId == learnerId && r.CardId == c.Id && r.LastReviewedAt != null)
                     .Select(r => new { r.Repetitions, r.EaseFactor, r.Lapses })
                     .FirstOrDefault(),
             })

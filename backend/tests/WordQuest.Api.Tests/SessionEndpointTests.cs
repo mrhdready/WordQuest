@@ -180,6 +180,37 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Abgebrochene_Runde_ueber_mehrere_Sets_bietet_dieselben_Karten_wieder_an()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        await SeedSetAsync(_factory, family);
+        await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView first = await StartAsync(child, family.Child.Id);
+        SessionView second = await StartAsync(child, family.Child.Id);
+
+        Assert.Equal(
+            first.Items.Select(i => i.CardId).Order(),
+            second.Items.Select(i => i.CardId).Order());
+    }
+
+    [Fact]
+    public async Task Altbestand_ohne_Antwort_steht_in_der_Ampel_als_neu()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        DateTimeOffset today = StartOfToday();
+        await SeedStateAsync(family.Child, set.Cards[0].Id, ReviewCardState.New, today, today);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        JsonElement light = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/learners/{family.Child.Id}/traffic-light?setId={set.Set.Id}");
+
+        Assert.Equal("new", light[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
     public async Task Altbestand_von_heute_verbraucht_kein_Tageslimit()
     {
         SeededFamily family = await SeedFamilyAsync(_factory);
@@ -440,6 +471,34 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal(result.XpAwarded, stored.XpAwarded);
         Assert.Equal(result.XpAwarded, profile.Xp);
         Assert.Equal(result.CoinsAwarded, profile.Coins);
+    }
+
+    [Fact]
+    public async Task Gleichzeitige_Antworten_auf_eine_Wiederholung_ergeben_200_und_409()
+    {
+        // Karte mit vorhandenem Lernstand: Einzige Kollision ist das UPDATE der
+        // Aufgabe, also der Pfad ueber das Concurrency-Token AnsweredAt.
+        SeededFamily family = await SeedFamilyAsync(_factory, dailyNewLimit: 3);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        Guid cardId = set.Cards[0].Id;
+        DateTimeOffset past = DateTimeOffset.UtcNow.AddDays(-2);
+        await SeedStateAsync(family.Child, cardId, ReviewCardState.Review, past, past);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = Assert.Single(session.Items, i => i.CardId == cardId);
+        string answer = set.AnswerFor(item.Prompt);
+
+        var held = await LockRowsAsync(("session_item", item.ItemId));
+        Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, item.ItemId, answer);
+        Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, item.ItemId, answer);
+        await WaitForTwoBlockedAsync();
+        await ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+        HttpResponseMessage conflict = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Conflict);
+        Assert.Equal(AlreadyAnswered, await DetailAsync(conflict, HttpStatusCode.Conflict));
+        Assert.Equal(1, await ReviewLogCountAsync(family.Child.Id, cardId));
     }
 
     [Fact]

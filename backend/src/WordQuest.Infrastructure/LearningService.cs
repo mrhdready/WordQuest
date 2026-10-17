@@ -96,6 +96,11 @@ public sealed class LearningService(
                 // in ein neues Wort.
                 .OrderBy(c => c.Direction == CardDirection.TargetToSource ? 0 : 1)
                 .ThenBy(c => c.Entry!.Position)
+                // Eindeutiger Gleichstandsbrecher: Ohne Set teilen sich Karten
+                // verschiedener Sets dieselbe Position, und PostgreSQL garantiert
+                // dann keine feste Reihenfolge. Die naechste Runde soll dieselben
+                // neuen Karten anbieten (FIX-03).
+                .ThenBy(c => c.Id)
                 .Take(newBudget)
                 .Select(c => new SessionCandidate(c.Id, ReviewCardState.New, now))
                 .ToListAsync(ct);
