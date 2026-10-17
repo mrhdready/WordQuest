@@ -217,7 +217,7 @@ public static class SessionEndpoints
         {
             denied = Results.Problem(
                 title: "Nicht erlaubt",
-                detail: "Dieses Profil gehoert jemand anderem.",
+                detail: "Dieses Profil gehört jemand anderem.",
                 statusCode: StatusCodes.Status403Forbidden);
             return false;
         }
