@@ -7,7 +7,6 @@ using WordQuest.Modules.Gamification.Entities;
 using WordQuest.Modules.Gamification.Services;
 using WordQuest.Modules.Identity.Entities;
 using WordQuest.Modules.Identity.Services;
-using WordQuest.Modules.Learning.Entities;
 using WordQuest.Modules.Learning.Services;
 
 namespace WordQuest.Api.Endpoints;
@@ -191,6 +190,7 @@ public static class LearnerEndpoints
     private static async Task<IResult> OverviewAsync(
         Guid learnerId,
         WordQuestDbContext db,
+        LearningService learning,
         Sm2Scheduler scheduler,
         TimeProvider clock,
         HttpContext http,
@@ -219,23 +219,9 @@ public static class LearnerEndpoints
             ?? new GamificationProfile { Id = learnerId };
 
         DateTimeOffset now = clock.GetUtcNow();
-        DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
-
-        // Dieselben Mengen und dieselbe Budgetregel wie LearningService.StartSessionAsync:
-        // faellig sind nur Wiederholung und Neulernen, eingefuehrt ist eine
-        // neue Karte erst mit ihrer ersten Antwort (FIX-09).
-        int dueToday = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId
-                 && (r.State == ReviewCardState.Review || r.State == ReviewCardState.Relearning)
-                 && r.DueAt <= now, ct);
-
-        int introducedToday = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId
-                 && r.LastReviewedAt != null
-                 && r.FirstSeenAt >= dayStart, ct);
 
         // Woerter, nicht Karten, mit derselben Regel wie die Ampel (FIX-06, D-16).
-        List<WordStates> words = await WordStatesAsync(db, learnerId, setId: null, ct);
+        List<WordProgress> words = await learning.WordProgressAsync(learnerId, setId: null, ct);
 
         return Results.Ok(new LearnerOverviewDto(
             LearnerId: learnerId,
@@ -246,10 +232,10 @@ public static class LearnerEndpoints
             XpToNextLevel: LevelCurve.XpToNextLevel(gamification.Xp),
             Coins: gamification.Coins,
             Streak: StreakRules.CurrentStreak(gamification, scheduler.LocalDate(now)),
-            DueToday: dueToday,
-            NewRemainingToday: Math.Max(0, profile.DailyNewLimit - introducedToday),
+            DueToday: await learning.DueCountAsync(learnerId, now, ct),
+            NewRemainingToday: await learning.NewBudgetAsync(profile, now, ct),
             // Die Feldnamen bleiben (U7), gezaehlt werden Woerter.
-            CardsMastered: words.Count(w => MasteryRules.IsWordMastered(w.States)),
+            CardsMastered: words.Count(w => w.Mastered),
             CardsTotal: words.Count));
     }
 
@@ -262,6 +248,7 @@ public static class LearnerEndpoints
         Guid learnerId,
         Guid? setId,
         WordQuestDbContext db,
+        LearningService learning,
         CancellationToken ct)
     {
         // Ohne Kind waere jedes Wort "neu", als waere der Lernstand zurueckgesetzt (WR-05).
@@ -273,53 +260,14 @@ public static class LearnerEndpoints
                 statusCode: StatusCodes.Status404NotFound);
         }
 
-        List<TrafficLightDto> result = (await WordStatesAsync(db, learnerId, setId, ct))
-            .Select(w =>
-            {
-                bool anySeen = w.States.Any(state => state is not null);
-                int lapses = w.States.Max(state => state?.Lapses ?? 0);
-                double worstEase = w.States.Min(state => state?.EaseFactor ?? 2.5);
-
-                string status =
-                    !anySeen ? "new"
-                    : lapses >= 3 || worstEase < 1.8 ? "red"
-                    : MasteryRules.IsWordMastered(w.States) ? "green"
-                    : "yellow";
-
-                return new TrafficLightDto(w.EntryId, w.SourceText, w.TargetText, status, lapses, worstEase);
-            })
-            .OrderBy(r => r.Status switch { "red" => 0, "yellow" => 1, "new" => 2, _ => 3 })
-            .ThenBy(r => r.SourceText)
+        // Sorgenkinder zuerst: Die Ampelstufen stehen in Anzeigereihenfolge.
+        List<TrafficLightDto> result = (await learning.WordProgressAsync(learnerId, setId, ct))
+            .OrderBy(w => w.Light)
+            .ThenBy(w => w.SourceText)
+            .Select(w => new TrafficLightDto(
+                w.EntryId, w.SourceText, w.TargetText, w.Light.ToString().ToLowerInvariant(), w.Lapses, w.WorstEase))
             .ToList();
 
         return Results.Ok(result);
     }
-
-    /// <summary>
-    /// Je Wort die Lernstaende seiner Karten (beide Richtungen), ohne Lernstand
-    /// <c>null</c>. Nie beantwortete Lernstaende (Altbestand aus dem frueheren
-    /// Rundenstart) gelten als neu, wie beim Tagesbudget (FIX-09).
-    /// </summary>
-    private static async Task<List<WordStates>> WordStatesAsync(
-        WordQuestDbContext db, Guid learnerId, Guid? setId, CancellationToken ct)
-    {
-        var cards = await db.Cards
-            .Where(c => setId == null || c.Entry!.SetId == setId)
-            .Select(c => new { c.Id, c.EntryId, c.Entry!.SourceText, c.Entry.TargetText })
-            .ToListAsync(ct);
-
-        Dictionary<Guid, ReviewState> states = await db.ReviewStates
-            .AsNoTracking()
-            .Where(r => r.LearnerId == learnerId && r.LastReviewedAt != null)
-            .ToDictionaryAsync(r => r.CardId, ct);
-
-        return cards
-            .GroupBy(c => new { c.EntryId, c.SourceText, c.TargetText })
-            .Select(g => new WordStates(
-                g.Key.EntryId, g.Key.SourceText, g.Key.TargetText,
-                g.Select(c => states.GetValueOrDefault(c.Id)).ToList()))
-            .ToList();
-    }
-
-    private sealed record WordStates(Guid EntryId, string SourceText, string TargetText, IReadOnlyList<ReviewState?> States);
 }

@@ -63,4 +63,32 @@ public sealed class MasteryRulesTests
     {
         Assert.False(MasteryRules.IsWordMastered([]));
     }
+
+    // Ampel (WR-04): dieselben Schwellen wie bisher im Endpoint, jetzt an einer Stelle.
+    [Fact]
+    public void AWordWithoutAnyReviewStateIsNew()
+    {
+        Assert.Equal(TrafficLight.New, MasteryRules.Light([null, null]));
+    }
+
+    [Theory]
+    [InlineData(3, 2.5)]
+    [InlineData(0, 1.79)]
+    public void ManyLapsesOrALowEaseInOneDirectionIsRed(int lapses, double easeFactor)
+    {
+        Assert.Equal(TrafficLight.Red, MasteryRules.Light([State(), State(easeFactor: easeFactor, lapses: lapses)]));
+    }
+
+    [Fact]
+    public void AnUnseenDirectionDoesNotMakeAWordRed()
+    {
+        Assert.Equal(TrafficLight.Yellow, MasteryRules.Light([State(repetitions: 1, easeFactor: 1.8, lapses: 2), null]));
+    }
+
+    [Fact]
+    public void AWordIsGreenOnlyWhenBothDirectionsAreMastered()
+    {
+        Assert.Equal(TrafficLight.Green, MasteryRules.Light([State(), State()]));
+        Assert.Equal(TrafficLight.Yellow, MasteryRules.Light([State(), null]));
+    }
 }

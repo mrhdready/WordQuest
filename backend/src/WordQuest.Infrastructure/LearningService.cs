@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using WordQuest.Modules.Content.Entities;
@@ -49,9 +50,8 @@ public sealed class LearningService(
 
         // 1. Fehler aus vorherigen Sessions, die noch in Relearning stehen.
         List<SessionCandidate> relearning = await db.ReviewStates
-            .Where(r => r.LearnerId == learnerId
-                        && r.State == ReviewCardState.Relearning
-                        && r.DueAt <= now)
+            .Where(IsDue(learnerId, now))
+            .Where(r => r.State == ReviewCardState.Relearning)
             .OrderBy(r => r.DueAt)
             .Select(r => new SessionCandidate(r.CardId, r.State, r.DueAt))
             .Take(50)
@@ -59,25 +59,15 @@ public sealed class LearningService(
 
         // 2. Faellige Wiederholungen.
         List<SessionCandidate> due = await db.ReviewStates
-            .Where(r => r.LearnerId == learnerId
-                        && r.State == ReviewCardState.Review
-                        && r.DueAt <= now)
+            .Where(IsDue(learnerId, now))
+            .Where(r => r.State == ReviewCardState.Review)
             .OrderBy(r => r.DueAt)
             .Select(r => new SessionCandidate(r.CardId, r.State, r.DueAt))
             .Take(scheduler.Options.MaxDuePerSession * 2)
             .ToListAsync(ct);
 
-        // 3. Neue Karten, begrenzt durch das Tagesbudget. Eingefuehrt ist eine
-        // Karte erst mit ihrer ersten Antwort (FIX-09, Konzept §6.3): Ansehen
-        // ohne Antwort kostet nichts. Dieselbe Regel zaehlt die Uebersicht
-        // (LearnerEndpoints.OverviewAsync).
-        DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
-        int introducedToday = await db.ReviewStates
-            .CountAsync(r => r.LearnerId == learnerId
-                             && r.LastReviewedAt != null
-                             && r.FirstSeenAt >= dayStart, ct);
-
-        int newBudget = Math.Max(0, profile.DailyNewLimit - introducedToday);
+        // 3. Neue Karten, begrenzt durch das Tagesbudget.
+        int newBudget = await NewBudgetAsync(profile, now, ct);
 
         List<SessionCandidate> fresh = [];
         if (newBudget > 0)
@@ -360,7 +350,69 @@ public sealed class LearningService(
             LeveledUp: level > levelBefore);
     }
 
+    /// <summary>Heute faellige Karten: dieselbe Menge, aus der der Rundenstart waehlt.</summary>
+    public Task<int> DueCountAsync(Guid learnerId, DateTimeOffset now, CancellationToken ct = default) =>
+        db.ReviewStates.CountAsync(IsDue(learnerId, now), ct);
+
+    /// <summary>
+    /// Wie viele neue Karten heute noch drankommen. Eingefuehrt ist eine Karte
+    /// erst mit ihrer ersten Antwort (FIX-09, Konzept §6.3): Ansehen ohne
+    /// Antwort kostet nichts. Rundenstart und Uebersicht nutzen diese eine Regel.
+    /// </summary>
+    public async Task<int> NewBudgetAsync(LearnerProfile profile, DateTimeOffset now, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
+        int introducedToday = await db.ReviewStates
+            .CountAsync(r => r.LearnerId == profile.Id
+                             && r.LastReviewedAt != null
+                             && r.FirstSeenAt >= dayStart, ct);
+
+        return Math.Max(0, profile.DailyNewLimit - introducedToday);
+    }
+
+    /// <summary>
+    /// Lernstand je Wort ueber beide Richtungen, fuer Uebersicht und Ampel
+    /// (FIX-06, D-16). Nie beantwortete Lernstaende (Altbestand aus dem
+    /// frueheren Rundenstart) gelten als neu, wie beim Tagesbudget (FIX-09).
+    /// </summary>
+    public async Task<List<WordProgress>> WordProgressAsync(
+        Guid learnerId, Guid? setId, CancellationToken ct = default)
+    {
+        var cards = await db.Cards
+            .Where(c => setId == null || c.Entry!.SetId == setId)
+            .Select(c => new { c.Id, c.EntryId, c.Entry!.SourceText, c.Entry.TargetText })
+            .ToListAsync(ct);
+
+        Dictionary<Guid, ReviewState> states = await db.ReviewStates
+            .AsNoTracking()
+            .Where(r => r.LearnerId == learnerId && r.LastReviewedAt != null)
+            .ToDictionaryAsync(r => r.CardId, ct);
+
+        double initialEase = scheduler.Options.InitialEaseFactor;
+        return cards
+            .GroupBy(c => new { c.EntryId, c.SourceText, c.TargetText })
+            .Select(g =>
+            {
+                List<ReviewState?> directions = g.Select(c => states.GetValueOrDefault(c.Id)).ToList();
+                return new WordProgress(
+                    g.Key.EntryId, g.Key.SourceText, g.Key.TargetText,
+                    MasteryRules.Light(directions),
+                    MasteryRules.IsWordMastered(directions),
+                    directions.Max(r => r?.Lapses ?? 0),
+                    directions.Min(r => r?.EaseFactor ?? initialEase));
+            })
+            .ToList();
+    }
+
     // ------------------------------------------------------------------ Hilfen
+
+    // Faellig sind nur Wiederholung und Neulernen; neue Karten zaehlen ueber das Tagesbudget.
+    private static Expression<Func<ReviewState, bool>> IsDue(Guid learnerId, DateTimeOffset now) =>
+        r => r.LearnerId == learnerId
+             && (r.State == ReviewCardState.Review || r.State == ReviewCardState.Relearning)
+             && r.DueAt <= now;
 
     private IQueryable<Card> CardsInScope(Guid? setId)
     {

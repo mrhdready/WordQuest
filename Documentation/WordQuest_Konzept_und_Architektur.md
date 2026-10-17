@@ -448,7 +448,7 @@ Ampeleinstufung pro Vokabel (`VocabularyEntry`, aggregiert über beide Richtunge
 | 🔴 schwierig | `lapses ≥ 3` oder `ease < 1.8` (bei einer der beiden Karten) |
 | ⚪ neu | noch nie beantwortet |
 
-Die Regel steht einmal in `MasteryRules` (Learning-Modul, `FIX-06`); Ampel und Übersicht benutzen sie. Die Übersicht zählt sicher gelernte Wörter, also genau die Wörter mit grüner Ampel, und alle Wörter der Familie. Die Felder `cardsMastered`/`cardsTotal` behalten ihren Namen und zählen Wörter.
+Die Regel samt Ampelschwellen steht einmal in `MasteryRules` (Learning-Modul, `FIX-06`); die Wortzählung (`WordProgressAsync`) und die Zählung von fälligen Karten und Tagesbudget stehen einmal im `LearningService`, Rundenstart, Ampel und Übersicht benutzen sie. Die Übersicht zählt sicher gelernte Wörter, also genau die Wörter mit grüner Ampel, und alle Wörter der Familie. Die Felder `cardsMastered`/`cardsTotal` behalten ihren Namen und zählen Wörter.
 
 Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen, Streak, heute fällig, neue Karten übrig, sicher gelernte Wörter) und die Ampel je Set. **Geplant, nicht umgesetzt** (v2, `PAR2-03`): Wochenübersicht (Minuten pro Tag, Antworten, Trefferquote) · Top-10-Problemwörter mit Fehlversuchen.
 
@@ -504,7 +504,7 @@ backend/tests/
   WordQuest.Learning.Tests/    // ◄ höchste Testabdeckung, siehe unten
 ```
 
-**Verworfen / zurückgestellt:** Ein Modul `WordQuest.Modules.Reporting` gibt es nicht; die Auswertungen liegen in `LearnerEndpoints.cs`. `Result<T>`, In-Process-Domain-Events (z. B. `CardReviewed`) und Repositories gibt es ebenfalls nicht und sie sind nicht geplant.
+**Verworfen / zurückgestellt:** Ein Modul `WordQuest.Modules.Reporting` gibt es nicht; die Auswertungen rechnet der `LearningService`, `LearnerEndpoints.cs` ruft sie nur auf. `Result<T>`, In-Process-Domain-Events (z. B. `CardReviewed`) und Repositories gibt es ebenfalls nicht und sie sind nicht geplant.
 
 **Architekturhaltung: DDD-light.** Die Module sind grobe Bounded Contexts. Sie enthalten Entitäten und reine Domänendienste ohne EF- oder HTTP-Abhängigkeit (`Sm2Scheduler`, `SessionComposer`, `AnswerEvaluator`, `XpRules`, `StreakRules`, `LevelCurve`). Einzige Modulabhängigkeit: `Learning` → `Content`. Aggregates, Domain-Events und Repositories werden bewusst nicht eingeführt; volles DDD ist nicht geplant. Die Orchestrierung einer Session (Auswahl, Bewertung, Terminierung, Protokoll, Belohnung) liegt im `LearningService` in `WordQuest.Infrastructure`, der die Gamification-Regeln direkt aufruft. Endpunkte bleiben dünn; nicht triviale Logik gehört in Module oder Services.
 
