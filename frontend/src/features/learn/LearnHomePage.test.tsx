@@ -62,4 +62,19 @@ describe('Lern-Startseite', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(generic)
     expect(screen.queryByText('0 Karten fällig')).toBeNull()
   })
+
+  // FIX-04: ein noch angemeldetes Geraet eines geloeschten Kindes bekommt einen lesbaren Hinweis.
+  it('Gelöschtes Profil: 404 der Übersicht zeigt den Servertext', async () => {
+    const profileGone = 'Dieses Profil gibt es nicht mehr. Bitte melde dich ab.'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/learners/kind-1/overview')
+          ? Response.json({ title: 'Nicht gefunden', detail: profileGone }, { status: 404 })
+          : Response.json([{ id: 'set-1', title: 'Tiere', entryCount: 5 }]),
+      ),
+    )
+    render()
+    expect((await screen.findByRole('alert')).textContent).toBe(profileGone)
+  })
 })

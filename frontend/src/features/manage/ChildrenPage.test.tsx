@@ -91,4 +91,13 @@ describe('Kinderliste', () => {
       'Das Kind ist angelegt. Es kann sich jetzt mit seiner PIN anmelden.',
     )
   })
+
+  it('Erfolgsmeldung nach dem Löschen des letzten Kindes steht vor dem Leerzustand', async () => {
+    stubLearners([])
+    render({ message: 'Zz E2E Mia ist gelöscht.' })
+    const empty = await screen.findByText('Noch kein Kinderprofil')
+    const note = screen.getByRole('status')
+    expect(note.textContent).toBe('Zz E2E Mia ist gelöscht.')
+    expect(note.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 })

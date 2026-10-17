@@ -487,3 +487,156 @@ describe('Kind bearbeiten', () => {
     expect(f.name.value).toBe('Jürgen 🦊')
   })
 })
+
+// --- Kind loeschen (PAR-03) ------------------------------------------------
+
+const deleteTitle = 'Mia löschen?'
+const deleteDescription =
+  'Alle Lernfortschritte, XP und die Serie von Mia werden gelöscht. Das lässt sich nicht rückgängig machen.'
+const childGone = 'Dieses Kind gibt es nicht (mehr).'
+const noContent = async () => new Response(null, { status: 204 })
+
+// Zaehlt GET /learners und DELETE; ab dem zweiten GET liefert die Liste later (Kind in anderem Tab geloescht).
+function stubDelete(remove: () => Promise<Response> = noContent, later = children) {
+  const calls = { gets: 0, deletes: 0 }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') {
+        calls.deletes += 1
+        return remove()
+      }
+      calls.gets += 1
+      return Response.json(calls.gets === 1 ? children : later)
+    }),
+  )
+  return calls
+}
+
+async function openDelete() {
+  renderEdit()
+  const trigger = await screen.findByRole('button', { name: 'Kind löschen' })
+  await userEvent.click(trigger)
+  return { trigger, dialog: screen.getByRole('alertdialog', { name: deleteTitle }) }
+}
+
+describe('Kind löschen', () => {
+  it('Anlegen zeigt kein "Kind löschen"', () => {
+    renderWithProviders(<ChildFormPage mode="create" />, {
+      route: '/verwalten/kinder/neu',
+      path: '/verwalten/kinder/neu',
+    })
+    expect(screen.getByRole('button', { name: 'Kind anlegen' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Kind löschen' })).toBeNull()
+  })
+
+  it('Unbekannte ID zeigt kein "Kind löschen"', async () => {
+    stubDelete()
+    renderEdit('gibt-es-nicht')
+    expect(await screen.findByText(unknownChild)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Kind löschen' })).toBeNull()
+  })
+
+  it('Ladefehler zeigt kein "Kind löschen"', async () => {
+    stubEdit(patched, async () => new Response('', { status: 500 }))
+    renderEdit()
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('button', { name: 'Kind löschen' })).toBeNull()
+  })
+
+  it('"Kind löschen" liegt außerhalb des Formulars', async () => {
+    stubDelete()
+    renderEdit()
+    const trigger = await screen.findByRole('button', { name: 'Kind löschen' })
+    expect(trigger.closest('form')).toBeNull()
+    expect(trigger.getAttribute('type')).toBe('button')
+  })
+
+  it('Dialog: Titel und Beschreibung exakt, Fokus auf "Abbrechen"', async () => {
+    stubDelete()
+    const { dialog } = await openDelete()
+    expect(screen.getByRole('heading', { name: deleteTitle })).toBeTruthy()
+    const describedBy = dialog.getAttribute('aria-describedby')
+    expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(deleteDescription)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' }))
+  })
+
+  it('"Abbrechen": keine DELETE-Anfrage, Fokus zurück auf "Kind löschen"', async () => {
+    const calls = stubDelete()
+    const { trigger } = await openDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    await settle()
+    expect(calls.deletes).toBe(0)
+  })
+
+  it('Server 404: Fehler im Dialog bis zum Schließen, danach Leerzustand und Fokus auf "Alle Kinder"', async () => {
+    const calls = stubDelete(
+      async () => Response.json({ title: 'Nicht gefunden', detail: childGone }, { status: 404 }),
+      children.slice(1),
+    )
+    await openDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(childGone)
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    await settle()
+    expect(calls.gets).toBe(1)
+    expect(screen.getByRole('alert').textContent).toBe(childGone)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    expect(await screen.findByText(unknownChild)).toBeTruthy()
+    expect(calls.gets).toBe(2)
+    expect(calls.deletes).toBe(1)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Alle Kinder' })))
+  })
+
+  it('Server 500: Fehler im Dialog, "Abbrechen" gibt den Fokus an "Kind löschen"', async () => {
+    stubDelete(async () => new Response('', { status: 500 }))
+    const { trigger } = await openDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Das hat nicht geklappt. Versuche es noch einmal.')
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Endgültig löschen' }) as HTMLButtonElement).disabled).toBe(false)
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    expect(screen.getByLabelText('Name')).toBeTruthy()
+  })
+
+  it('Server nicht erreichbar: Hinweis im Dialog', async () => {
+    stubDelete(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await openDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+  })
+
+  it('Doppelklick auf "Endgültig löschen" sendet genau eine Anfrage', async () => {
+    let release: () => void = () => {}
+    const calls = stubDelete(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => void noContent().then(resolve)
+        }),
+    )
+    await openDelete()
+    const confirm = screen.getByRole('button', { name: 'Endgültig löschen' })
+    await userEvent.dblClick(confirm)
+    expect(confirm.textContent).toBe('Einen Moment …')
+    expect((confirm as HTMLButtonElement).disabled).toBe(true)
+    release()
+    await screen.findByText('/verwalten/kinder')
+    expect(calls.deletes).toBe(1)
+  })
+
+  it('Happy Path: Kinderliste mit "Mia ist gelöscht."', async () => {
+    const calls = stubDelete()
+    await openDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect(await screen.findByText('/verwalten/kinder')).toBeTruthy()
+    expect(screen.getByText('Mia ist gelöscht.')).toBeTruthy()
+    expect(calls.deletes).toBe(1)
+  })
+})
