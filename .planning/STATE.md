@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: verifying
-stopped_at: Completed 02-06-PLAN.md
-last_updated: "2026-10-17T20:27:23.067Z"
+stopped_at: Completed 02-07-PLAN.md
+last_updated: "2026-10-17T20:57:26.995Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 8d080d8b4eebd0a0ec84d6271b82071a4595585f
+state_head: ebdca52cca2e2dbefed8e58a923a4990b980b79e
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # Project State
@@ -70,6 +70,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P04 | 22min | 3 tasks | 16 files |
 | Phase 02 P05 | 28min | 3 tasks | 10 files |
 | Phase 02 P06 | 24min | 3 tasks | 14 files |
+| Phase 02 P07 | 27min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,9 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-05: PUT /sets/{id}/entries/{entryId} aendert nur Deutsch/Englisch (WordProblems ueber ContentRules); POST ohne Pflichtfelder bzw. mit zu langem Emoji/Beispiel bleibt per API 500 (gemeldet, nicht gebaut)
 - [Phase 02]: 02-06: nginx setzt X-Forwarded-For auf $remote_addr, API mit ForwardLimit 1 und Vertrauen nur fuer private Netze; realip nur im Traefik-Stack (real_ip_recursive off)
 - [Phase 02]: 02-06: /auth/refresh und /auth/logout ohne Rate-Limit; Frontend meldet nur bei Refresh 400/401 ab
+- [Phase 02]: 02-07: Angezeigte Serie wird beim Lesen berechnet (StreakRules.CurrentStreak), gespeichert nur beim Rundenabschluss
+- [Phase 02]: 02-07: MasteryRules im Learning-Modul ist die einzige Meisterschaftsregel; Uebersicht zaehlt Woerter (= gruene Ampel), Feldnamen bleiben
+- [Phase 02]: 02-07: ThrowOnBadRequest in jeder Umgebung; unlesbarer Body/Parameter ergibt 400 mit deutschem Text
 
 ### Pending Todos
 
@@ -143,6 +147,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T20:27:23.018Z
-Stopped at: Completed 02-06-PLAN.md
+Last session: 2026-10-17T20:57:26.950Z
+Stopped at: Completed 02-07-PLAN.md
 Resume file: None

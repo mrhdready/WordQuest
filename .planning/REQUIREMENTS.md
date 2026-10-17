@@ -27,11 +27,11 @@
 - [x] **FIX-01**: One family member mistyping cannot lock the others out of login (rate limit per real client IP; token refresh does not consume the login budget)
 - [x] **FIX-02**: Deleting a set or entry removes its learning data; no orphaned cards show up in sessions
 - [x] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
-- [ ] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
-- [ ] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
+- [x] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
+- [x] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
 - [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace, Enter), not only by tapping
 - [x] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
-- [ ] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
+- [x] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
 - [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart
 
 ### Design
@@ -40,7 +40,7 @@
 
 ### Quality
 
-- [ ] **QUAL-01**: API integration tests against real PostgreSQL cover login, refresh, isolation between siblings, and each FIX requirement
+- [x] **QUAL-01**: API integration tests against real PostgreSQL cover login, refresh, isolation between siblings, and each FIX requirement
 - [ ] **QUAL-02**: New/changed forms (password change, edit child) have frontend tests with the edge-case matrix and pass an axe check (WCAG 2.2 AA)
 
 ### Release
@@ -103,13 +103,13 @@
 | FIX-01 | Phase 2 | Complete |
 | FIX-02 | Phase 2 | Complete |
 | FIX-03 | Phase 2 | Complete |
-| FIX-04 | Phase 2 | Pending |
-| FIX-05 | Phase 2 | Pending |
-| FIX-06 | Phase 2 | Pending |
+| FIX-04 | Phase 2 | Complete |
+| FIX-05 | Phase 2 | Complete |
+| FIX-06 | Phase 2 | Complete |
 | FIX-08 | Phase 1 | Pending |
 | FIX-09 | Phase 2 | Complete |
 | FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
-| QUAL-01 | Phase 2 | Pending |
+| QUAL-01 | Phase 2 | Complete |
 | QUAL-02 | Phase 1 | Pending |
 | REL-01 | Phase 3 | Pending |
 | REL-02 | Phase 3 | Pending |
