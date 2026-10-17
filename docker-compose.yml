@@ -61,6 +61,12 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    volumes:
+      # Nur hier: nginx uebernimmt die Geraeteadresse aus dem Kopf, den Traefik
+      # setzt, damit das Anmelde-Limit pro Geraet zaehlt (FIX-01). Im
+      # Heimnetz-Stack (docker-compose.quick.yml) nie einbinden, dort koennten
+      # Geraete ihre Adresse selbst waehlen.
+      - ./frontend/nginx-traefik-realip.conf:/etc/nginx/conf.d/realip.conf:ro
     labels:
       - traefik.enable=true
       - traefik.http.routers.wq.rule=Host(`${WQ_HOST:-wordquest.local}`)
