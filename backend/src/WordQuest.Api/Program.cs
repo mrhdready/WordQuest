@@ -138,8 +138,9 @@ builder.Services.AddRateLimiter(options =>
         }));
 });
 
-// Fehlender oder kaputter JSON-Body (direkter API-Aufruf): in jeder Umgebung 400 mit
-// deutschem Text. Ohne das: 500 in Development, englisches "Bad Request" in Production.
+// Fehlender oder kaputter JSON-Body bzw. nicht bindbarer Parameter (direkter API-Aufruf):
+// in jeder Umgebung 400 mit deutschem Text. Ohne das: 500 in Development, englisches
+// "Bad Request" in Production.
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 builder.Services.Configure<ExceptionHandlerOptions>(options =>
 {
@@ -153,7 +154,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
     if (context.Exception is BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest })
     {
         context.ProblemDetails.Title = "Ungültige Anfrage";
-        context.ProblemDetails.Detail = "Die Anfrage enthält keine lesbaren Daten.";
+        context.ProblemDetails.Detail = "Die Anfrage ist unvollständig oder nicht lesbar.";
     }
 });
 builder.Services.AddHealthChecks()

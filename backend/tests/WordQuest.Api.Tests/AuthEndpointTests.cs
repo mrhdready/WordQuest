@@ -18,7 +18,7 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 {
     private const string Auth = "/api/v1/auth";
     private const string Expired = "Sitzung abgelaufen. Bitte neu anmelden.";
-    private const string BadBody = "Die Anfrage enthält keine lesbaren Daten.";
+    private const string BadBody = "Die Anfrage ist unvollständig oder nicht lesbar.";
 
     private readonly ApiFactory _factory = new ApiFactory();
 
