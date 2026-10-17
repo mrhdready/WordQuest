@@ -179,7 +179,23 @@ test.describe('Elternbereich', () => {
     await page.getByRole('link', { name: new RegExp(name) }).click()
     await page.getByRole('button', { name: 'Kind löschen' }).click()
     await expect(cancel).toBeFocused()
+
+    // Mit Fehlertext (UI-SPEC overflow): Sheet bleibt im Bild, jeder Button per Tab ganz sichtbar.
+    await page.route('**/api/v1/learners/*', (route) =>
+      route.request().method() === 'DELETE' ? route.fulfill({ status: 500, body: '' }) : route.fallback(),
+    )
+    await confirm.click()
+    await expect(dialog.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+    const withError = await dialog.boundingBox()
+    expect(withError!.height).toBeLessThanOrEqual(zoomed.height - 16)
+    expect(withError!.y).toBeGreaterThanOrEqual(8)
+    await cancel.focus()
+    await expect(cancel).toBeInViewport({ ratio: 1 })
     await page.keyboard.press('Tab')
+    await expect(confirm).toBeFocused()
+    await expect(confirm).toBeInViewport({ ratio: 1 })
+    await page.unroute('**/api/v1/learners/*')
+
     await page.keyboard.press('Enter')
     await expect(page.getByRole('status').filter({ hasText: `${name} ist gelöscht.` })).toBeVisible()
   })

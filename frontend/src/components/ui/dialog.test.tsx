@@ -61,6 +61,7 @@ describe('ConfirmDialog', () => {
     const dialog = await openDialog()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' }))
     expect(screen.getByRole('alertdialog', { name: title })).toBe(dialog)
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(title)
     const describedBy = dialog.getAttribute('aria-describedby')
     expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(description)

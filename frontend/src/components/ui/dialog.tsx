@@ -32,6 +32,8 @@ export function Dialog({
         <DialogPrimitive.Overlay className="fixed inset-0 bg-scrim" />
         <DialogPrimitive.Content
           role={role}
+          // Radix setzt aria-modal nicht selbst (nur hideOthers); Screenreader brauchen es fuer den Modus.
+          aria-modal="true"
           className="glass-sheet fixed inset-x-sheet-inset bottom-sheet-inset mx-auto flex max-h-[calc(100dvh_-_2*var(--spacing-sheet-inset))] max-w-md flex-col gap-4 overflow-y-auto rounded-sheet p-6 text-ink"
           onOpenAutoFocus={(event) => {
             if (!initialFocusRef?.current) return
