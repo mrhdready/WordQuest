@@ -274,7 +274,7 @@ Gestaltung (nur Tokens):
 - `Overlay`: `fixed inset-0`, Fläche `components.sheet-scrim` (`colors.scrim`, neu in `DESIGN.md`), kein Blur.
 - `Content`: `components.sheet` — `glass-sheet` (bringt den deckenden Fallback bei `prefers-reduced-transparency` und ohne `backdrop-filter` mit), `rounded-sheet` (44 px), `p-6`. Unten verankert mit `spacing.sheet-inset` (Stufe 2) Abstand zu linkem, rechtem und unterem Rand, `max-w-md`, waagerecht zentriert, Höchsthöhe Viewport minus 2 × `sheet-inset`, darüber `overflow-y-auto`. `flex flex-col gap-4`.
 - `Title`: `h2`, `type-headline text-ink break-words`. `Description`: `type-body-md text-ink-soft`.
-- Button-Zeile: `flex flex-wrap gap-2`, Buttons `flex-1`, Größe `md`. DOM-Reihenfolge = Sichtreihenfolge: „Abbrechen“ zuerst, Aktion danach. Bei 320 px brechen die Buttons in zwei volle Zeilen um.
+- Button-Zeile: `flex flex-wrap gap-2`, Buttons `flex-auto`, Größe `md`. DOM-Reihenfolge = Sichtreihenfolge: „Abbrechen“ zuerst, Aktion danach. Bei 320 px brechen die Buttons in zwei volle Zeilen um. `flex-auto` statt `flex-1`: mit Basis 0 passen beide Buttons immer in eine Zeile, `flex-wrap` greift nie, und „Endgültig löschen“ bricht bei 320 px im Button um; mit Basis `auto` zählt die Textbreite, die Zeile bricht um, und jeder Button füllt danach seine Zeile (`dialog.tsx`, umgesetzt in Phase 2, UI-Review Pillar 2).
 - Keine Ein-/Ausblend-Animation (keine neue Bewegung, wie Phase 1).
 
 Verhalten:
