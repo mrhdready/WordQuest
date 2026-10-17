@@ -135,6 +135,9 @@ start_abort "Start abgebrochen: WQ_JWT_SIGNING_KEY" \
 start_abort "Start abgebrochen: ConnectionStrings__Default" \
   -e WQ_DB_PASSWORD="$random_db" -e WQ_JWT_SIGNING_KEY="$random_jwt" \
   -e ConnectionStrings__Default="Host=gibt-es-nicht;Username=wordquest;Password=$known_db"
+# Demo-Seed eingeschaltet (CR-01): bricht vor jedem Datenbankzugriff ab.
+start_abort "Start abgebrochen: WQ_SEED_DEMO_DATA" \
+  -e WQ_DB_PASSWORD="$random_db" -e WQ_JWT_SIGNING_KEY="$random_jwt" -e WQ_SEED_DEMO_DATA=True
 echo "STARTABBRUCH OK"
 
 echo "== Taegliche Sicherung (SETUP-01)"
@@ -156,5 +159,39 @@ WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
   npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
   || fail "Erstdurchlauf auf frischer Installation fehlgeschlagen."
 echo "FIRST RUN OK"
+
+echo "== Startabbruch mit Demo-Konto und bekanntem Passwort, Ausweg reset-password (CR-01)"
+# Altinstallation nachstellen: das Elternkonto bekommt Adresse und Passwort-Hash des
+# Demo-Kontos. Hash im Format von PasswordHasher (v1.<iter>.<salt>.<subkey>), per node.
+demo_hash="$(node -e "const c=require('crypto');const s=c.randomBytes(16);const k=c.pbkdf2Sync(process.argv[1],s,210000,32,'sha256');console.log('v1.210000.'+s.toString('base64')+'.'+k.toString('base64'))" "$demo_password")"
+docker compose exec -T db psql -U wordquest -d wordquest -qc \
+  "update app_user set email='$demo_email', password_hash='$demo_hash' where email='eltern@example.de'" </dev/null >/dev/null
+docker compose restart api </dev/null >/dev/null 2>&1 || true
+aborted=0
+for _ in $(seq 1 30); do
+  if docker compose logs api </dev/null 2>&1 | grep -qF "Start abgebrochen: Das Demo-Elternkonto $demo_email hat noch sein bekanntes Passwort."; then
+    aborted=1; break
+  fi
+  sleep 2
+done
+[[ "$aborted" == 1 ]] || fail "Start mit Demo-Konto und bekanntem Passwort bricht nicht mit Meldung ab."
+# Genau der Befehl aus der Meldung; exec ginge nicht, der api-Container laeuft nicht.
+recovery="$(docker compose logs api </dev/null 2>&1 | sed -n 's/.*Setze es zurück mit `\(docker compose run --rm api reset-password [^`]*\)`.*/\1/p' | tail -n 1)"
+[[ "$recovery" == "docker compose run --rm api reset-password $demo_email" ]] || fail "Meldung nennt den Ausweg nicht: '$recovery'."
+status=0
+docker compose run --rm -T api reset-password "$demo_email" </dev/null >demo-reset.log 2>/dev/null || status=$?
+[[ "$status" == 0 ]] || fail "reset-password aus der Abbruchmeldung: Exit $status statt 0."
+grep -qF "Neues Passwort für $demo_email:" demo-reset.log || fail "reset-password fuer das Demo-Konto: keine Erfolgszeile."
+# restart statt up -d: up wartete auf den naechsten Neustart der Abbruchschleife.
+docker compose restart api </dev/null >/dev/null 2>&1
+ready=0
+for _ in $(seq 1 60); do
+  if docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null 2>&1; then ready=1; break; fi
+  sleep 2
+done
+[[ "$ready" == 1 ]] || fail "API startet nach reset-password nicht."
+code="$(login "$demo_email" "$demo_password")"
+[[ "$code" == 401 ]] || fail "Demo-Login nach reset-password: HTTP $code statt 401."
+echo "DEMO-ABBRUCH OK"
 
 echo "SMOKE OK"

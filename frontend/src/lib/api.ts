@@ -163,7 +163,8 @@ async function readError(response: Response): Promise<ApiError> {
       const messages = Object.values(problem.errors).flat().join(' ')
       return new ApiError(messages, response.status, problem.errors)
     }
-    return new ApiError(problem.title ?? GENERIC, response.status)
+    // Ohne detail/errors bleibt nur der englische Standardtitel ("Not Found") — nicht anzeigen.
+    return new ApiError(GENERIC, response.status)
   } catch {
     return new ApiError(GENERIC, response.status)
   }

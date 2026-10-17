@@ -362,6 +362,15 @@ describe('Kind bearbeiten', () => {
     expect(screen.getByText('Für dieses Kind ist noch keine PIN gesetzt.')).toBeTruthy()
   })
 
+  // Ohne PIN kann sich das Kind nie anmelden: Speichern verlangt dann eine (WR-02).
+  it('Kind ohne PIN: Speichern ohne PIN verlangt die PIN', async () => {
+    const bodies = stubEdit()
+    renderEdit('kind-2')
+    const f = await editFields()
+    await userEvent.click(f.button)
+    await expectClientError(f.pin, pinMissing, bodies)
+  })
+
   it('Unbekannte ID: Hinweis und Link zur Liste, kein Formular', async () => {
     stubEdit()
     renderEdit('gibt-es-nicht')

@@ -21,9 +21,9 @@ interface Errors {
   pin?: string
 }
 
-// Name zaehlt wie auf dem Server nach dem Trimmen. Beim Bearbeiten ist eine
-// leere PIN gueltig (unveraendert), eine aus Leerzeichen nicht.
-function validate(name: string, limit: string, pin: string, editing: boolean): Errors {
+// Name zaehlt wie auf dem Server nach dem Trimmen. Beim Bearbeiten eines Kindes
+// mit PIN ist eine leere PIN gueltig (unveraendert), eine aus Leerzeichen nicht.
+function validate(name: string, limit: string, pin: string, pinOptional: boolean): Errors {
   const errors: Errors = {}
   if (!name.trim()) errors.name = 'Wie soll das Kind heißen? Ein Spitzname genügt.'
   else if (name.trim().length > MAX_NAME_LENGTH)
@@ -32,7 +32,7 @@ function validate(name: string, limit: string, pin: string, editing: boolean): E
   if (!limit.trim() || !Number.isInteger(count) || count < 3 || count > 15)
     errors.limit = 'Bitte gib eine Zahl von 3 bis 15 ein.'
   if (!pin) {
-    if (!editing) errors.pin = 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'
+    if (!pinOptional) errors.pin = 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'
   } else if (!PIN_PATTERN.test(pin)) errors.pin = 'Die PIN muss aus 4 bis 6 Ziffern bestehen.'
   return errors
 }
@@ -101,6 +101,8 @@ function ChildForm({ learner }: { learner?: Learner }) {
         body: { displayName: name, pin, dailyNewLimit: Number(limit) } satisfies CreateLearnerRequest,
       })
       void queryClient.invalidateQueries({ queryKey: ['learners'] })
+      // Profilwahl auf demselben Geraet soll das neue Kind sofort zeigen (IN-05).
+      void queryClient.invalidateQueries({ queryKey: ['profiles'] })
       navigate('/verwalten/kinder', {
         state: { message: 'Das Kind ist angelegt. Es kann sich jetzt mit seiner PIN anmelden.' },
       })
@@ -114,6 +116,7 @@ function ChildForm({ learner }: { learner?: Learner }) {
       pin ? 'Die Änderungen sind gespeichert. Die neue PIN gilt ab sofort.' : 'Die Änderungen sind gespeichert.',
     )
     void queryClient.invalidateQueries({ queryKey: ['learners'] })
+    void queryClient.invalidateQueries({ queryKey: ['profiles'] })
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -122,7 +125,8 @@ function ChildForm({ learner }: { learner?: Learner }) {
     if (busyRef.current) return
     setFailure(null)
     setSaved(null)
-    const found = validate(name, limit, pin, learner !== undefined)
+    // Ohne PIN kann sich das Kind nie anmelden: dann ist sie auch beim Bearbeiten Pflicht (WR-02).
+    const found = validate(name, limit, pin, learner?.hasPin === true)
     if (Object.keys(found).length > 0) {
       showErrors(found)
       return

@@ -69,6 +69,14 @@ describe('api() Fehlerform', () => {
     expect(error.message).toBe('Nicht da.')
   })
 
+  // Results.NotFound()/Forbid() ohne Koerper: UseStatusCodePages ergaenzt nur einen englischen title (WR-04).
+  it('4xx nur mit englischem title ergibt den allgemeinen Text', async () => {
+    respond(404, JSON.stringify({ title: 'Not Found', status: 404 }))
+    const error = await caught()
+    expect(error.status).toBe(404)
+    expect(error.message).toBe(generic)
+  })
+
   // Rate-Limit "auth" antwortet ohne Koerper; "Versuche es noch einmal" luede
   // an der PIN-Eingabe zum sofortigen Wiederholen ein.
   it('429 ergibt den Hinweis, eine Minute zu warten', async () => {

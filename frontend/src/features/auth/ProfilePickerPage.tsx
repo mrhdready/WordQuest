@@ -37,6 +37,8 @@ export function ProfilePickerPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const firstKey = useRef<HTMLButtonElement>(null)
+  const tiles = useRef<HTMLDivElement>(null)
+  const retried = useRef(false)
 
   // Nach falscher PIN zurueck an den Anfang des Ziffernfelds. Als Effekt, weil
   // die Tasten erst nach dem Rendern mit busy=false wieder fokussierbar sind.
@@ -49,6 +51,13 @@ export function ProfilePickerPage() {
     queryFn: () => api<LearnerTile[]>('/auth/profiles'),
     retry: false,
   })
+
+  // Nach "Noch einmal" verschwindet der Button: Fokus auf die erste Kachel statt auf body.
+  useEffect(() => {
+    if (!retried.current || !profiles.isSuccess) return
+    retried.current = false
+    tiles.current?.querySelector('button')?.focus()
+  }, [profiles.isSuccess])
 
   const canSubmit = !busy && pin.length >= MIN_PIN_LENGTH
 
@@ -113,11 +122,25 @@ export function ProfilePickerPage() {
         <>
           <h1 className="mb-8 text-center type-large-title">Wer lernt heute?</h1>
 
+          {/* Ein Kind am Tablet laedt nicht selbst neu: Wiederholen direkt hier. */}
           {profiles.isError ? (
-            <ErrorNote message="Die Profile konnten nicht geladen werden." />
+            <div className="mb-8 flex flex-col gap-4">
+              <ErrorNote message="Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal." />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={profiles.isFetching}
+                onClick={() => {
+                  retried.current = true
+                  void profiles.refetch()
+                }}
+              >
+                Noch einmal
+              </Button>
+            </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div ref={tiles} className="grid grid-cols-2 gap-4">
             {(profiles.data ?? []).map((profile) => (
               <button
                 key={profile.id}
@@ -155,7 +178,7 @@ export function ProfilePickerPage() {
               aria-label="Zurück zur Profilwahl"
               onClick={() => choose(null)}
             >
-              <ChevronLeft className="size-6" />
+              <ChevronLeft className="size-6" aria-hidden />
             </Button>
           </div>
 
@@ -223,7 +246,7 @@ export function ProfilePickerPage() {
                 disabled={busy}
                 onClick={removeLast}
               >
-                <Delete className="size-8" />
+                <Delete className="size-8" aria-hidden />
               </button>
             </div>
 

@@ -16,8 +16,8 @@ namespace WordQuest.Api.Tests;
 /// POST /api/v1/learners und PATCH /api/v1/learners/{id}/settings (PAR-05,
 /// PAR-01, PAR-02, D-15). Gemeinsame Factory, deshalb legt jeder Fall eine
 /// eigene Familie mit eindeutigen Namen an und prueft keine globalen
-/// Zaehlungen (Isolationsregel ApiFactory). Hoechstens 6 Aufrufe der Policy
-/// "auth" (learner-login), Grenze 10 pro Minute; GET /auth/profiles verlangt
+/// Zaehlungen (Isolationsregel ApiFactory). Hoechstens 8 Aufrufe der Policy
+/// "auth" (learner-login, refresh), Grenze 10 pro Minute; GET /auth/profiles verlangt
 /// genau einen Mandanten und wird hier nicht aufgerufen.
 /// </summary>
 public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
@@ -323,7 +323,7 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Patch_name_with_100_characters_is_saved()
     {
-        (User owner, User child) = await SeedFamilyAsync();
+        (User owner, User child) = await SeedFamilyAsync(OldPin);
         string name = new('b', 100);
 
         HttpResponseMessage patch = await PatchAsync(owner, child.Id, new { displayName = name });
@@ -357,7 +357,7 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Patch_umlauts_and_emoji_are_listed_unchanged()
     {
-        (User owner, User child) = await SeedFamilyAsync();
+        (User owner, User child) = await SeedFamilyAsync(OldPin);
         const string name = "Jürgen 🦊";
 
         HttpResponseMessage patch = await PatchAsync(owner, child.Id, new { displayName = name });
@@ -371,7 +371,7 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Patch_without_name_keeps_the_name()
     {
-        (User owner, User child) = await SeedFamilyAsync();
+        (User owner, User child) = await SeedFamilyAsync(OldPin);
 
         HttpResponseMessage patch = await PatchAsync(owner, child.Id, new { dailyNewLimit = 4 });
 
@@ -436,6 +436,38 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await LearnerLoginAsync(child.Id, "2580")).StatusCode);
+    }
+
+    // Eine neue PIN sperrt Geraete aus, die sich mit der alten angemeldet haben (WR-01).
+    [Fact]
+    public async Task New_pin_revokes_the_childs_refresh_tokens()
+    {
+        (User owner, User child) = await SeedFamilyAsync(OldPin);
+        HttpResponseMessage login = await LearnerLoginAsync(child.Id, OldPin);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        string refreshToken = (await login.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>())
+            .GetProperty("refreshToken").GetString()!;
+
+        HttpResponseMessage patch = await PatchAsync(owner, child.Id, new { pin = "2580" });
+
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+        using HttpClient client = _factory.CreateClient();
+        HttpResponseMessage refresh = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken });
+        Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+    }
+
+    // Ohne PIN kann sich das Kind nie anmelden: Speichern verlangt dann eine (WR-02).
+    [Fact]
+    public async Task Patch_on_a_child_without_pin_requires_a_pin()
+    {
+        (User owner, User child) = await SeedFamilyAsync();
+
+        HttpResponseMessage without = await PatchAsync(owner, child.Id, new { displayName = UniqueName() });
+        HttpResponseMessage with = await PatchAsync(owner, child.Id, new { pin = "2580" });
+
+        Assert.Equal(PinMissing, await FieldErrorAsync(without, "pin"));
+        Assert.Equal(HttpStatusCode.OK, with.StatusCode);
+        Assert.NotNull((await ProfileAsync(child.Id)).PinHash);
     }
 
     // Bearbeiten aendert nie den Lernstand: jedes Feld einzeln, Werte bewusst abseits der Standardwerte.

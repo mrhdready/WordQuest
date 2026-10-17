@@ -172,8 +172,23 @@ gar nicht erst.
 Demo-Daten (Elternkonto, Kind, Beispielset) gibt es nur noch als
 Entwickler-Option: `WQ_SEED_DEMO_DATA=true` legt sie beim Start auf einer
 leeren Datenbank an. In beiden Compose-Dateien und in `.env.example` steht der
-Wert auf `false`. Steht in einer älteren `.env` noch `true`, bricht `setup.sh`
-mit einem Hinweis ab, denn das Demo-Konto hat ein bekanntes Passwort.
+Wert auf `false`. Steht in einer älteren `.env` noch `true` (auch `True` oder
+`"true"`), bricht `setup.sh` mit einem Hinweis ab, denn das Demo-Konto hat ein
+bekanntes Passwort. Außerhalb des Entwicklungsmodus startet auch die API mit
+eingeschalteten Demo-Daten nicht.
+
+Ältere Installationen haben das Demo-Konto oft noch in der Datenbank; den
+Schalter abzustellen entfernt es nicht. Hat es noch sein bekanntes Passwort,
+bricht die API beim Start mit einer Meldung ab (`docker compose logs api`).
+Weil die API dann nicht läuft, geht der Ausweg über `run` statt `exec`:
+
+```bash
+docker compose run --rm api reset-password demo@wordquest.local
+docker compose up -d
+```
+
+Das Demo-Kind hat ebenfalls eine bekannte PIN (`1234`). Gib ihm unter
+„Verwalten → Kinder“ eine neue PIN.
 
 #### Aktualisieren
 

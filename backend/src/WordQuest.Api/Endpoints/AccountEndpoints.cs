@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using WordQuest.Api.Auth;
 using WordQuest.Api.Contracts;
 using WordQuest.Infrastructure;
+using WordQuest.Modules.Identity.Services;
 
 namespace WordQuest.Api.Endpoints;
 
@@ -41,9 +43,10 @@ public static class AccountEndpoints
             }),
             PasswordChange.NewPasswordTooShort => Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["newPassword"] = ["Das neue Passwort muss mindestens 8 Zeichen lang sein."],
+                ["newPassword"] = [$"Das neue Passwort muss mindestens {AccountRules.MinPasswordLength} Zeichen lang sein."],
             }),
-            _ => Results.NotFound(),
+            PasswordChange.UnknownUser => Results.NotFound(),
+            _ => throw new UnreachableException($"Unbekanntes Ergebnis {result}."),
         };
     }
 }

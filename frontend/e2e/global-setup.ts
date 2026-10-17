@@ -1,6 +1,7 @@
 import { chromium, expect, type FullConfig } from '@playwright/test'
 
-// Eine Eltern-Anmeldung je Lauf: Rate-Limit "auth" erlaubt 10 pro Minute.
+// Eine Eltern-Anmeldung je Lauf: Rate-Limit "auth" erlaubt im Install-Smoke 10
+// pro Minute (Standard), im e2e-Stack 1000 (Auth__RequestsPerMinute).
 // Standard ist das Demo-Konto des e2e-Stacks (DemoDataSeeder); der seedfreie
 // Install-Smoke setzt eigene Zugangsdaten (01-07).
 export const guardianStorageState = 'playwright/.auth/guardian.json'

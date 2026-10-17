@@ -73,7 +73,9 @@ else
 fi
 
 # Aeltere .env-Vorlagen hatten Demo-Daten an: dann gaebe es ein Konto mit bekanntem Passwort.
-if [[ "$(env_value WQ_SEED_DEMO_DATA)" == "true" ]]; then
+# .NET liest true ohne Ruecksicht auf Gross-/Kleinschreibung, auch in Anfuehrungszeichen.
+seed_demo="$(env_value WQ_SEED_DEMO_DATA | tr -d "\"' " | tr '[:upper:]' '[:lower:]')"
+if [[ "$seed_demo" == "true" ]]; then
   die "In .env steht WQ_SEED_DEMO_DATA=true. Damit entsteht ein Demo-Konto mit bekanntem Passwort. Setze den Wert in .env auf false und starte setup.sh erneut."
 fi
 
@@ -153,7 +155,8 @@ esac
 
 # --- Abschluss ---------------------------------------------------------------
 compose_file="${COMPOSE_FILE:-$(env_value COMPOSE_FILE)}"
-if [[ "$compose_file" == docker-compose.yml* ]]; then
+# Ohne COMPOSE_FILE (aeltere .env) nimmt docker compose docker-compose.yml.
+if [[ -z "$compose_file" || "$compose_file" == docker-compose.yml* ]]; then
   url="https://$(env_value WQ_HOST)"
 else
   host="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"

@@ -29,6 +29,15 @@ if (!builder.Environment.IsDevelopment())
         Environment.ExitCode = 1;
         return;
     }
+
+    // Demo-Daten nur in Development (CR-01): ein Demo-Konto hat ein bekanntes Passwort.
+    string? seedProblem = DemoAccountCheck.SeedProblem(builder.Configuration.GetValue("WQ_SEED_DEMO_DATA", false));
+    if (seedProblem is not null)
+    {
+        Console.Error.WriteLine(seedProblem);
+        Environment.ExitCode = 1;
+        return;
+    }
 }
 
 // --- Konfiguration ----------------------------------------------------------
@@ -39,6 +48,7 @@ string signingKey = ReadSecret("WQ_JWT_SIGNING_KEY", builder.Configuration["Auth
     ?? throw new InvalidOperationException(
         "Kein JWT-Signaturschluessel. WQ_JWT_SIGNING_KEY_FILE setzen oder setup.sh ausfuehren.");
 
+// Greift nur noch in Development; sonst meldet SecretCheck die Laenge vorher lesbar.
 if (signingKey.Length < 32)
 {
     throw new InvalidOperationException(
@@ -136,8 +146,10 @@ if (builder.Environment.IsDevelopment())
 
 WebApplication app = builder.Build();
 
-// Wartungsverben (setup.sh) laufen vor dem Start-Block: keine Migration, kein
-// Kestrel. Der Container laeuft dabei schon und hat das Schema migriert.
+// Wartungsverben laufen vor dem Start-Block: keine Migration, kein Kestrel.
+// Aufruf per exec im laufenden Container (setup.sh) oder per run, wenn die API
+// nach einem Startabbruch nicht laeuft (DemoAccountCheck); das Schema ist dann
+// schon migriert.
 if (AccountCommands.IsCommand(args))
 {
     Environment.ExitCode = await AccountCommands.RunAsync(app.Services, args, Console.In, Console.Out);
@@ -191,6 +203,15 @@ await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
     if (app.Configuration.GetValue("WQ_SEED_DEMO_DATA", false))
     {
         await DemoDataSeeder.SeedAsync(db, logger);
+    }
+
+    // Nach der Migration, aber hinter den CLI-Verben: reset-password bleibt der Ausweg.
+    if (!app.Environment.IsDevelopment()
+        && await DemoAccountCheck.AccountProblemAsync(db) is { } demoProblem)
+    {
+        Console.Error.WriteLine(demoProblem);
+        Environment.ExitCode = 1;
+        return;
     }
 }
 

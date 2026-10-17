@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Badge, EmptyState, Progress, Spinner } from '@/components/ui/misc'
+import { Badge, EmptyState, ErrorNote, Progress, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { avatarFor } from '@/lib/avatars'
@@ -32,6 +32,11 @@ export function LearnHomePage() {
   const data = overview.data
   const availableSets = sets.data ?? []
   const nothingDue = data !== undefined && data.dueToday === 0 && data.newRemainingToday === 0
+  // Ladefehler ist nicht "gibt es nicht" (WR-03): sonst stuenden "Noch keine Vokabeln da"
+  // oder "0 Karten fällig" da. Kopfzeile mit "Abmelden" bleibt.
+  const loadError =
+    (overview.isError && !overview.data ? overview.error : null) ??
+    (sets.isError && !sets.data ? sets.error : null)
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
@@ -75,7 +80,9 @@ export function LearnHomePage() {
         </Card>
       ) : null}
 
-      {availableSets.length === 0 ? (
+      {loadError ? (
+        <ErrorNote message={loadError.message} />
+      ) : availableSets.length === 0 ? (
         <EmptyState
           title="Noch keine Vokabeln da"
           hint="Ein Elternteil kann im Verwaltungsbereich ein Set anlegen."

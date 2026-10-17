@@ -12,6 +12,9 @@ public static class SecretCheck
     private const int MinimumSigningKeyLength = 32;
 
     // Werte, die im Repository stehen oder standen und deshalb oeffentlich bekannt sind.
+    // Ausnahme: die reinen Testwerte aus frontend/e2e/docker-compose.e2e.yml und
+    // ApiFactory fehlen bewusst. Beide laufen als Development, wo diese Pruefung
+    // nicht greift; in einer Betriebsdatei stehen sie nie.
     private static readonly HashSet<string> KnownDefaults = new(StringComparer.Ordinal)
     {
         // DB-Passwort: Fallback in Program.cs (BuildConnectionString) und appsettings.Development.json.

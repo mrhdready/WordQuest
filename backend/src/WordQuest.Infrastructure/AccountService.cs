@@ -92,19 +92,28 @@ public sealed class AccountService(WordQuestDbContext db, TimeProvider clock)
 
         string password = RandomNumberGenerator.GetString(ResetAlphabet, ResetPasswordLength);
         user.PasswordHash = PasswordHasher.Hash(password);
+        await MarkRefreshTokensRevokedAsync(user.Id, ct);
 
+        // Ein SaveChanges: Passwort und Widerruf gelten zusammen oder gar nicht.
+        await db.SaveChangesAsync(ct);
+        return password;
+    }
+
+    /// <summary>
+    /// Markiert alle aktiven Refresh-Tokens des Kontos als widerrufen, ohne zu
+    /// speichern: der Aufrufer speichert zusammen mit den neuen Zugangsdaten
+    /// (Passwort oder Kinder-PIN), damit beides zusammen gilt oder gar nicht.
+    /// </summary>
+    public async Task MarkRefreshTokensRevokedAsync(Guid userId, CancellationToken ct = default)
+    {
         DateTimeOffset now = clock.GetUtcNow();
         List<RefreshToken> active = await db.RefreshTokens
-            .Where(t => t.UserId == user.Id && t.RevokedAt == null)
+            .Where(t => t.UserId == userId && t.RevokedAt == null)
             .ToListAsync(ct);
         foreach (RefreshToken token in active)
         {
             token.RevokedAt = now;
         }
-
-        // Ein SaveChanges: Passwort und Widerruf gelten zusammen oder gar nicht.
-        await db.SaveChangesAsync(ct);
-        return password;
     }
 
     /// <summary>

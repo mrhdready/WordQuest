@@ -42,8 +42,8 @@ async function walkTabOrder(page: Page): Promise<FocusStep[]> {
 // WCAG 2.4.11: kein per Tab fokussiertes Element liegt unter der schwebenden Leiste.
 // Bei Scroll 0 merkt sich jedes Element seine Unterkante; mindestens ein Ziel muss
 // dort unter der Leiste beginnen, sonst prueft der Test nur den trivialen Fall.
-async function expectFocusNotObscured(page: Page, viewport = { width: 320, height: 568 }) {
-  await page.setViewportSize(viewport)
+async function expectFocusNotObscured(page: Page) {
+  await page.setViewportSize({ width: 320, height: 568 })
   const startBarTop = await page.evaluate(() => {
     window.scrollTo(0, 0)
     for (const element of document.querySelectorAll('main *')) {
@@ -93,14 +93,7 @@ test('Fokus nicht verdeckt bei 320 px', async ({ page }) => {
   await expectFocusNotObscured(page)
 })
 
-// Ab sm (640 px) steht die Tab-Leiste mit vier Tabs und "+" in einer Zeile; der Freiraum
-// unter <main> setzt das voraus (Uebergabe 01-06). Querformat-Hoehe, damit Ziele bei
-// Scroll 0 unter der Leiste liegen.
-test('Fokus nicht verdeckt bei 640 px', async ({ page }) => {
-  await page.goto('/verwalten?neu=1')
-  await expect(page.locator('main a[href^="/verwalten/sets/"]').first()).toBeVisible()
-  await expectFocusNotObscured(page, { width: 640, height: 360 })
-})
+// 640 px (= 200 % Zoom) prueft keyboard-zoom.spec.ts fuer alle Phase-1-Seiten.
 
 test('"+" öffnet das Set-Formular', async ({ page }) => {
   await page.goto('/verwalten')

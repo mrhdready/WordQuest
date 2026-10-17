@@ -90,6 +90,7 @@ public static class LearnerEndpoints
         Guid learnerId,
         UpdateLearnerSettingsRequest request,
         WordQuestDbContext db,
+        AccountService accounts,
         CancellationToken ct)
     {
         LearnerProfile? profile = await db.LearnerProfiles
@@ -103,7 +104,7 @@ public static class LearnerEndpoints
 
         // Alles pruefen, bevor etwas zugewiesen wird: eine abgelehnte Anfrage aendert nichts.
         IReadOnlyList<LearnerProfileProblem> problems = AccountRules.ValidateLearnerProfile(
-            request.DisplayName, nameRequired: false, request.Pin, pinRequired: false);
+            request.DisplayName, nameRequired: false, request.Pin, pinRequired: profile.PinHash is null);
         if (problems.Count > 0)
         {
             return ValidationProblem(problems);
@@ -129,12 +130,14 @@ public static class LearnerEndpoints
             profile.SoundEnabled = sound;
         }
 
-        // Leer heisst "PIN unveraendert"; eine neue PIN hebt eine Sperre sofort auf.
+        // Leer heisst "PIN unveraendert"; eine neue PIN hebt eine Sperre sofort auf
+        // und meldet alle Geraete ab, die sich mit der alten angemeldet haben (WR-01).
         if (!string.IsNullOrEmpty(request.Pin))
         {
             profile.PinHash = PasswordHasher.Hash(request.Pin);
             profile.FailedPinAttempts = 0;
             profile.PinLockedUntil = null;
+            await accounts.MarkRefreshTokensRevokedAsync(profile.Id, ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -151,10 +154,10 @@ public static class LearnerEndpoints
             .Select(problem => problem switch
             {
                 LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
-                LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: "Der Name darf höchstens 100 Zeichen lang sein."),
+                LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: $"Der Name darf höchstens {AccountRules.MaxDisplayNameLength} Zeichen lang sein."),
                 LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 bis 6 Ziffern ein."),
                 LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
-                LearnerProfileProblem.AvatarKeyTooLong => (Field: "avatarKey", Message: "Das Bild darf höchstens 50 Zeichen lang sein."),
+                LearnerProfileProblem.AvatarKeyTooLong => (Field: "avatarKey", Message: $"Das Bild darf höchstens {AccountRules.MaxAvatarKeyLength} Zeichen lang sein."),
                 _ => throw new UnreachableException($"Unbekannter Befund {problem}."),
             })
             .ToDictionary(error => error.Field, error => new[] { error.Message }));

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Badge, EmptyState, Progress, Spinner } from '@/components/ui/misc'
+import { Badge, EmptyState, ErrorNote, Progress, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { avatarFor } from '@/lib/avatars'
 import { cn } from '@/lib/utils'
@@ -44,6 +44,8 @@ export function ProgressPage() {
   })
 
   if (learners.isLoading) return <Spinner />
+  // Ladefehler ist nicht "gibt es nicht" (WR-03, Muster ChildFormPage).
+  if (learners.isError && !learners.data) return <ErrorNote message={learners.error.message} />
 
   if (!learners.data?.length) {
     return (

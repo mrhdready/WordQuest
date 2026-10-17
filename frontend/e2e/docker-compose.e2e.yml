@@ -26,12 +26,13 @@ services:
       context: ../..
       dockerfile: backend/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      # Development, weil die Tests das Demo-Konto brauchen: ausserhalb von
+      # Development bricht die API mit Demo-Daten ab (CR-01). Die
+      # Secret-Pruefung fuer Production deckt der Install-Smoke ab.
+      ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
-      WQ_DB_HOST: db
-      WQ_DB_NAME: wordquest
-      WQ_DB_USER: wordquest
-      WQ_DB_PASSWORD: e2e-db-testpasswort-nicht-fuer-betrieb
+      # Schlaegt den localhost-Wert aus appsettings.Development.json.
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=wordquest;Username=wordquest;Password=e2e-db-testpasswort-nicht-fuer-betrieb;GSS Encryption Mode=Disable"
       WQ_JWT_SIGNING_KEY: e2e-jwt-testschluessel-nur-fuer-playwright-laeufe-0001
       WQ_TIMEZONE: Europe/Berlin
       WQ_AI_PROVIDER: none
