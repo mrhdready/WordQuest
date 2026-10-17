@@ -83,7 +83,11 @@ export function ProgressPage() {
         <Card>
           <div className="mb-4 flex items-baseline justify-between gap-4">
             <span className="type-headline">Level {overview.data.level}</span>
-            <span className="type-body-md text-ink-soft">🔥 {overview.data.streak} Tage</span>
+            <span className="type-body-md text-ink-soft">
+              {overview.data.streak === 0
+                ? 'Keine laufende Serie'
+                : `🔥 ${overview.data.streak} ${overview.data.streak === 1 ? 'Tag' : 'Tage'}`}
+            </span>
           </div>
 
           <Progress value={overview.data.levelProgress} label="Fortschritt bis zum nächsten Level" />

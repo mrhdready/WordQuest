@@ -71,9 +71,34 @@ public static class StreakRules
         return new StreakResult(profile.CurrentStreak, true, saverUsed, reset);
     }
 
+    /// <summary>
+    /// Serie, die heute angezeigt wird (FIX-05, D-12): 0 ohne Aktivitaet, die
+    /// gespeicherte Serie bei Aktivitaet heute oder gestern sowie nach genau
+    /// einem verpassten Tag mit verfuegbarem Retter, sonst 0. Ohne Schreibwirkung:
+    /// Gespeichert wird weiter nur in <see cref="RegisterActivity"/> (Konzept §8).
+    /// </summary>
+    public static int CurrentStreak(GamificationProfile profile, DateOnly today)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        if (profile.LastActiveDate is not { } last)
+        {
+            return 0;
+        }
+
+        int gap = today.DayNumber - last.DayNumber;
+
+        // Dieselbe Retter-Regel wie RegisterActivity: Ein neuer Monat fuellt vorher auf.
+        bool saverAvailable = profile.StreakSaverPeriod != Period(today) || profile.StreakSaversLeft > 0;
+
+        return gap <= 1 || (gap == 2 && saverAvailable) ? profile.CurrentStreak : 0;
+    }
+
+    private static string Period(DateOnly day) => $"{day.Year:D4}-{day.Month:D2}";
+
     private static void RefillSaversIfNewMonth(GamificationProfile profile, DateOnly today)
     {
-        string period = $"{today.Year:D4}-{today.Month:D2}";
+        string period = Period(today);
         if (profile.StreakSaverPeriod != period)
         {
             profile.StreakSaverPeriod = period;

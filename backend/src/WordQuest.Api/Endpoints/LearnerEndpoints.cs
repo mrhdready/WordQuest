@@ -250,7 +250,7 @@ public static class LearnerEndpoints
             LevelProgress: LevelCurve.ProgressInLevel(gamification.Xp),
             XpToNextLevel: LevelCurve.XpToNextLevel(gamification.Xp),
             Coins: gamification.Coins,
-            Streak: gamification.CurrentStreak,
+            Streak: StreakRules.CurrentStreak(gamification, scheduler.LocalDate(now)),
             DueToday: dueToday,
             NewRemainingToday: Math.Max(0, profile.DailyNewLimit - introducedToday),
             CardsMastered: mastered,

@@ -57,10 +57,14 @@ export function LearnHomePage() {
         <Card className="mb-6">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <span className="type-display text-ink">Level {data.level}</span>
-            <Badge tone="yellow" className="gap-1">
-              <Flame className="size-4" aria-hidden />
-              {data.streak} {data.streak === 1 ? 'Tag' : 'Tage'}
-            </Badge>
+            {data.streak > 0 ? (
+              <Badge tone="yellow" className="gap-1">
+                <Flame className="size-4" aria-hidden />
+                {data.streak} {data.streak === 1 ? 'Tag' : 'Tage'}
+              </Badge>
+            ) : (
+              <Badge tone="neutral">Starte heute deine Serie!</Badge>
+            )}
           </div>
 
           <Progress value={data.levelProgress} label="Fortschritt bis zum nächsten Level" />
