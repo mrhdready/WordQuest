@@ -65,6 +65,12 @@ public sealed class SessionItemConfiguration : IEntityTypeConfiguration<SessionI
         builder.Property(i => i.Grade).HasConversion<string>().HasMaxLength(10);
         builder.Property(i => i.GivenAnswer).HasMaxLength(300);
 
+        // Eine Aufgabe wird genau einmal gewertet: Das UPDATE prueft den alten
+        // Wert (answered_at IS NULL). Die zweite gleichzeitige Antwort trifft
+        // keine Zeile mehr, SaveChanges wirft und rollt Lernstand, Protokoll
+        // und XP zurueck (FIX-04).
+        builder.Property(i => i.AnsweredAt).IsConcurrencyToken();
+
         builder.HasIndex(i => new { i.SessionId, i.Position });
 
         // Macht das Einspielen offline erfasster Antworten idempotent:

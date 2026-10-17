@@ -2,9 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using WordQuest.Api.Contracts;
+using WordQuest.Infrastructure;
+using WordQuest.Modules.Gamification.Entities;
+using WordQuest.Modules.Gamification.Services;
 using WordQuest.Modules.Identity.Entities;
 using WordQuest.Modules.Learning.Entities;
 using WordQuest.Modules.Learning.Services;
@@ -21,6 +27,11 @@ namespace WordQuest.Api.Tests;
 public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
 {
     private const string Sessions = "/api/v1/sessions";
+    private const string SessionGone = "Diese Runde gibt es nicht mehr. Starte eine neue Runde.";
+    private const string CardGone = "Diese Karte gehört nicht zu dieser Runde. Starte eine neue Runde.";
+    private const string ChildGone = "Dieses Kind gibt es nicht (mehr).";
+    private const string SizeInvalid = "Eine Runde hat 1 bis 50 Karten.";
+    private const string AlreadyAnswered = "Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -197,5 +208,319 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         using HttpClient child = _factory.CreateClientFor(family.Child);
 
         Assert.Equal(2, (await OverviewAsync(child, family.Child.Id)).DueToday);
+    }
+
+    // ------------------------------------------------------------ FIX-04
+
+    private static async Task<string?> DetailAsync(HttpResponseMessage response, HttpStatusCode expected)
+    {
+        Assert.Equal(expected, response.StatusCode);
+        ProblemDetails? problem = await response.Content.ReadFromJsonAsync<ProblemDetails>(Json);
+        Assert.NotNull(problem);
+        return problem.Detail;
+    }
+
+    private static async Task<string> FieldErrorAsync(HttpResponseMessage response, string key)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        HttpValidationProblemDetails? problem =
+            await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>(Json);
+        Assert.NotNull(problem);
+        Assert.True(problem.Errors.ContainsKey(key), $"Schluessel {key} fehlt: {string.Join(", ", problem.Errors.Keys)}");
+        return problem.Errors[key][0];
+    }
+
+    private static Task<HttpResponseMessage> StartRawAsync(HttpClient client, Guid learnerId, int? size) =>
+        client.PostAsJsonAsync(Sessions, new { learnerId, setId = (Guid?)null, gameKey = "classic", size });
+
+    private async Task<int> ReviewLogCountAsync(Guid learnerId, Guid cardId)
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        return await db.ReviewLogs.CountAsync(l => l.LearnerId == learnerId && l.CardId == cardId);
+    }
+
+    private async Task<(LearningSession Session, GamificationProfile Profile)> CountersAsync(Guid sessionId, Guid learnerId)
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        LearningSession session = await db.LearningSessions.AsNoTracking().Include(s => s.Items).SingleAsync(s => s.Id == sessionId);
+        GamificationProfile profile = await db.GamificationProfiles.AsNoTracking().SingleAsync(p => p.Id == learnerId);
+        return (session, profile);
+    }
+
+    /// <summary>
+    /// Haelt in einer offenen Transaktion eine Zeilensperre (SELECT ... FOR UPDATE).
+    /// Lesen bleibt frei (MVCC), Schreiben auf diese Zeilen wartet, bis der
+    /// Aufrufer die Transaktion zuruecksetzt.
+    /// </summary>
+    private async Task<(WordQuestDbContext Db, IDbContextTransaction Lock)> LockRowsAsync(
+        params (string Table, Guid Id)[] rows)
+    {
+        WordQuestDbContext db = _factory.CreateSystemDbContext();
+        IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
+        foreach ((string table, Guid id) in rows)
+        {
+            // Tabellennamen sind Konstanten dieser Testklasse, die Id geht als Parameter.
+            string sql = "SELECT 1 FROM " + table + " WHERE id = {0} FOR UPDATE";
+            await db.Database.ExecuteSqlRawAsync(sql, id);
+        }
+
+        return (db, transaction);
+    }
+
+    private static async Task ReleaseAsync((WordQuestDbContext Db, IDbContextTransaction Lock) held)
+    {
+        await held.Lock.RollbackAsync();
+        await held.Lock.DisposeAsync();
+        await held.Db.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Wartet, bis zwei Backends dieser Datenbank auf eine Sperre warten: Dann
+    /// haben beide Anfragen gelesen und stehen vor dem Schreiben.
+    /// </summary>
+    private async Task WaitForTwoBlockedAsync()
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        for (int attempt = 0; attempt < 200; attempt++)
+        {
+            int waiting = await db.Database
+                .SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'")
+                .SingleAsync();
+            if (waiting >= 2)
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.Fail("Nach 10 Sekunden warteten keine zwei Anfragen auf die Sperre.");
+    }
+
+    [Fact]
+    public async Task Unbekannte_Runde_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        Guid unknown = Guid.NewGuid();
+
+        Assert.Equal(SessionGone, await DetailAsync(
+            await AnswerAsync(child, unknown, session.Items[0].ItemId, "x"), HttpStatusCode.NotFound));
+        Assert.Equal(SessionGone, await DetailAsync(
+            await child.PostAsync($"{Sessions}/{unknown}/complete", null), HttpStatusCode.NotFound));
+    }
+
+    [Fact]
+    public async Task Fremde_Aufgabe_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+
+        Assert.Equal(CardGone, await DetailAsync(
+            await AnswerAsync(child, session.SessionId, Guid.NewGuid(), "x"), HttpStatusCode.NotFound));
+    }
+
+    [Fact]
+    public async Task Waehrend_der_Runde_geloeschte_Karte_ergibt_404_statt_500()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = session.Items[0];
+        Guid entryId = set.Cards.Single(c => c.Id == item.CardId).EntryId;
+
+        HttpResponseMessage deleted = await owner.DeleteAsync($"/api/v1/sets/{set.Set.Id}/entries/{entryId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        Assert.Equal(CardGone, await DetailAsync(
+            await AnswerAsync(child, session.SessionId, item.ItemId, "x"), HttpStatusCode.NotFound));
+    }
+
+    [Fact]
+    public async Task Start_fuer_fremdes_oder_unbekanntes_Kind_ergibt_404()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        Assert.Equal(ChildGone, await DetailAsync(
+            await StartRawAsync(owner, other.Child.Id, null), HttpStatusCode.NotFound));
+        Assert.Equal(ChildGone, await DetailAsync(
+            await StartRawAsync(owner, Guid.NewGuid(), null), HttpStatusCode.NotFound));
+    }
+
+    [Fact]
+    public async Task Rundengroesse_ausserhalb_1_bis_50_ergibt_400()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        foreach (int size in new[] { 0, -1, 51 })
+        {
+            Assert.Equal(SizeInvalid, await FieldErrorAsync(await StartRawAsync(child, family.Child.Id, size), "size"));
+        }
+
+        foreach (int size in new[] { 1, 50 })
+        {
+            Assert.Equal(HttpStatusCode.OK, (await StartRawAsync(child, family.Child.Id, size)).StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Wiederholte_Antwort_bleibt_200_ohne_neue_Wertung()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = session.Items[0];
+        Guid clientAnswerId = Guid.NewGuid();
+
+        AnswerResult first = await ReadAnswerAsync(
+            await AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt), clientAnswerId));
+        AnswerResult again = await ReadAnswerAsync(
+            await AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt), clientAnswerId));
+
+        Assert.True(first.XpAwarded > 0);
+        Assert.Equal(0, again.XpAwarded);
+        Assert.Equal(1, await ReviewLogCountAsync(family.Child.Id, item.CardId));
+    }
+
+    [Fact]
+    public async Task Antwort_Id_einer_anderen_Aufgabe_ergibt_409()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        Guid clientAnswerId = Guid.NewGuid();
+
+        SessionItemView first = session.Items[0];
+        SessionItemView second = session.Items[1];
+        await ReadAnswerAsync(await AnswerAsync(child, session.SessionId, first.ItemId, set.AnswerFor(first.Prompt), clientAnswerId));
+
+        Assert.Equal(AlreadyAnswered, await DetailAsync(
+            await AnswerAsync(child, session.SessionId, second.ItemId, set.AnswerFor(second.Prompt), clientAnswerId),
+            HttpStatusCode.Conflict));
+        Assert.Equal(0, await ReviewLogCountAsync(family.Child.Id, second.CardId));
+    }
+
+    [Fact]
+    public async Task Gleichzeitige_Antworten_auf_dieselbe_Aufgabe_ergeben_200_und_409()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = session.Items[0];
+        string answer = set.AnswerFor(item.Prompt);
+
+        var held = await LockRowsAsync(("session_item", item.ItemId));
+        Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, item.ItemId, answer);
+        Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, item.ItemId, answer);
+        await WaitForTwoBlockedAsync();
+        await ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        HttpResponseMessage ok = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+        HttpResponseMessage conflict = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Conflict);
+        Assert.Equal(AlreadyAnswered, await DetailAsync(conflict, HttpStatusCode.Conflict));
+        AnswerResult result = await ReadAnswerAsync(ok);
+
+        Assert.Equal(1, await ReviewLogCountAsync(family.Child.Id, item.CardId));
+        (LearningSession stored, GamificationProfile profile) = await CountersAsync(session.SessionId, family.Child.Id);
+        Assert.True(result.XpAwarded > 0);
+        Assert.Equal(result.XpAwarded, stored.XpAwarded);
+        Assert.Equal(result.XpAwarded, profile.Xp);
+        Assert.Equal(result.CoinsAwarded, profile.Coins);
+    }
+
+    [Fact]
+    public async Task Gleichzeitige_Antworten_auf_zwei_Aufgaben_verlieren_keine_Gutschrift()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView first = session.Items[0];
+        SessionItemView second = session.Items[1];
+
+        var held = await LockRowsAsync(("learning_session", session.SessionId), ("gamification_profile", family.Child.Id));
+        Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, first.ItemId, set.AnswerFor(first.Prompt));
+        Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, second.ItemId, set.AnswerFor(second.Prompt));
+        await WaitForTwoBlockedAsync();
+        await ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        AnswerResult a = await ReadAnswerAsync(responses[0]);
+        AnswerResult b = await ReadAnswerAsync(responses[1]);
+        (LearningSession stored, GamificationProfile profile) = await CountersAsync(session.SessionId, family.Child.Id);
+        Assert.Equal(a.XpAwarded + b.XpAwarded, stored.XpAwarded);
+        Assert.Equal(a.CoinsAwarded + b.CoinsAwarded, stored.CoinsAwarded);
+        Assert.Equal(a.XpAwarded + b.XpAwarded, profile.Xp);
+        Assert.Equal(a.CoinsAwarded + b.CoinsAwarded, profile.Coins);
+    }
+
+    [Fact]
+    public async Task Gleichzeitige_Abschluesse_vergeben_den_Bonus_einmal()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = session.Items[0];
+        AnswerResult answered = await ReadAnswerAsync(
+            await AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt)));
+        (int bonusXp, int bonusCoins) = XpRules.ForSessionCompletion(1, 1);
+
+        var held = await LockRowsAsync(("learning_session", session.SessionId));
+        Task<HttpResponseMessage> one = child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
+        Task<HttpResponseMessage> two = child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
+        await WaitForTwoBlockedAsync();
+        await ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        (LearningSession stored, GamificationProfile profile) = await CountersAsync(session.SessionId, family.Child.Id);
+        Assert.Equal(answered.XpAwarded + bonusXp, stored.XpAwarded);
+        Assert.Equal(answered.CoinsAwarded + bonusCoins, stored.CoinsAwarded);
+        Assert.Equal(answered.XpAwarded + bonusXp, profile.Xp);
+        Assert.Equal(answered.CoinsAwarded + bonusCoins, profile.Coins);
+        Assert.NotNull(stored.CompletedAt);
+    }
+
+    [Fact]
+    public async Task Sync_ohne_Antworten_ergibt_400_und_fremde_Aufgabe_404_ohne_Schreiben()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = session.Items[0];
+
+        HttpResponseMessage missing = await child.PostAsJsonAsync(
+            $"{Sessions}/sync", new { sessionId = session.SessionId, answers = (object?)null });
+        Assert.Equal("Es fehlen die Antworten.", await FieldErrorAsync(missing, "answers"));
+
+        object Answer(Guid itemId, string text) =>
+            new { itemId, givenAnswer = text, answerMs = 2000, clientAnswerId = Guid.NewGuid(), hintUsed = false };
+        HttpResponseMessage foreign = await child.PostAsJsonAsync($"{Sessions}/sync", new
+        {
+            sessionId = session.SessionId,
+            answers = new[] { Answer(item.ItemId, set.AnswerFor(item.Prompt)), Answer(Guid.NewGuid(), "x") },
+        });
+        Assert.Equal(CardGone, await DetailAsync(foreign, HttpStatusCode.NotFound));
+
+        (LearningSession stored, _) = await CountersAsync(session.SessionId, family.Child.Id);
+        Assert.All(stored.Items, i => Assert.Null(i.AnsweredAt));
+        Assert.Equal(0, await ReviewLogCountAsync(family.Child.Id, item.CardId));
+        Assert.Null(stored.CompletedAt);
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using WordQuest.Modules.Content.Entities;
 using WordQuest.Modules.Gamification.Entities;
 using WordQuest.Modules.Gamification.Services;
@@ -26,7 +27,8 @@ public sealed class LearningService(
 {
     private const int MaxChoices = 4;
 
-    public async Task<SessionView> StartSessionAsync(
+    /// <summary>Startet eine Runde; <c>null</c>, wenn es das Lernprofil nicht (mehr) gibt.</summary>
+    public async Task<SessionView?> StartSessionAsync(
         Guid learnerId,
         Guid? setId,
         string gameKey,
@@ -36,9 +38,12 @@ public sealed class LearningService(
         DateTimeOffset now = clock.GetUtcNow();
         GameDefinition game = GameCatalog.Get(gameKey);
 
-        LearnerProfile profile = await db.LearnerProfiles
-            .FirstOrDefaultAsync(p => p.Id == learnerId, ct)
-            ?? throw new InvalidOperationException($"Unbekanntes Lernprofil {learnerId}.");
+        LearnerProfile? profile = await db.LearnerProfiles
+            .FirstOrDefaultAsync(p => p.Id == learnerId, ct);
+        if (profile is null)
+        {
+            return null;
+        }
 
         IQueryable<Card> cardsInScope = CardsInScope(setId);
 
@@ -126,7 +131,13 @@ public sealed class LearningService(
         return new SessionView(session.Id, game.Key, views.Count, views);
     }
 
-    public async Task<AnswerResult> SubmitAnswerAsync(
+    /// <summary>
+    /// Wertet eine Antwort; <c>null</c>, wenn Runde, Aufgabe oder Karte nicht
+    /// (mehr) existieren. Eine gleichzeitige zweite Antwort auf dieselbe
+    /// Aufgabe endet in einer <see cref="DbUpdateException"/> (Concurrency-Token
+    /// AnsweredAt bzw. Unique-Index), ohne dass etwas gespeichert wird.
+    /// </summary>
+    public async Task<AnswerResult?> SubmitAnswerAsync(
         Guid learnerId,
         Guid sessionId,
         Guid itemId,
@@ -138,19 +149,25 @@ public sealed class LearningService(
     {
         DateTimeOffset now = clock.GetUtcNow();
 
-        LearningSession session = await db.LearningSessions
+        LearningSession? session = await db.LearningSessions
             .Include(s => s.Items)
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct)
-            ?? throw new InvalidOperationException("Session nicht gefunden.");
-
-        SessionItem item = session.Items.FirstOrDefault(i => i.Id == itemId)
-            ?? throw new InvalidOperationException("Aufgabe gehoert nicht zu dieser Session.");
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct);
+        SessionItem? item = session?.Items.FirstOrDefault(i => i.Id == itemId);
+        if (session is null || item is null)
+        {
+            return null;
+        }
 
         GameDefinition game = GameCatalog.Get(session.GameKey);
 
-        Card card = await db.Cards
+        // Die Karte kann waehrend der Runde geloescht worden sein (Eintrag entfernt).
+        Card? card = await db.Cards
             .Include(c => c.Entry)
-            .FirstAsync(c => c.Id == item.CardId, ct);
+            .FirstOrDefaultAsync(c => c.Id == item.CardId, ct);
+        if (card is null)
+        {
+            return null;
+        }
 
         ExpectedAnswer expected = BuildExpectedAnswer(card);
 
@@ -220,12 +237,7 @@ public sealed class LearningService(
         });
 
         (int xp, int coins) = XpRules.ForAnswer(grade, game.XpWeight);
-        session.XpAwarded += xp;
-        session.CoinsAwarded += coins;
-
-        GamificationProfile profile = await GetOrCreateProfileAsync(learnerId, ct);
-        profile.Xp += xp;
-        profile.Coins += coins;
+        await GetOrCreateProfileAsync(learnerId, ct);
 
         // Falsch beantwortete Karte in derselben Session nachreichen.
         SessionItemView? retryView = null;
@@ -246,7 +258,13 @@ public sealed class LearningService(
             retryView = BuildItemView(retry, card, game, await BuildChoicesAsync(card, game, ct));
         }
 
-        await db.SaveChangesAsync(ct);
+        // Aufgabe, Lernstand, Protokoll und Gutschrift gehoeren zusammen: Ein
+        // Konflikt beim Speichern bricht vor der Gutschrift ab und rollt alles zurueck.
+        await InTransactionAsync(async () =>
+        {
+            await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+            await CreditAsync(sessionId, learnerId, xp, coins, ct);
+        }, ct);
 
         return new AnswerResult(
             Correct: evaluation.IsCorrect,
@@ -259,15 +277,19 @@ public sealed class LearningService(
             RetryItem: retryView);
     }
 
-    public async Task<SessionSummary> CompleteSessionAsync(
+    /// <summary>Schliesst eine Runde ab; <c>null</c>, wenn es die Runde nicht (mehr) gibt.</summary>
+    public async Task<SessionSummary?> CompleteSessionAsync(
         Guid learnerId, Guid sessionId, CancellationToken ct = default)
     {
         DateTimeOffset now = clock.GetUtcNow();
 
-        LearningSession session = await db.LearningSessions
+        LearningSession? session = await db.LearningSessions
             .Include(s => s.Items)
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct)
-            ?? throw new InvalidOperationException("Session nicht gefunden.");
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct);
+        if (session is null)
+        {
+            return null;
+        }
 
         GamificationProfile profile = await GetOrCreateProfileAsync(learnerId, ct);
         int levelBefore = LevelCurve.LevelFor(profile.Xp);
@@ -275,22 +297,35 @@ public sealed class LearningService(
         int answered = session.Items.Count(i => i.AnsweredAt is not null);
         int correct = session.Items.Count(i => i.Grade is not null and not Grade.Again);
 
-        bool alreadyComplete = session.CompletedAt is not null;
         var streak = new StreakResult(profile.CurrentStreak, false, false, false);
+        (int bonusXp, int bonusCoins) = XpRules.ForSessionCompletion(answered, correct);
 
-        if (!alreadyComplete && answered > 0)
+        // Den Abschluss atomar beanspruchen: Von zwei gleichzeitigen
+        // Abschluessen findet nur einer die Runde noch offen; nur er vergibt
+        // Bonus und Serie (Review Runde 1).
+        await InTransactionAsync(async () =>
         {
-            (int bonusXp, int bonusCoins) = XpRules.ForSessionCompletion(answered, correct);
-            session.XpAwarded += bonusXp;
-            session.CoinsAwarded += bonusCoins;
-            profile.Xp += bonusXp;
-            profile.Coins += bonusCoins;
+            int claimed = await db.LearningSessions
+                .Where(s => s.Id == sessionId && s.CompletedAt == null)
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.CompletedAt, now), ct);
 
-            streak = StreakRules.RegisterActivity(profile, scheduler.LocalDate(now));
-        }
+            if (claimed == 1)
+            {
+                if (answered > 0)
+                {
+                    // RegisterActivity ist am selben Tag idempotent, ein Wiederholungslauf
+                    // der Ausfuehrungsstrategie zaehlt die Serie also nicht doppelt.
+                    streak = StreakRules.RegisterActivity(profile, scheduler.LocalDate(now));
+                }
 
-        session.CompletedAt ??= now;
-        await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+                await CreditAsync(sessionId, learnerId, bonusXp, bonusCoins, ct);
+            }
+        }, ct);
+
+        // Zaehler stehen nach der Gutschrift nur in der Datenbank richtig.
+        await db.Entry(session).ReloadAsync(ct);
+        await db.Entry(profile).ReloadAsync(ct);
 
         int level = LevelCurve.LevelFor(profile.Xp);
 
@@ -328,6 +363,50 @@ public sealed class LearningService(
             FirstSeenAt = now,
             State = ReviewCardState.New,
         };
+
+    /// <summary>
+    /// Fuehrt <paramref name="work"/> in einer Transaktion aus. Wegen
+    /// EnableRetryOnFailure muss die Transaktion in der Ausfuehrungsstrategie
+    /// laufen; SaveChanges darin mit acceptAllChangesOnSuccess: false, damit ein
+    /// Wiederholungslauf dieselben Aenderungen noch einmal schreibt.
+    /// </summary>
+    private async Task InTransactionAsync(Func<Task> work, CancellationToken ct)
+    {
+        IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+            await work();
+            await transaction.CommitAsync(ct);
+        });
+        db.ChangeTracker.AcceptAllChanges();
+    }
+
+    /// <summary>
+    /// Schreibt XP und Muenzen als wert = wert + n gut, nie als gelesener Wert
+    /// plus n: Gleichzeitige Antworten auf verschiedene Aufgaben derselben Runde
+    /// schreiben dieselben Zeilen, und Lesen-Addieren-Schreiben verliert dabei
+    /// eine Gutschrift (Review Runde 1).
+    /// </summary>
+    private async Task CreditAsync(Guid sessionId, Guid learnerId, int xp, int coins, CancellationToken ct)
+    {
+        if (xp == 0 && coins == 0)
+        {
+            return;
+        }
+
+        await db.LearningSessions
+            .Where(s => s.Id == sessionId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.XpAwarded, s => s.XpAwarded + xp)
+                .SetProperty(s => s.CoinsAwarded, s => s.CoinsAwarded + coins), ct);
+
+        await db.GamificationProfiles
+            .Where(p => p.Id == learnerId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(p => p.Xp, p => p.Xp + xp)
+                .SetProperty(p => p.Coins, p => p.Coins + coins), ct);
+    }
 
     private async Task<GamificationProfile> GetOrCreateProfileAsync(Guid learnerId, CancellationToken ct)
     {

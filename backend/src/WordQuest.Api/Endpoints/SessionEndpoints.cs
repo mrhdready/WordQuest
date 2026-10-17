@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using WordQuest.Api.Auth;
 using WordQuest.Api.Contracts;
 using WordQuest.Infrastructure;
@@ -8,6 +9,16 @@ namespace WordQuest.Api.Endpoints;
 
 public static class SessionEndpoints
 {
+    // Texte fuer Kinder (02-UI-SPEC "Lernrunde (FIX-04)"): was passiert ist und was jetzt hilft.
+    private const string NotFoundTitle = "Nicht gefunden";
+    private const string SessionGone = "Diese Runde gibt es nicht mehr. Starte eine neue Runde.";
+    private const string CardGone = "Diese Karte gehört nicht zu dieser Runde. Starte eine neue Runde.";
+    private const string ChildGone = "Dieses Kind gibt es nicht (mehr).";
+    private const string SizeInvalid = "Eine Runde hat 1 bis 50 Karten.";
+    private const string AnswersMissing = "Es fehlen die Antworten.";
+    private const string AlreadyAnswered = "Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.";
+    private const int MaxSessionSize = 50;
+
     public static void MapSessionEndpoints(this IEndpointRouteBuilder app)
     {
         RouteGroupBuilder group = app.MapGroup("/api/v1/sessions")
@@ -28,13 +39,22 @@ public static class SessionEndpoints
         HttpContext http,
         CancellationToken ct)
     {
+        if (request.Size is < 1 or > MaxSessionSize)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["size"] = [SizeInvalid] });
+        }
+
         if (!MayActFor(http, request.LearnerId, out IResult denied))
         {
             return denied;
         }
 
-        SessionView view = await learning.StartSessionAsync(
+        SessionView? view = await learning.StartSessionAsync(
             request.LearnerId, request.SetId, request.GameKey ?? GameCatalog.Classic, request.Size, ct);
+        if (view is null)
+        {
+            return NotFound(ChildGone);
+        }
 
         // Eine leere Liste ist kein Fehler: dann ist heute nichts faellig,
         // und das Frontend zeigt "alles erledigt" statt einer Fehlermeldung.
@@ -52,7 +72,7 @@ public static class SessionEndpoints
         Guid learnerId = await ResolveLearnerAsync(db, sessionId, ct);
         if (learnerId == Guid.Empty)
         {
-            return Results.NotFound();
+            return NotFound(SessionGone);
         }
 
         if (!MayActFor(http, learnerId, out IResult denied))
@@ -60,11 +80,18 @@ public static class SessionEndpoints
             return denied;
         }
 
-        AnswerResult result = await learning.SubmitAnswerAsync(
-            learnerId, sessionId, request.ItemId, request.GivenAnswer,
-            request.AnswerMs, request.ClientAnswerId, request.HintUsed, ct);
+        try
+        {
+            AnswerResult? result = await learning.SubmitAnswerAsync(
+                learnerId, sessionId, request.ItemId, request.GivenAnswer,
+                request.AnswerMs, request.ClientAnswerId, request.HintUsed, ct);
 
-        return Results.Ok(result);
+            return result is null ? NotFound(CardGone) : Results.Ok(result);
+        }
+        catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict))
+        {
+            return Conflict();
+        }
     }
 
     private static async Task<IResult> CompleteAsync(
@@ -77,7 +104,7 @@ public static class SessionEndpoints
         Guid learnerId = await ResolveLearnerAsync(db, sessionId, ct);
         if (learnerId == Guid.Empty)
         {
-            return Results.NotFound();
+            return NotFound(SessionGone);
         }
 
         if (!MayActFor(http, learnerId, out IResult denied))
@@ -85,8 +112,8 @@ public static class SessionEndpoints
             return denied;
         }
 
-        SessionSummary summary = await learning.CompleteSessionAsync(learnerId, sessionId, ct);
-        return Results.Ok(summary);
+        SessionSummary? summary = await learning.CompleteSessionAsync(learnerId, sessionId, ct);
+        return summary is null ? NotFound(SessionGone) : Results.Ok(summary);
     }
 
     /// <summary>
@@ -101,10 +128,15 @@ public static class SessionEndpoints
         HttpContext http,
         CancellationToken ct)
     {
+        if (request.Answers is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["answers"] = [AnswersMissing] });
+        }
+
         Guid learnerId = await ResolveLearnerAsync(db, request.SessionId, ct);
         if (learnerId == Guid.Empty)
         {
-            return Results.NotFound();
+            return NotFound(SessionGone);
         }
 
         if (!MayActFor(http, learnerId, out IResult denied))
@@ -112,17 +144,58 @@ public static class SessionEndpoints
             return denied;
         }
 
-        var results = new List<AnswerResult>(request.Answers.Count);
-        foreach (SubmitAnswerRequest answer in request.Answers)
+        // Vor dem ersten Schreiben pruefen, damit ein Batch mit fremder Aufgabe
+        // nichts halb speichert.
+        List<Guid> itemIds = request.Answers.Select(a => a.ItemId).Distinct().ToList();
+        int known = await db.SessionItems
+            .CountAsync(i => i.SessionId == request.SessionId && itemIds.Contains(i.Id), ct);
+        if (known != itemIds.Count)
         {
-            results.Add(await learning.SubmitAnswerAsync(
-                learnerId, request.SessionId, answer.ItemId, answer.GivenAnswer,
-                answer.AnswerMs, answer.ClientAnswerId, answer.HintUsed, ct));
+            return NotFound(CardGone);
         }
 
-        SessionSummary summary = await learning.CompleteSessionAsync(learnerId, request.SessionId, ct);
-        return Results.Ok(new { accepted = results.Count, summary });
+        try
+        {
+            int accepted = 0;
+            foreach (SubmitAnswerRequest answer in request.Answers)
+            {
+                AnswerResult? result = await learning.SubmitAnswerAsync(
+                    learnerId, request.SessionId, answer.ItemId, answer.GivenAnswer,
+                    answer.AnswerMs, answer.ClientAnswerId, answer.HintUsed, ct);
+                if (result is null)
+                {
+                    return NotFound(CardGone);
+                }
+
+                accepted++;
+            }
+
+            SessionSummary? summary = await learning.CompleteSessionAsync(learnerId, request.SessionId, ct);
+            return summary is null
+                ? NotFound(SessionGone)
+                : Results.Ok(new { accepted, summary });
+        }
+        catch (DbUpdateException conflict) when (IsDuplicateAnswer(conflict))
+        {
+            return Conflict();
+        }
     }
+
+    private static IResult NotFound(string detail) =>
+        Results.Problem(title: NotFoundTitle, detail: detail, statusCode: StatusCodes.Status404NotFound);
+
+    private static IResult Conflict() =>
+        Results.Problem(title: "Schon beantwortet", detail: AlreadyAnswered, statusCode: StatusCodes.Status409Conflict);
+
+    /// <summary>
+    /// Doppel-Antwort: Eine gleichzeitige Antwort hat die Aufgabe schon gewertet
+    /// (Concurrency-Token AnsweredAt), den Lernstand der neuen Karte schon
+    /// angelegt (Primaerschluessel review_state) oder die Antwort-Id schon
+    /// verbraucht (Unique-Index client_answer_id).
+    /// </summary>
+    private static bool IsDuplicateAnswer(DbUpdateException exception) =>
+        exception is DbUpdateConcurrencyException
+        || exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
     private static async Task<Guid> ResolveLearnerAsync(
         WordQuestDbContext db, Guid sessionId, CancellationToken ct)
