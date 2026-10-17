@@ -176,6 +176,23 @@ public sealed class LearnerDeleteTests : IClassFixture<ApiFactory>
         Assert.True(await UserExistsAsync(family.Owner.Id));
     }
 
+    /// <summary>
+    /// Bearbeiten-Seite in einem zweiten Tab: Speichern nach dem Loeschen zeigt
+    /// denselben deutschen Text wie das Loeschen (Review 02-02).
+    /// </summary>
+    [Fact]
+    public async Task Einstellungen_eines_geloeschten_Kindes_ergeben_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        Assert.Equal(HttpStatusCode.NoContent, (await DeleteAsync(owner, family.Child.Id)).StatusCode);
+        HttpResponseMessage response = await owner.PatchAsJsonAsync(
+            $"{Learners}/{family.Child.Id}/settings", new { dailyNewLimit = 7 });
+
+        Assert.Equal(ChildGone, await DetailAsync(response, HttpStatusCode.NotFound));
+    }
+
     // ------------------------------------------------------------ FIX-04 / D-11
 
     [Fact]

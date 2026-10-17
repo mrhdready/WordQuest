@@ -100,7 +100,11 @@ public static class LearnerEndpoints
 
         if (profile is null)
         {
-            return Results.NotFound();
+            // Mit Text: die Bearbeiten-Seite eines in einem anderen Tab geloeschten Kindes zeigt ihn an.
+            return Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Kind gibt es nicht (mehr).",
+                statusCode: StatusCodes.Status404NotFound);
         }
 
         // Alles pruefen, bevor etwas zugewiesen wird: eine abgelehnte Anfrage aendert nichts.
