@@ -503,4 +503,30 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
         Assert.Equal(2, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("imported").GetInt32());
         Assert.Equal(3, await EntryCountAsync(set.Set.Id));
     }
+
+    // Lesbarer Body ohne Pflichtfeld: System.Text.Json bindet null ohne Fehler (WR-02, W-1).
+    // 400 mit deutschem Text statt 500, nichts wird geschrieben.
+    public static TheoryData<string, string, string> ImportWithoutRequiredField => new()
+    {
+        { "import", "{}", "Es fehlen die Vokabeln." },
+        { "import", "{\"entries\":null}", "Es fehlen die Vokabeln." },
+        { "import", "{\"entries\":[null]}", "Es fehlen die Vokabeln." },
+        { "import/preview", "{}", "Es fehlt der Text zum Importieren." },
+    };
+
+    [Theory]
+    [MemberData(nameof(ImportWithoutRequiredField))]
+    public async Task Import_ohne_Pflichtfeld_ergibt_400_mit_deutschem_Text(string path, string body, string message)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        string url = path == "import" ? $"/api/v1/sets/{set.Set.Id}/import" : "/api/v1/sets/import/preview";
+
+        HttpResponseMessage response = await owner.PostAsync(url, new StringContent(body, Encoding.UTF8, "application/json"));
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(response);
+        Assert.Equal(message, Assert.Single(errors).Value[0]);
+        Assert.Equal(1, await EntryCountAsync(set.Set.Id));
+    }
 }

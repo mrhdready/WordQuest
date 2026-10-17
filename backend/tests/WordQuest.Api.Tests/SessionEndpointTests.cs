@@ -568,6 +568,11 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
             $"{Sessions}/sync", new { sessionId = session.SessionId, answers = (object?)null });
         Assert.Equal("Es fehlen die Antworten.", await FieldErrorAsync(missing, "answers"));
 
+        // Eine leere Antwort in der Liste ergab 500 (W-1).
+        HttpResponseMessage nullAnswer = await child.PostAsJsonAsync(
+            $"{Sessions}/sync", new { sessionId = session.SessionId, answers = new object?[] { null } });
+        Assert.Equal("Es fehlen die Antworten.", await FieldErrorAsync(nullAnswer, "answers"));
+
         object Answer(Guid itemId, string text) =>
             new { itemId, givenAnswer = text, answerMs = 2000, clientAnswerId = Guid.NewGuid(), hintUsed = false };
         HttpResponseMessage foreign = await child.PostAsJsonAsync($"{Sessions}/sync", new

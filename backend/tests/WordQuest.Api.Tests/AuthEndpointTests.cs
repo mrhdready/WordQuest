@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using WordQuest.Api.Contracts;
 using WordQuest.Modules.Identity.Entities;
@@ -74,6 +75,28 @@ public sealed class AuthEndpointTests : IAsyncLifetime
             body is null ? null : new StringContent(body, Encoding.UTF8, "application/json"));
 
         Assert.Equal(BadBody, await DetailAsync(response, HttpStatusCode.BadRequest));
+    }
+
+    // Lesbarer Body ohne Pflichtfeld: System.Text.Json bindet null ohne Fehler, das
+    // zentrale 400 greift nicht. Ebenfalls 400 mit deutschem Text statt 500 (W-1).
+    [Theory]
+    [InlineData("refresh", "{}", "refreshToken", "Es fehlt das Anmelde-Token.")]
+    [InlineData("refresh", "{\"refreshToken\":null}", "refreshToken", "Es fehlt das Anmelde-Token.")]
+    [InlineData("logout", "{}", "refreshToken", "Es fehlt das Anmelde-Token.")]
+    [InlineData("logout", "{\"refreshToken\":null}", "refreshToken", "Es fehlt das Anmelde-Token.")]
+    [InlineData("login", "{}", "email", "Bitte gib E-Mail-Adresse und Passwort ein.")]
+    public async Task Anfrage_ohne_Pflichtfeld_ergibt_400_mit_deutschem_Text(
+        string endpoint, string body, string key, string message)
+    {
+        using HttpClient client = _factory.CreateClient();
+
+        HttpResponseMessage response = await client.PostAsync(
+            $"{Auth}/{endpoint}", new StringContent(body, Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        HttpValidationProblemDetails? problem = await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>();
+        Assert.NotNull(problem);
+        Assert.Equal(message, problem.Errors[key][0]);
     }
 
     // ------------------------------------------------------------ Login

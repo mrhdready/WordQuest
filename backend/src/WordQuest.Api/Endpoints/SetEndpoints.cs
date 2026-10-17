@@ -284,6 +284,15 @@ public static class SetEndpoints
     /// </summary>
     private static IResult PreviewImport(ImportPreviewRequest request)
     {
+        // Lesbarer Body ohne Feld: System.Text.Json bindet null ohne Fehler (WR-02).
+        if (request.Content is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["content"] = ["Es fehlt der Text zum Importieren."],
+            });
+        }
+
         CsvParseResult parsed = CsvVocabularyParser.Parse(request.Content);
 
         return Results.Ok(new ImportPreviewResponse(
@@ -297,6 +306,15 @@ public static class SetEndpoints
     private static async Task<IResult> ConfirmImportAsync(
         Guid setId, ImportConfirmRequest request, WordQuestDbContext db, CancellationToken ct)
     {
+        // Fehlende Liste oder leere Zeile: 400 statt NullReferenceException (WR-02).
+        if (request.Entries is null || request.Entries.Any(row => row is null))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["entries"] = ["Es fehlen die Vokabeln."],
+            });
+        }
+
         if (!await db.VocabularySets.AnyAsync(s => s.Id == setId, ct))
         {
             return Results.NotFound();

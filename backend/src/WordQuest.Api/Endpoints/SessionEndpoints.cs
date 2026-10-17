@@ -138,7 +138,8 @@ public static class SessionEndpoints
         HttpContext http,
         CancellationToken ct)
     {
-        if (request.Answers is null)
+        // Auch eine leere Antwort in der Liste: 400 statt NullReferenceException (W-1).
+        if (request.Answers is null || request.Answers.Any(answer => answer is null))
         {
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["answers"] = [AnswersMissing] });
         }
