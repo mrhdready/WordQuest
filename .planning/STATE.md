@@ -1,13 +1,13 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 1
-current_phase_name: Safe Home-Network Install
+current_phase: 2
+current_phase_name: Reliable Learning & Clean Family Data
 status: verifying
 stopped_at: Completed 02-07-PLAN.md
 last_updated: "2026-10-17T20:57:26.995Z"
-last_activity: 2026-10-16
-last_activity_desc: Phase 1 execution started
+last_activity: 2026-10-17
+last_activity_desc: Phase 2 ausgefuehrt, Audits und Fixes erledigt; manuelle Abnahme offen
 state_head: ebdca52cca2e2dbefed8e58a923a4990b980b79e
 progress:
   total_phases: 3
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** Parents without special know-how can set up WordQuest in their home network and their children can learn with it safely and reliably.
-**Current focus:** Phase 1 — Safe Home-Network Install
+**Current focus:** Phase 2 abgeschlossen bis auf manuelle Abnahme (02-UAT.md); Phase 1 ebenso (01-UAT.md); naechste Phase 3
 
 ## Current Position
 
-Phase: 1 (Safe Home-Network Install) — EXECUTING
-Plan: 8 of 8
-Status: Phase complete — ready for verification
-Last activity: 2026-10-16 — Phase 1 execution started
+Phase: 2 (Reliable Learning & Clean Family Data) — VERIFYING (human_needed)
+Plan: 7 of 7
+Status: Automatisches Gate gruen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen
+Last activity: 2026-10-17 — Phase-2-Audits (Verifikation, Review, Security, UI) und Fixes
 
 Progress: [░░░░░░░░░░] 0%
 
