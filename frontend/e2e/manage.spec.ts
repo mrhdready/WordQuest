@@ -229,6 +229,17 @@ test('Set umbenennen', async ({ page }) => {
   const field = dialog.getByLabel('Titel')
   await expect(field).toBeFocused()
   await expect(field).toHaveValue(title)
+
+  // Serverfehler nach Klick auf "Speichern": Fokus bleibt im Dialog, auf "Abbrechen" (WR-03).
+  const patchUrl = '**/api/v1/sets/*'
+  await page.route(patchUrl, (route) =>
+    route.request().method() === 'PATCH' ? route.fulfill({ status: 500, body: '' }) : route.fallback(),
+  )
+  await dialog.getByRole('button', { name: 'Speichern' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.unroute(patchUrl)
+
   await field.fill(renamed)
   await field.press('Enter')
 
@@ -286,6 +297,17 @@ test('Vokabel bearbeiten', async ({ page }) => {
   const english = dialog.getByLabel('Englisch')
   await expect(german).toBeFocused()
   await expect(german).toHaveValue('Hnud')
+
+  // Serverfehler nach Klick auf "Speichern": Fokus bleibt im Dialog, auf "Abbrechen" (WR-03).
+  const putUrl = '**/api/v1/sets/*/entries/*'
+  await page.route(putUrl, (route) =>
+    route.request().method() === 'PUT' ? route.fulfill({ status: 500, body: '' }) : route.fallback(),
+  )
+  await dialog.getByRole('button', { name: 'Speichern' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.unroute(putUrl)
+
   await german.fill('Hund')
   await english.fill('dog')
   await english.press('Enter')

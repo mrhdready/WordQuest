@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Pencil, Trash2, Upload } from 'lucide-react'
-import { useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -308,6 +308,11 @@ function RenameSet({
   const busyRef = useRef(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  // Der gesperrte "Speichern" gibt den Fokus an body ab (WR-03); nach einem Fehler ohne Feldbezug zurueck in den Dialog.
+  useEffect(() => {
+    if (error) cancelRef.current?.focus()
+  }, [error])
 
   function changeOpen(next: boolean) {
     // Waehrend der Anfrage schliessen weder Esc noch "Abbrechen".
@@ -384,6 +389,7 @@ function RenameSet({
           {error ? <ErrorNote message={error} /> : null}
           <div className="flex flex-wrap gap-2">
             <Button
+              ref={cancelRef}
               type="button"
               variant="secondary"
               className="flex-auto"
@@ -428,6 +434,11 @@ function EditEntry({
   const busyRef = useRef(false)
   const sourceRef = useRef<HTMLInputElement>(null)
   const targetRef = useRef<HTMLInputElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  // Wie RenameSet (WR-03): nach einem Fehler ohne Feldbezug steht der Fokus auf "Abbrechen".
+  useEffect(() => {
+    if (error) cancelRef.current?.focus()
+  }, [error])
 
   function changeOpen(next: boolean) {
     // Waehrend der Anfrage schliessen weder Esc noch "Abbrechen".
@@ -511,6 +522,7 @@ function EditEntry({
         {error ? <ErrorNote message={error} /> : null}
         <div className="flex flex-wrap gap-2">
           <Button
+            ref={cancelRef}
             type="button"
             variant="secondary"
             className="flex-auto"

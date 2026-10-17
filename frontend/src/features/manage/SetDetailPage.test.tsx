@@ -232,6 +232,8 @@ describe('Set umbenennen', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
     expect(input.value).toBe('Unit 4')
     expect((screen.getByRole('button', { name: 'Speichern' }) as HTMLButtonElement).disabled).toBe(false)
+    // WR-03: der gesperrte "Speichern" verliert den Fokus, nach dem Fehler steht er auf "Abbrechen".
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' })))
   })
 
   it('5: Enter im Feld sendet genau ein PATCH', async () => {
@@ -625,6 +627,7 @@ describe('Vokabel bearbeiten', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
     expect([german.value, english.value]).toEqual(['Hund', 'dog'])
     expect(screen.getByText('Hnud → dgo')).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' })))
   })
 
   it('Doppelklick auf "Speichern": genau ein PUT, gesperrt, Esc schließt nicht', async () => {

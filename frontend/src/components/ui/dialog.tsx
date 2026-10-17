@@ -1,6 +1,6 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Trash2 } from 'lucide-react'
-import { useRef, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/ui/misc'
 
@@ -86,6 +86,11 @@ export function ConfirmDialog({
   returnFocusRef,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null)
+  // Der gesperrte "Endgueltig loeschen" gibt den Fokus an body ab (WR-03): nach einem
+  // Fehler steht er wieder im Dialog, auf "Abbrechen" wie beim Oeffnen.
+  useEffect(() => {
+    if (error) cancelRef.current?.focus()
+  }, [error])
   // Waehrend der Anfrage bleibt der Dialog offen, Esc und "Abbrechen" wirken nicht.
   function change(next: boolean) {
     if (!busy) onOpenChange(next)

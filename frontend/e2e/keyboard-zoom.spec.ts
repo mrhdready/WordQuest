@@ -189,7 +189,8 @@ test.describe('Elternbereich', () => {
     const withError = await dialog.boundingBox()
     expect(withError!.height).toBeLessThanOrEqual(zoomed.height - 16)
     expect(withError!.y).toBeGreaterThanOrEqual(8)
-    await cancel.focus()
+    // WR-03: der gesperrte Button gibt den Fokus an body ab; nach dem Fehler steht er von allein auf "Abbrechen".
+    await expect(cancel).toBeFocused()
     await expect(cancel).toBeInViewport({ ratio: 1 })
     await page.keyboard.press('Tab')
     await expect(confirm).toBeFocused()

@@ -138,6 +138,16 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('alertdialog')).toBeTruthy()
   })
 
+  // WR-03: der fokussierte Button wird waehrend busy gesperrt und verliert den Fokus.
+  it('Fehler nach busy: Fokus auf "Abbrechen"', async () => {
+    const { rerender } = render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: 'Öffnen' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    rerender(<Harness busy />)
+    rerender(<Harness error="Das hat nicht geklappt. Versuche es noch einmal." />)
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' })))
+  })
+
   it('"Endgültig löschen" ruft onConfirm', async () => {
     const onConfirm = vi.fn()
     await openDialog({ onConfirm })
