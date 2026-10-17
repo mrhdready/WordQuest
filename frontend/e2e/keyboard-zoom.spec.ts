@@ -268,6 +268,82 @@ test.describe('Elternbereich', () => {
     await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
   })
 
+  // Eigenes Testset mit einer Vokabel, am Schluss ueber "Set löschen" entfernt.
+  test('Dialoge der Vokabelzeile bei 200 %', async ({ page }) => {
+    const title = `Zz E2E Zoom Vokabel ${Date.now()}`
+    await page.goto('/verwalten?neu=1')
+    await page.getByLabel('Titel').fill(title)
+    await page.getByRole('button', { name: 'Anlegen' }).click()
+    await page.getByRole('link').filter({ hasText: title }).click()
+    await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+    await page.getByLabel('Deutsch', { exact: true }).fill('Hund')
+    await page.getByLabel('Englisch', { exact: true }).fill('dog')
+    await page.getByLabel('Englisch', { exact: true }).press('Enter')
+    await expect(page.getByText('Hund → dog')).toBeVisible()
+    const focusVisible = () =>
+      page.evaluate(() => getComputedStyle(document.activeElement as HTMLElement).outlineStyle !== 'none')
+
+    // Vokabel bearbeiten mit zwei Fehlertexten: Sheet im Bild, jeder Button per Tab ganz sichtbar.
+    const edit = page.getByRole('button', { name: 'Hund bearbeiten' })
+    const editDialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+    const german = editDialog.getByLabel('Deutsch')
+    const english = editDialog.getByLabel('Englisch')
+    await edit.focus()
+    await page.keyboard.press('Enter')
+    await expect(german).toBeFocused()
+    await german.fill('')
+    await english.fill('')
+    await english.press('Enter')
+    await expect(editDialog.getByText('Bitte gib das deutsche Wort ein.')).toBeVisible()
+    await expect(editDialog.getByText('Bitte gib das englische Wort ein.')).toBeVisible()
+    await expect(german).toBeFocused()
+    const box = await editDialog.boundingBox()
+    expect(box!.height).toBeLessThanOrEqual(zoomed.height - 16)
+    expect(box!.y).toBeGreaterThanOrEqual(8)
+    for (const name of ['Englisch', 'Abbrechen', 'Speichern']) {
+      await page.keyboard.press('Tab')
+      const target = name === 'Englisch' ? english : editDialog.getByRole('button', { name })
+      await expect(target).toBeFocused()
+      await expect(target).toBeInViewport({ ratio: 1 })
+      expect(await focusVisible(), `${name} ohne sichtbaren Fokus`).toBe(true)
+    }
+    await page.keyboard.press('Tab')
+    await expect(german).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(editDialog).toHaveCount(0)
+    await expect(edit).toBeFocused()
+    await expect(page.getByText('Hund → dog')).toBeVisible()
+
+    // Vokabel löschen: Startfokus "Abbrechen", Tab bleibt im Dialog, Enter auf "Abbrechen" loescht nichts.
+    const remove = page.getByRole('button', { name: 'Hund löschen' })
+    const dialog = page.getByRole('alertdialog', { name: '„Hund“ löschen?' })
+    const cancel = dialog.getByRole('button', { name: 'Abbrechen' })
+    const confirm = dialog.getByRole('button', { name: 'Endgültig löschen' })
+    await remove.focus()
+    await page.keyboard.press('Enter')
+    await expect(cancel).toBeFocused()
+    expect((await dialog.boundingBox())!.height).toBeLessThanOrEqual(zoomed.height - 16)
+    await expect(cancel).toBeInViewport({ ratio: 1 })
+    await expect(confirm).toBeInViewport({ ratio: 1 })
+    expect(await focusVisible(), 'Abbrechen ohne sichtbaren Fokus').toBe(true)
+    await page.keyboard.press('Tab')
+    await expect(confirm).toBeFocused()
+    expect(await focusVisible(), 'Endgültig löschen ohne sichtbaren Fokus').toBe(true)
+    await page.keyboard.press('Tab')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(dialog).toHaveCount(0)
+    await expect(remove).toBeFocused()
+    await expect(page.getByText('Hund → dog')).toBeVisible()
+
+    // Aufraeumen: das Testset per Tastatur loeschen.
+    await page.getByRole('button', { name: 'Set löschen' }).focus()
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
+  })
+
   // Uebernommen aus manage.spec ("Fokus nicht verdeckt bei 640 px"): die lange Set-Liste
   // reicht bei dieser Hoehe unter die Leiste, mindestens ein Ziel muss erst ins Bild rollen.
   test('/verwalten?neu=1', async ({ page }) => {

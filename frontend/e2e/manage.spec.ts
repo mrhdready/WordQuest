@@ -380,6 +380,59 @@ test('Langer Set-Titel bei 320 px', async ({ page }) => {
   await expectWraps(page, page.getByRole('status').filter({ hasText: 'ist gelöscht.' }), `Das Set „${long}“ ist gelöscht.`)
 })
 
+// D-09: beide Vokabel-Dialoge offen (Bearbeiten mit zwei Fehlertexten), danach Erfolgsmeldung ueber dem Leerzustand.
+test('Vokabel-Dialoge barrierefrei', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Vokabeln ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const edit = page.getByRole('button', { name: 'Hund bearbeiten' })
+  const remove = page.getByRole('button', { name: 'Hund löschen' })
+  for (const button of [edit, remove]) {
+    const box = await button.boundingBox()
+    expect([box!.width, box!.height]).toEqual([48, 48])
+  }
+  // Stift vor Papierkorb
+  expect((await edit.boundingBox())!.x).toBeLessThan((await remove.boundingBox())!.x)
+
+  await edit.click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  await dialog.getByLabel('Deutsch').fill('')
+  await dialog.getByLabel('Englisch').fill('')
+  await dialog.getByRole('button', { name: 'Speichern' }).click()
+  await expect(dialog.getByText('Bitte gib das deutsche Wort ein.')).toBeVisible()
+  await expect(dialog.getByText('Bitte gib das englische Wort ein.')).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+
+  await remove.click()
+  const confirm = page.getByRole('alertdialog', { name: '„Hund“ löschen?' })
+  await expect(confirm).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await confirm.getByRole('button', { name: 'Endgültig löschen' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: '„Hund“ ist gelöscht.' })).toBeVisible()
+  await expect(page.getByText('Noch keine Vokabeln in diesem Set')).toBeVisible()
+  await checkPage(page)
+})
+
+// Unguenstigster Fall (UI-SPEC long-text): 200 Zeichen ohne Leerzeichen in Zeile, Dialogtitel und Erfolgsmeldung.
+test('Lange Vokabel bei 320 px', async ({ page }) => {
+  const stamp = `ZzE2E${Date.now()}`
+  const long = stamp + 'x'.repeat(200 - stamp.length)
+  await createAndOpenSet(page, `Zz E2E Lange Vokabel ${Date.now()}`)
+  await addEntry(page, long, 'x')
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await expectWraps(page, page.getByText(`${long} → x`), `${long} → x`)
+  await page.getByRole('button', { name: `${long} löschen` }).click()
+  const dialog = page.getByRole('alertdialog', { name: `„${long}“ löschen?` })
+  await expectWraps(page, dialog.getByRole('heading', { level: 2 }), `„${long}“ löschen?`)
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expectWraps(page, page.getByRole('status').filter({ hasText: 'ist gelöscht.' }), `„${long}“ ist gelöscht.`)
+})
+
 test('Fortschritt: axe 0', async ({ page }) => {
   await page.goto('/verwalten/fortschritt')
   await expect(page.getByText(/^Level \d+$/)).toBeVisible()

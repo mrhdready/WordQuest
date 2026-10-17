@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
@@ -432,5 +432,435 @@ describe('Set löschen', () => {
     expect(await screen.findByText('/verwalten')).toBeTruthy()
     expect(screen.getByText('Das Set „Unit 3“ ist gelöscht.')).toBeTruthy()
     expect(calls.deletes).toBe(1)
+  })
+})
+
+// ------------------------------------------------------------ Vokabeln
+
+const entryGone = 'Diese Vokabel gibt es nicht (mehr).'
+const sourceMissing = 'Bitte gib das deutsche Wort ein.'
+const targetMissing = 'Bitte gib das englische Wort ein.'
+const wordTooLong = 'Das Wort darf höchstens 200 Zeichen lang sein.'
+const entryDeleteDescription =
+  'Der Lernstand aller Kinder zu dieser Vokabel wird mit gelöscht. Das lässt sich nicht rückgängig machen.'
+
+function vocab(id: string, sourceText: string, targetText: string) {
+  return {
+    id,
+    sourceText,
+    targetText,
+    targetAlternatives: [],
+    sourceAlternatives: [],
+    partOfSpeech: 'Unknown',
+    emoji: null,
+    exampleSource: null,
+    exampleTarget: null,
+    position: 0,
+  }
+}
+
+const hnud = vocab('e-1', 'Hnud', 'dgo')
+const katze = vocab('e-2', 'Katze', 'cat')
+const entryNotFound = async () => Response.json({ title: 'Nicht gefunden', detail: entryGone }, { status: 404 })
+const offline = async (): Promise<Response> => {
+  throw new TypeError('Failed to fetch')
+}
+
+/**
+ * fetch-Stub der Set-Seite mit Vokabeln. GET /sets liefert [unit]; GET der
+ * Vokabelliste beim ersten Mal `list`, danach `later` (z. B. ohne die Vokabel
+ * nach einem 404 aus einem anderen Tab). PUT, DELETE und POST antworten per `respond`.
+ */
+function stubEntries(respond: () => Promise<Response>, list: unknown[] = [hnud, katze], later: unknown[] = list) {
+  const calls = { entryGets: 0, puts: [] as unknown[], deletes: 0, posts: [] as unknown[] }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        calls.puts.push(JSON.parse(String(init.body)))
+        return respond()
+      }
+      if (init?.method === 'DELETE') {
+        calls.deletes += 1
+        return respond()
+      }
+      if (init?.method === 'POST') {
+        calls.posts.push(JSON.parse(String(init.body)))
+        return respond()
+      }
+      if (url.endsWith('/entries')) {
+        calls.entryGets += 1
+        return Response.json(calls.entryGets === 1 ? list : later)
+      }
+      return Response.json([unit])
+    }),
+  )
+  return calls
+}
+
+const heading = () => screen.getByRole('heading', { level: 2, name: 'Unit 3' })
+
+async function openEdit() {
+  renderPage()
+  const trigger = await screen.findByRole('button', { name: 'Hnud bearbeiten' })
+  await userEvent.click(trigger)
+  const dialog = screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  // Die Erfassung traegt dieselben Labels: Felder im Dialog suchen.
+  const german = within(dialog).getByLabelText('Deutsch') as HTMLInputElement
+  const english = within(dialog).getByLabelText('Englisch') as HTMLInputElement
+  return { trigger, dialog, german, english }
+}
+
+// Feldfehler am Feld verdrahtet, Fokus dort, keine Anfrage der genannten Art.
+async function expectWordError(input: HTMLInputElement, message: string, sent: unknown[]) {
+  const error = await screen.findByText(message)
+  expect(error.id).toBe(`${input.id}-fehler`)
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  expect(document.activeElement).toBe(input)
+  await settle()
+  expect(sent).toHaveLength(0)
+}
+
+// Hausregel: je Fall genau eine Abweichung, exakte Texte, Enter eigener Pfad, Happy Path zuletzt.
+describe('Vokabel bearbeiten', () => {
+  it('Zeile: Stift vor Papierkorb, Dialog mit Titel, Beschreibung, vorbefüllten Feldern, Fokus Deutsch', async () => {
+    stubEntries(async () => Response.json(hnud))
+    const { trigger, dialog, german, english } = await openEdit()
+    const describedBy = dialog.getAttribute('aria-describedby')
+    expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(
+      'Der Lernstand der Kinder bleibt erhalten.',
+    )
+    expect([german.id, german.value, german.getAttribute('autocomplete')]).toEqual(['vokabel-deutsch', 'Hnud', 'off'])
+    expect([english.id, english.value, english.getAttribute('autocomplete')]).toEqual(['vokabel-englisch', 'dgo', 'off'])
+    expect(document.activeElement).toBe(german)
+    expect(trigger.nextElementSibling?.getAttribute('aria-label')).toBe('Hnud löschen')
+  })
+
+  it.each([
+    ['1: Deutsch leer', 'Deutsch', '', sourceMissing],
+    ['2: Deutsch nur Leerzeichen', 'Deutsch', '   ', sourceMissing],
+    ['3: Deutsch 201 Zeichen', 'Deutsch', 'a'.repeat(201), wordTooLong],
+    ['4: Englisch leer', 'Englisch', '', targetMissing],
+    ['5: Englisch nur Leerzeichen', 'Englisch', '   ', targetMissing],
+    ['6: Englisch 201 Zeichen', 'Englisch', 'b'.repeat(201), wordTooLong],
+  ])('%s → Feldfehler, kein PUT', async (_name, label, value, message) => {
+    const calls = stubEntries(async () => Response.json(hnud))
+    const { dialog } = await openEdit()
+    const input = within(dialog).getByLabelText(label) as HTMLInputElement
+    await replaceTitle(input, value)
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    await expectWordError(input, message, calls.puts)
+  })
+
+  it('beide leer: beide Feldfehler gleichzeitig, Fokus auf Deutsch', async () => {
+    const calls = stubEntries(async () => Response.json(hnud))
+    const { german, english } = await openEdit()
+    await replaceTitle(german, '')
+    await replaceTitle(english, '')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect(screen.getByText(targetMissing).id).toBe('vokabel-englisch-fehler')
+    await expectWordError(german, sourceMissing, calls.puts)
+  })
+
+  it('7: Enter im Feld Englisch sendet genau ein PUT', async () => {
+    const calls = stubEntries(async () => Response.json({ ...hnud, sourceText: 'Hund', targetText: 'dog' }))
+    const { german, english } = await openEdit()
+    await replaceTitle(german, 'Hund')
+    await replaceTitle(english, 'dog')
+    await userEvent.type(english, '{Enter}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await settle()
+    expect(calls.puts).toEqual([{ sourceText: 'Hund', targetText: 'dog' }])
+  })
+
+  it('8: beide geändert, dann Esc → kein PUT, Zeile unverändert, Fokus auf "Hnud bearbeiten"', async () => {
+    const calls = stubEntries(async () => Response.json(hnud))
+    const { trigger, german, english } = await openEdit()
+    await replaceTitle(german, 'Hund')
+    await replaceTitle(english, 'dog')
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    expect(screen.getByText('Hnud → dgo')).toBeTruthy()
+    await settle()
+    expect(calls.puts).toHaveLength(0)
+  })
+
+  it('Server 404 → Fehler im Dialog bis zum Schließen, Esc → Zeile weg, Fokus auf der Set-Überschrift', async () => {
+    const calls = stubEntries(entryNotFound, [hnud, katze], [katze])
+    const { german } = await openEdit()
+    await replaceTitle(german, 'Hund')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(entryGone)
+    expect(screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })).toBeTruthy()
+    expect(german.value).toBe('Hund')
+    await settle()
+    expect(calls.entryGets).toBe(1)
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByText('Hnud → dgo')).toBeNull())
+    expect(calls.entryGets).toBe(2)
+    await waitFor(() => expect(document.activeElement).toBe(heading()))
+  })
+
+  it('Feldfehler des Servers steht am Feld', async () => {
+    const calls = stubEntries(async () =>
+      Response.json({ title: 'One or more validation errors occurred.', errors: { targetText: [wordTooLong] } }, { status: 400 }),
+    )
+    const { english } = await openEdit()
+    await replaceTitle(english, 'dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect((await screen.findByText(wordTooLong)).id).toBe('vokabel-englisch-fehler')
+    expect(document.activeElement).toBe(english)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(calls.puts).toHaveLength(1)
+  })
+
+  it('Server nicht erreichbar: Hinweis im Dialog, Eingaben bleiben', async () => {
+    stubEntries(offline)
+    const { german, english } = await openEdit()
+    await replaceTitle(german, 'Hund')
+    await replaceTitle(english, 'dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
+    expect([german.value, english.value]).toEqual(['Hund', 'dog'])
+    expect(screen.getByText('Hnud → dgo')).toBeTruthy()
+  })
+
+  it('Doppelklick auf "Speichern": genau ein PUT, gesperrt, Esc schließt nicht', async () => {
+    let release: () => void = () => {}
+    const calls = stubEntries(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(Response.json(hnud))
+        }),
+    )
+    await openEdit()
+    const save = screen.getByRole('button', { name: 'Speichern' })
+    await userEvent.dblClick(save)
+    expect(save.textContent).toBe('Einen Moment …')
+    expect((save as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Abbrechen' }) as HTMLButtonElement).disabled).toBe(true)
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })).toBeTruthy()
+    release()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(calls.puts).toHaveLength(1)
+  })
+
+  it('9: Happy Path „Hund“/„dog“: Zeile neu, Erfolgsmeldung, Fokus auf "Hund bearbeiten"', async () => {
+    const fixed = { ...hnud, sourceText: 'Hund', targetText: 'dog' }
+    const calls = stubEntries(async () => Response.json(fixed), [hnud, katze], [fixed, katze])
+    const { german, english } = await openEdit()
+    await replaceTitle(german, ' Hund ')
+    await replaceTitle(english, 'dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect(await screen.findByText('Hund → dog')).toBeTruthy()
+    expect(screen.getByText('Die Vokabel ist gespeichert.').getAttribute('role')).toBe('status')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hund bearbeiten' })))
+    expect(calls.puts).toEqual([{ sourceText: 'Hund', targetText: 'dog' }])
+  })
+})
+
+async function openEntryDelete() {
+  renderPage()
+  const trigger = await screen.findByRole('button', { name: 'Katze löschen' })
+  await userEvent.click(trigger)
+  return { trigger, dialog: screen.getByRole('alertdialog', { name: '„Katze“ löschen?' }) }
+}
+
+describe('Vokabel löschen', () => {
+  it('1: Fokus auf "Abbrechen", Titel und Beschreibung exakt', async () => {
+    stubEntries(noContent)
+    const { dialog } = await openEntryDelete()
+    expect(screen.getByRole('heading', { name: '„Katze“ löschen?' })).toBeTruthy()
+    const describedBy = dialog.getAttribute('aria-describedby')
+    expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(entryDeleteDescription)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abbrechen' }))
+  })
+
+  it('2: Enter direkt nach dem Öffnen → kein DELETE, Fokus auf dem Papierkorb', async () => {
+    const calls = stubEntries(noContent)
+    const { trigger } = await openEntryDelete()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    await settle()
+    expect(calls.deletes).toBe(0)
+  })
+
+  it('3: Esc → kein DELETE, Fokus auf dem Papierkorb', async () => {
+    const calls = stubEntries(noContent)
+    const { trigger } = await openEntryDelete()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+    expect(screen.getByText('Katze → cat')).toBeTruthy()
+    await settle()
+    expect(calls.deletes).toBe(0)
+  })
+
+  it('4: Klick auf die Abdunklung lässt den Dialog offen', async () => {
+    stubEntries(noContent)
+    await openEntryDelete()
+    await userEvent.click(document.querySelector('.bg-scrim') as Element)
+    expect(screen.getByRole('alertdialog', { name: '„Katze“ löschen?' })).toBeTruthy()
+  })
+
+  it('5: Tab bleibt im Dialog', async () => {
+    stubEntries(noContent)
+    await openEntryDelete()
+    const cancel = screen.getByRole('button', { name: 'Abbrechen' })
+    await userEvent.tab()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    await userEvent.tab()
+    expect(document.activeElement).toBe(cancel)
+  })
+
+  it('6: Server 404 → Fehler im Dialog, Zeile bleibt; "Abbrechen" → Zeile weg, Fokus auf der Set-Überschrift', async () => {
+    const calls = stubEntries(entryNotFound, [hnud, katze], [hnud])
+    await openEntryDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(entryGone)
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    expect(screen.getByText('Katze → cat')).toBeTruthy()
+    await settle()
+    expect(calls.entryGets).toBe(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(screen.queryByText('Katze → cat')).toBeNull())
+    expect(calls.entryGets).toBe(2)
+    await waitFor(() => expect(document.activeElement).toBe(heading()))
+  })
+
+  it('6: Server 500 → Fehler im Dialog, "Abbrechen" gibt den Fokus an den Papierkorb', async () => {
+    stubEntries(async () => new Response('', { status: 500 }))
+    const { trigger } = await openEntryDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(generic)
+    expect(screen.getByText('Katze → cat')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+  })
+
+  it('7: Doppelklick auf "Endgültig löschen" sendet genau ein DELETE', async () => {
+    let release: () => void = () => {}
+    const calls = stubEntries(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => void noContent().then(resolve)
+        }),
+      [hnud, katze],
+      [hnud],
+    )
+    await openEntryDelete()
+    const confirm = screen.getByRole('button', { name: 'Endgültig löschen' })
+    await userEvent.dblClick(confirm)
+    expect(confirm.textContent).toBe('Einen Moment …')
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    release()
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(calls.deletes).toBe(1)
+  })
+
+  it('Letzte Vokabel gelöscht: Erfolgsmeldung über dem Leerzustand', async () => {
+    stubEntries(noContent, [katze], [])
+    await openEntryDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect(await screen.findByText('Noch keine Vokabeln in diesem Set')).toBeTruthy()
+    expect(screen.getByText('„Katze“ ist gelöscht.').getAttribute('role')).toBe('status')
+  })
+
+  it('8: Happy Path → Zeile weg, „„Katze“ ist gelöscht.“, Fokus auf der Set-Überschrift', async () => {
+    const calls = stubEntries(noContent, [hnud, katze], [hnud])
+    await openEntryDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    await waitFor(() => expect(screen.queryByText('Katze → cat')).toBeNull())
+    expect(screen.getByText('„Katze“ ist gelöscht.').getAttribute('role')).toBe('status')
+    expect(screen.getByText('Hnud → dgo')).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(heading()))
+    expect(calls.deletes).toBe(1)
+  })
+})
+
+async function renderCapture() {
+  renderPage()
+  const german = (await screen.findByLabelText('Deutsch')) as HTMLInputElement
+  return { german, english: screen.getByLabelText('Englisch') as HTMLInputElement }
+}
+
+const tooLongField = (key: string) => async () =>
+  Response.json({ title: 'One or more validation errors occurred.', errors: { [key]: [wordTooLong] } }, { status: 400 })
+
+describe('Erfassung', () => {
+  it.each([
+    ['1: Deutsch leer', '', 'dog', 'Deutsch', sourceMissing],
+    ['2: Deutsch nur Leerzeichen', '   ', 'dog', 'Deutsch', sourceMissing],
+    ['3: Englisch leer', 'Hund', '', 'Englisch', targetMissing],
+    ['4: Englisch nur Leerzeichen', 'Hund', '   ', 'Englisch', targetMissing],
+  ])('%s → Feldfehler, kein POST', async (_name, source, target, label, message) => {
+    const calls = stubEntries(async () => Response.json(hnud, { status: 201 }))
+    const { german, english } = await renderCapture()
+    await replaceTitle(german, source)
+    await replaceTitle(english, target)
+    await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    await expectWordError(screen.getByLabelText(label) as HTMLInputElement, message, calls.posts)
+  })
+
+  it('Fehlertext steht unter eintrag-deutsch-fehler', async () => {
+    stubEntries(async () => Response.json(hnud, { status: 201 }))
+    const { english } = await renderCapture()
+    await replaceTitle(english, 'dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    expect((await screen.findByText(sourceMissing)).id).toBe('eintrag-deutsch-fehler')
+  })
+
+  it('5: Deutsch leer, Enter im Feld Englisch → Feldfehler, kein POST', async () => {
+    const calls = stubEntries(async () => Response.json(hnud, { status: 201 }))
+    const { german, english } = await renderCapture()
+    await replaceTitle(english, 'dog')
+    await userEvent.type(english, '{Enter}')
+    await expectWordError(german, sourceMissing, calls.posts)
+  })
+
+  it.each([
+    ['6: Deutsch 201 Zeichen', 'a'.repeat(201), 'dog', 'sourceText'],
+    ['7: Englisch 201 Zeichen', 'Hund', 'b'.repeat(201), 'targetText'],
+  ])('%s → Servertext unter dem Formular', async (_name, source, target, key) => {
+    const calls = stubEntries(tooLongField(key))
+    const { german, english } = await renderCapture()
+    await replaceTitle(german, source)
+    await replaceTitle(english, target)
+    await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(wordTooLong)
+    expect(calls.posts).toHaveLength(1)
+  })
+
+  it('8: Server nicht erreichbar → Hinweis unter dem Formular', async () => {
+    stubEntries(offline)
+    const { german, english } = await renderCapture()
+    await replaceTitle(german, 'Hund')
+    await replaceTitle(english, 'dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
+  })
+
+  it('9: Happy Path „Hund“/„dog“ per Enter: ein POST, Zeile da, Felder leer, keine Fehlertexte', async () => {
+    const hund = vocab('e-3', 'Hund', 'dog')
+    const calls = stubEntries(async () => Response.json(hund, { status: 201 }), [], [hund])
+    const { german, english } = await renderCapture()
+    // Erst ein Fehlversuch: der Happy Path muss den Fehlertext wieder wegnehmen.
+    await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    expect(await screen.findByText(sourceMissing)).toBeTruthy()
+    await replaceTitle(german, 'Hund')
+    await replaceTitle(english, 'dog')
+    await userEvent.type(english, '{Enter}')
+    expect(await screen.findByText('Hund → dog')).toBeTruthy()
+    expect([german.value, english.value]).toEqual(['', ''])
+    expect(screen.queryByText(sourceMissing)).toBeNull()
+    expect(screen.queryByText(targetMissing)).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(calls.posts).toEqual([{ sourceText: 'Hund', targetText: 'dog' }])
   })
 })

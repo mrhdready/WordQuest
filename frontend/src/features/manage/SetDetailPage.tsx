@@ -25,6 +25,9 @@ export function SetDetailPage() {
 
   const [source, setSource] = useState('')
   const [target, setTarget] = useState('')
+  const [captureErrors, setCaptureErrors] = useState<WordErrors>({})
+  const sourceRef = useRef<HTMLInputElement>(null)
+  const targetRef = useRef<HTMLInputElement>(null)
   const [showImport, setShowImport] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
   // Fokusziel, wenn das Set schon weg war und die Buttons im Kopf mit ihm verschwinden.
@@ -64,7 +67,16 @@ export function SetDetailPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (source.trim() && target.trim()) addEntry.mutate()
+    addEntry.reset()
+    // Nur "leer" prueft die Seite selbst; die Laenge meldet der Server (ErrorNote unter dem Formular).
+    const found = {
+      sourceText: source.trim() ? undefined : SOURCE_MISSING,
+      targetText: target.trim() ? undefined : TARGET_MISSING,
+    }
+    setCaptureErrors(found)
+    if (found.sourceText) sourceRef.current?.focus()
+    else if (found.targetText) targetRef.current?.focus()
+    else addEntry.mutate()
   }
 
   const back = (
@@ -112,26 +124,30 @@ export function SetDetailPage() {
       {/* Schnellerfassung: zwei Felder, Enter, weiter. Alles andere ist
           optional und wuerde das Abtippen eines Vokabelhefts nur bremsen. */}
       <Card className="flex flex-col gap-4">
-        <form onSubmit={submit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <Field id="eintrag-deutsch" label="Deutsch" className="flex-1">
+        {/* Oben ausgerichtet, damit ein Fehlertext unter einem Feld das andere nicht verschiebt. */}
+        <form noValidate onSubmit={submit} className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <Field id="eintrag-deutsch" label="Deutsch" className="flex-1" error={captureErrors.sourceText}>
             {(control) => (
               <Input
                 {...control}
+                ref={sourceRef}
                 value={source}
                 onChange={(event) => setSource(event.target.value)}
               />
             )}
           </Field>
-          <Field id="eintrag-englisch" label="Englisch" className="flex-1">
+          <Field id="eintrag-englisch" label="Englisch" className="flex-1" error={captureErrors.targetText}>
             {(control) => (
               <Input
                 {...control}
+                ref={targetRef}
                 value={target}
                 onChange={(event) => setTarget(event.target.value)}
               />
             )}
           </Field>
-          <Button type="submit" disabled={addEntry.isPending}>
+          {/* Label (18) + Abstand (8) + Feld (52) = Abstand (18) + Button (60): unten buendig mit den Feldern. */}
+          <Button type="submit" className="sm:mt-[var(--leading-label-section)]" disabled={addEntry.isPending}>
             Hinzufügen
           </Button>
         </form>
