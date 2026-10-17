@@ -360,4 +360,66 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal((entry.SourceText, entry.TargetText), await WordsAsync(entry.Id));
     }
+
+    // ------------------------------------------------- Hinzufuegen: Laenge und 404
+
+    private static Task<HttpResponseMessage> PostEntryAsync(HttpClient client, Guid setId, string sourceText, string targetText) =>
+        client.PostAsJsonAsync($"/api/v1/sets/{setId}/entries", new { sourceText, targetText });
+
+    private async Task<int> EntryCountAsync(Guid setId)
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        return await db.VocabularyEntries.CountAsync(e => e.SetId == setId);
+    }
+
+    public static TheoryData<string, string, string> TooLongWords => new()
+    {
+        { new string('a', 201), "dog", "sourceText" },
+        { "Hund", new string('b', 201), "targetText" },
+    };
+
+    [Theory]
+    [MemberData(nameof(TooLongWords))]
+    public async Task Hinzufuegen_mit_201_Zeichen_ergibt_400_statt_500(string sourceText, string targetText, string key)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await PostEntryAsync(owner, set.Set.Id, sourceText, targetText);
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(response);
+        Assert.Equal(new[] { key }, errors.Keys);
+        Assert.Equal(WordTooLong, errors[key][0]);
+        Assert.Equal(1, await EntryCountAsync(set.Set.Id));
+    }
+
+    [Fact]
+    public async Task Hinzufuegen_zu_unbekanntem_oder_fremdem_Set_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        SeededSet foreign = await SeedSetAsync(_factory, other, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage unknown = await PostEntryAsync(owner, Guid.NewGuid(), "Hund", "dog");
+        HttpResponseMessage foreignResponse = await PostEntryAsync(owner, foreign.Set.Id, "Hund", "dog");
+
+        Assert.Equal(SetGone, await DetailAsync(unknown));
+        Assert.Equal(SetGone, await DetailAsync(foreignResponse));
+        Assert.Equal(1, await EntryCountAsync(foreign.Set.Id));
+    }
+
+    [Fact]
+    public async Task Hinzufuegen_mit_leerer_Spalte_behaelt_den_Bestandstext()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(await PostEntryAsync(owner, set.Set.Id, "  ", "dog"));
+
+        Assert.Equal("Beide Spalten muessen befuellt sein.", errors["entry"][0]);
+        Assert.Equal(1, await EntryCountAsync(set.Set.Id));
+    }
 }

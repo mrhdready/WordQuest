@@ -296,6 +296,33 @@ test('Vokabel bearbeiten', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Hund bearbeiten' })).toBeFocused()
 })
 
+test('Vokabel löschen', async ({ page }) => {
+  const title = `Zz E2E Vokabel löschen ${Date.now()}`
+  await createAndOpenSet(page, title)
+  await addEntry(page, 'Hund', 'dog')
+  await addEntry(page, 'Katze', 'cat')
+
+  const trigger = page.getByRole('button', { name: 'Katze löschen' })
+  const dialog = page.getByRole('alertdialog', { name: '„Katze“ löschen?' })
+  await trigger.click()
+  await expect(dialog).toHaveAccessibleDescription(
+    'Der Lernstand aller Kinder zu dieser Vokabel wird mit gelöscht. Das lässt sich nicht rückgängig machen.',
+  )
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Katze → cat')).toBeVisible()
+  await expect(trigger).toBeFocused()
+
+  await trigger.click()
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Katze → cat')).toHaveCount(0)
+  await expect(page.getByText('Hund → dog')).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: '„Katze“ ist gelöscht.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: title })).toBeFocused()
+})
+
 // D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.
 test('Set-Dialoge barrierefrei', async ({ page }) => {
   const title = `Zz E2E Barrierefrei ${Date.now()}`

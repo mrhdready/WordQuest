@@ -152,7 +152,7 @@ public static class SetEndpoints
     {
         if (!await db.VocabularySets.AnyAsync(s => s.Id == setId, ct))
         {
-            return Results.NotFound();
+            return SetNotFound();
         }
 
         int nextPosition = await db.VocabularyEntries
@@ -167,6 +167,12 @@ public static class SetEndpoints
             {
                 ["entry"] = ["Beide Spalten muessen befuellt sein."],
             });
+        }
+
+        // Nach der Leerpruefung bleibt nur die Laenge; laenger endete sonst als Datenbankfehler (500).
+        if (WordProblems(entry.SourceText, entry.TargetText) is { } tooLong)
+        {
+            return Results.ValidationProblem(tooLong);
         }
 
         db.VocabularyEntries.Add(entry);
@@ -241,7 +247,7 @@ public static class SetEndpoints
 
         if (entry is null)
         {
-            return Results.NotFound();
+            return EntryNotFound();
         }
 
         db.VocabularyEntries.Remove(entry);

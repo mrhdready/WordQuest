@@ -20,6 +20,7 @@ public sealed class SetDeleteTests : IClassFixture<ApiFactory>
     private const string Sessions = "/api/v1/sessions";
     private const string CardGone = "Diese Karte gehört nicht zu dieser Runde. Starte eine neue Runde.";
     private const string SetGone = "Dieses Set gibt es nicht (mehr).";
+    private const string EntryGone = "Diese Vokabel gibt es nicht (mehr).";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -203,6 +204,27 @@ public sealed class SetDeleteTests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         await using var db = _factory.CreateSystemDbContext();
         Assert.True(await db.VocabularySets.AnyAsync(s => s.Id == set.Set.Id));
+    }
+
+    // ---------------------------------------- Vokabel loeschen: IDOR und 404
+
+    [Fact]
+    public async Task Vokabel_einer_anderen_Familie_oder_unbekannt_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet own = await SeedSetAsync(_factory, family, entries: 1);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        SeededSet foreign = await SeedSetAsync(_factory, other, entries: 1);
+        Guid foreignEntry = foreign.Entries[0].Id;
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.DeleteAsync($"/api/v1/sets/{foreign.Set.Id}/entries/{foreignEntry}");
+        HttpResponseMessage unknown = await owner.DeleteAsync($"/api/v1/sets/{own.Set.Id}/entries/{Guid.NewGuid()}");
+
+        Assert.Equal(EntryGone, await DetailAsync(response, HttpStatusCode.NotFound));
+        Assert.Equal(EntryGone, await DetailAsync(unknown, HttpStatusCode.NotFound));
+        await using var db = _factory.CreateSystemDbContext();
+        Assert.True(await db.VocabularyEntries.AnyAsync(e => e.Id == foreignEntry));
     }
 
     // ------------------------------------------------- Rundenstart mit setId

@@ -34,6 +34,7 @@ export function SetDetailPage() {
   // Schliessen; verschwindet die Zeile (geloescht, 404), wird es die Set-Ueberschrift.
   const rowFocusRef = useRef<HTMLElement | null>(null)
   const [editing, setEditing] = useState<VocabularyEntry | null>(null)
+  const [deleting, setDeleting] = useState<VocabularyEntry | null>(null)
 
   // Kein Einzelabruf: der Titel kommt aus der Liste ['sets'] (Muster ChildFormPage).
   const sets = useQuery({
@@ -56,15 +57,6 @@ export function SetDetailPage() {
     onSuccess: () => {
       setSource('')
       setTarget('')
-      void queryClient.invalidateQueries({ queryKey: ['entries', setId] })
-      void queryClient.invalidateQueries({ queryKey: ['sets'] })
-    },
-  })
-
-  const removeEntry = useMutation({
-    mutationFn: (entryId: string) =>
-      api<void>(`/sets/${setId}/entries/${entryId}`, { method: 'DELETE' }),
-    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['entries', setId] })
       void queryClient.invalidateQueries({ queryKey: ['sets'] })
     },
@@ -119,7 +111,7 @@ export function SetDetailPage() {
 
       {/* Schnellerfassung: zwei Felder, Enter, weiter. Alles andere ist
           optional und wuerde das Abtippen eines Vokabelhefts nur bremsen. */}
-      <Card>
+      <Card className="flex flex-col gap-4">
         <form onSubmit={submit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <Field id="eintrag-deutsch" label="Deutsch" className="flex-1">
             {(control) => (
@@ -143,6 +135,8 @@ export function SetDetailPage() {
             Hinzufügen
           </Button>
         </form>
+        {/* ApiError.message ist ein deutscher Satz, bei zu langen Woertern der Feldtext des Servers. */}
+        {addEntry.isError ? <ErrorNote message={addEntry.error.message} /> : null}
       </Card>
 
       <Button variant="ghost" onClick={() => setShowImport((value) => !value)}>
@@ -193,7 +187,10 @@ export function SetDetailPage() {
                 variant="ghost"
                 size="icon"
                 aria-label={`${entry.sourceText} löschen`}
-                onClick={() => removeEntry.mutate(entry.id)}
+                onClick={(event) => {
+                  rowFocusRef.current = event.currentTarget
+                  setDeleting(entry)
+                }}
               >
                 <Trash2 className="size-4" aria-hidden />
               </Button>
@@ -213,6 +210,20 @@ export function SetDetailPage() {
           }}
           onSaved={setSaved}
           onClose={() => setEditing(null)}
+        />
+      ) : null}
+
+      {deleting ? (
+        <DeleteEntry
+          key={deleting.id}
+          setId={setId}
+          entry={deleting}
+          returnFocusRef={rowFocusRef}
+          onRowGone={() => {
+            rowFocusRef.current = headingRef.current
+          }}
+          onDeleted={setSaved}
+          onClose={() => setDeleting(null)}
         />
       ) : null}
     </div>
@@ -496,6 +507,76 @@ function EditEntry({
         </div>
       </form>
     </Dialog>
+  )
+}
+
+// Loescht die Vokabel samt Lernstand aller Kinder dazu (FIX-02, D-17), deshalb mit Bestaetigung.
+function DeleteEntry({
+  setId,
+  entry,
+  returnFocusRef,
+  onRowGone,
+  onDeleted,
+  onClose,
+}: {
+  setId: string
+  entry: VocabularyEntry
+  returnFocusRef: RefObject<HTMLElement | null>
+  onRowGone: () => void
+  onDeleted: (message: string | null) => void
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const stale = useGone(['entries', setId])
+  const busyRef = useRef(false)
+
+  function changeOpen(next: boolean) {
+    if (next) return
+    stale.closed()
+    onClose()
+  }
+
+  async function confirm() {
+    // Ref statt nur disabled: ein zweiter Klick kann vor dem naechsten Rendern ankommen.
+    if (busyRef.current) return
+    busyRef.current = true
+    setBusy(true)
+    setError(null)
+    onDeleted(null)
+    try {
+      await api<void>(`/sets/${setId}/entries/${entry.id}`, { method: 'DELETE' })
+      // Die Zeile verschwindet mitsamt Papierkorb, der Fokus geht auf die Set-Ueberschrift.
+      onRowGone()
+      onDeleted(`„${entry.sourceText}“ ist gelöscht.`)
+      // Wortzahl und Meisterschaft aendern sich mit der Vokabel.
+      for (const key of [['entries', setId], ['sets'], ['traffic-light'], ['overview']]) {
+        void queryClient.invalidateQueries({ queryKey: key })
+      }
+      busyRef.current = false
+      onClose()
+    } catch (caught) {
+      if (stale.noteError(caught)) onRowGone()
+      setError(caught instanceof Error ? caught.message : GENERIC)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={changeOpen}
+      title={`„${entry.sourceText}“ löschen?`}
+      description="Der Lernstand aller Kinder zu dieser Vokabel wird mit gelöscht. Das lässt sich nicht rückgängig machen."
+      confirmLabel="Endgültig löschen"
+      busy={busy}
+      error={error}
+      onConfirm={() => void confirm()}
+      returnFocusRef={returnFocusRef}
+    />
   )
 }
 
