@@ -1010,6 +1010,15 @@ describe('CSV-Import', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(setGone)
   })
 
+  it('Text nach einem Fehler geändert: der alte Fehlertext verschwindet mit der Vorschau', async () => {
+    stubImport([hundRow, katzeRow], { confirm: notFound })
+    const textarea = await runPreview('Hund;dog\nKatze;cat')
+    await userEvent.click(screen.getByRole('button', { name: '2 Vokabeln übernehmen' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    await userEvent.type(textarea, 'x')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('Vorschau läuft: „Einen Moment …“, gesperrt', async () => {
     const answer = held()
     stubImport([hundRow], { preview: answer.answer })
@@ -1031,6 +1040,8 @@ describe('CSV-Import', () => {
     await userEvent.click(screen.getByRole('button', { name: '2 Vokabeln übernehmen' }))
     const busy = await screen.findByRole('button', { name: 'Einen Moment …' })
     expect((busy as HTMLButtonElement).disabled).toBe(true)
+    // Sonst liefe der Import mit den alten Zeilen, waehrend das Feld schon anderes zeigt.
+    expect((screen.getByRole('textbox', { name: /^Eine Zeile pro Vokabel/ }) as HTMLTextAreaElement).readOnly).toBe(true)
     answer.release(Response.json({ imported: 2 }))
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Vorschau' })).toBeNull())
   })

@@ -690,11 +690,14 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
         value={content}
         onChange={(event) => {
           setContent(event.target.value)
-          // Die Vorschau gilt fuer den alten Text: sonst uebernaehme der Button nicht das, was da steht.
+          // Vorschau und Fehlertexte gelten fuer den alten Text: sonst uebernaehme der Button nicht das, was da steht.
           setPreview(null)
+          runPreview.reset()
+          confirm.reset()
         }}
-        // Waehrend der Vorschau gesperrt: sonst kaeme danach die Auswertung des alten Textes an.
-        readOnly={runPreview.isPending}
+        // Waehrend der Anfragen gesperrt: sonst kaeme danach die Auswertung des alten Textes an
+        // bzw. liefe der Import mit Zeilen, die nicht mehr im Feld stehen.
+        readOnly={runPreview.isPending || confirm.isPending}
         placeholder={'Hund;dog\nHaus;house\ngehen;to go'}
         aria-labelledby="import-hinweis"
         className="font-mono"
