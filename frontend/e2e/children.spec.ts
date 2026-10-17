@@ -1,5 +1,6 @@
+import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Browser, type Page } from '@playwright/test'
-import { checkPage, expectReflow } from './axe'
+import { checkPage, expectGlassContrast, expectNoAxeViolations, expectReflow } from './axe'
 import { guardianStorageState } from './global-setup'
 
 test.use({ storageState: guardianStorageState })
@@ -121,6 +122,42 @@ test('Kind löschen', async ({ page, browser, baseURL }) => {
   await context.close()
 })
 
+// Ungünstigster Fall: 100 Zeichen ohne Trennstelle in Dialogtitel und Erfolgsmeldung (UI-SPEC long-text).
+// Kein Aufruf im Rate-Limit "auth".
+test('Kind löschen barrierefrei', async ({ page }) => {
+  const stamp = `Zz E2E${Date.now()}`
+  const name = stamp + 'x'.repeat(100 - stamp.length)
+  await createAndOpen(page, name)
+
+  const trigger = page.getByRole('button', { name: 'Kind löschen' })
+  await trigger.click()
+  const dialog = page.getByRole('alertdialog', { name: `${name} löschen?` })
+  await expect(dialog).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await expectReflow(page)
+  // Der Titel bricht bei 320 px um, statt abgeschnitten zu werden.
+  await page.setViewportSize({ width: 320, height: 568 })
+  const title = dialog.getByRole('heading', { level: 2 })
+  expect(await title.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  expect(await title.textContent()).toBe(`${name} löschen?`)
+  await page.setViewportSize({ width: 1280, height: 720 })
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+
+  await trigger.click()
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(page).toHaveURL(/\/verwalten\/kinder$/)
+  const note = page.getByRole('status').filter({ hasText: `${name} ist gelöscht.` })
+  await expect(note).toBeVisible()
+  await checkPage(page)
+  await page.setViewportSize({ width: 320, height: 568 })
+  expect(await note.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  expect(await note.textContent()).toBe(`${name} ist gelöscht.`)
+})
+
 // Ungünstigster Fall nach D-15: 100 Zeichen ohne Trennstelle. Kein Aufruf im Rate-Limit "auth".
 test('Langer Name', async ({ page }) => {
   const stamp = `Langername${Date.now()}`
@@ -198,6 +235,27 @@ test('Kind bearbeiten barrierefrei', async ({ page }) => {
   await expect(page.getByText('Dieses Kind gibt es nicht (mehr).')).toBeVisible()
   await checkPage(page)
 })
+
+// Hinter dem Sheet liegt je Textzeile anderer Seiteninhalt; axe misst dann nicht
+// ("elmPartiallyObscuring"). Gemessen wird deshalb der Dialog allein: ueber jeder
+// Backdrop-Farbe und ueber primary-deep, der dunkelsten Flaeche der Seite darunter.
+async function expectDialogContrast(page: Page) {
+  await page.evaluate(() => document.getElementById('root')?.style.setProperty('visibility', 'hidden'))
+  await expectGlassContrast(page)
+  await page.evaluate(() => {
+    document.body.style.backgroundImage = 'none'
+    document.body.style.backgroundColor = 'var(--color-primary-deep)'
+  })
+  const result = await new AxeBuilder({ page }).include('[role="alertdialog"]').withRules(['color-contrast']).analyze()
+  expect(result.violations, 'color-contrast ueber primary-deep').toEqual([])
+  expect(result.incomplete, 'nicht gemessener Kontrast ueber primary-deep').toEqual([])
+  expect(result.passes.flatMap((entry) => entry.nodes).length).toBeGreaterThan(0)
+  await page.evaluate(() => {
+    document.body.style.backgroundImage = ''
+    document.body.style.backgroundColor = ''
+    document.getElementById('root')?.style.removeProperty('visibility')
+  })
+}
 
 // Tab-Reihenfolge in <main> bei 320 px, kein Ziel unter der Tab-Leiste (WCAG 2.4.11).
 async function expectFormTabOrder(page: Page, expected: string[]) {

@@ -100,18 +100,19 @@ export function ConfirmDialog({
       returnFocusRef={returnFocusRef}
     >
       {error ? <ErrorNote message={error} /> : null}
+      {/* flex-auto statt flex-1: mit Basis 0 passten beide immer in eine Zeile und der Text brach im Button um. */}
       <div className="flex flex-wrap gap-2">
         <Button
           ref={cancelRef}
           type="button"
           variant="secondary"
-          className="flex-1"
+          className="flex-auto"
           disabled={busy}
           onClick={() => change(false)}
         >
           Abbrechen
         </Button>
-        <Button type="button" variant="danger" className="flex-1" disabled={busy} onClick={onConfirm}>
+        <Button type="button" variant="danger" className="flex-auto" disabled={busy} onClick={onConfirm}>
           <Trash2 className="size-5" aria-hidden />
           {busy ? 'Einen Moment …' : confirmLabel}
         </Button>

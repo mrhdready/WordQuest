@@ -74,9 +74,10 @@ export function ErrorNote({ message }: { message: string }) {
   )
 }
 
+// break-words: Meldungen tragen Namen bis 100 Zeichen ohne Trennstelle ("{Name} ist geloescht.").
 export function SuccessNote({ message }: { message: string }) {
   return (
-    <p className="rounded-sm bg-surface-success p-4 type-body-md text-success-text" role="status">
+    <p className="rounded-sm bg-surface-success p-4 type-body-md break-words text-success-text" role="status">
       {message}
     </p>
   )

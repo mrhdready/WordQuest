@@ -130,6 +130,60 @@ test.describe('Elternbereich', () => {
     await expectKeyboardAtZoom(page, '/verwalten/kinder/:id')
   })
 
+  // Eigenes Testkind ("Zz E2E" am Ende der sortierten Liste), am Schluss ueber den Dialog geloescht.
+  test('Dialog Kind löschen bei 200 %', async ({ page }) => {
+    const name = `Zz E2E Zoom ${Date.now()}`
+    await page.goto('/verwalten/kinder/neu')
+    await page.getByLabel('Name', { exact: true }).fill(name)
+    await page.getByLabel('PIN', { exact: true }).fill('1593')
+    await page.getByRole('button', { name: 'Kind anlegen' }).click()
+    await page.getByRole('link', { name: new RegExp(name) }).click()
+    await expect(page.getByRole('heading', { name: 'Kind bearbeiten' })).toBeVisible()
+
+    const trigger = page.getByRole('button', { name: 'Kind löschen' })
+    const dialog = page.getByRole('alertdialog', { name: `${name} löschen?` })
+    const cancel = dialog.getByRole('button', { name: 'Abbrechen' })
+    const confirm = dialog.getByRole('button', { name: 'Endgültig löschen' })
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+    await expect(cancel).toBeFocused()
+
+    // Sheet hoechstens Viewporthoehe minus 2 x sheet-inset (8 px), beide Buttons ganz im Bild.
+    const box = await dialog.boundingBox()
+    expect(box!.height).toBeLessThanOrEqual(zoomed.height - 16)
+    await expect(cancel).toBeInViewport({ ratio: 1 })
+    await expect(confirm).toBeInViewport({ ratio: 1 })
+
+    const focusVisible = () =>
+      page.evaluate(() => getComputedStyle(document.activeElement as HTMLElement).outlineStyle !== 'none')
+    expect(await focusVisible(), 'Abbrechen ohne sichtbaren Fokus').toBe(true)
+    await page.keyboard.press('Tab')
+    await expect(confirm).toBeFocused()
+    expect(await focusVisible(), 'Endgültig löschen ohne sichtbaren Fokus').toBe(true)
+    await page.keyboard.press('Tab')
+    await expect(cancel).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    // Enter auf dem Startfokus "Abbrechen" loescht nichts.
+    await page.keyboard.press('Enter')
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+    await page.goto('/verwalten/kinder')
+    await expect(page.getByRole('main').getByText(name, { exact: true })).toBeVisible()
+
+    await page.getByRole('link', { name: new RegExp(name) }).click()
+    await page.getByRole('button', { name: 'Kind löschen' }).click()
+    await expect(cancel).toBeFocused()
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('status').filter({ hasText: `${name} ist gelöscht.` })).toBeVisible()
+  })
+
   // Uebernommen aus manage.spec ("Fokus nicht verdeckt bei 640 px"): die lange Set-Liste
   // reicht bei dieser Hoehe unter die Leiste, mindestens ein Ziel muss erst ins Bild rollen.
   test('/verwalten?neu=1', async ({ page }) => {
