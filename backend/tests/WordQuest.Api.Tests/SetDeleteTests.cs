@@ -227,6 +227,21 @@ public sealed class SetDeleteTests : IClassFixture<ApiFactory>
         Assert.True(await db.VocabularyEntries.AnyAsync(e => e.Id == foreignEntry));
     }
 
+    [Fact]
+    public async Task Vokabel_loeschen_mit_Kinder_Token_ergibt_403()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        Guid entryId = set.Entries[0].Id;
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        HttpResponseMessage response = await child.DeleteAsync($"/api/v1/sets/{set.Set.Id}/entries/{entryId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await using var db = _factory.CreateSystemDbContext();
+        Assert.True(await db.VocabularyEntries.AnyAsync(e => e.Id == entryId));
+    }
+
     // ------------------------------------------------- Rundenstart mit setId
 
     [Fact]

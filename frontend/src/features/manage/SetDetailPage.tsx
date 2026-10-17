@@ -68,6 +68,8 @@ export function SetDetailPage() {
   function submit(event: FormEvent) {
     event.preventDefault()
     addEntry.reset()
+    // Die Meldung gehoert zur letzten Aktion: ein neuer Versuch nimmt die alte weg.
+    setSaved(null)
     // Nur "leer" prueft die Seite selbst; die Laenge meldet der Server (ErrorNote unter dem Formular).
     const found = {
       sourceText: source.trim() ? undefined : SOURCE_MISSING,

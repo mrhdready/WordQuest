@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
@@ -648,6 +648,16 @@ describe('Vokabel bearbeiten', () => {
     expect(calls.puts).toHaveLength(1)
   })
 
+  it('Zweimal Absenden im selben Takt: genau ein PUT (Ref-Riegel, nicht nur disabled)', async () => {
+    const calls = stubEntries(() => new Promise<Response>(() => {}))
+    const { dialog } = await openEdit()
+    const form = dialog.querySelector('form') as HTMLFormElement
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+    await settle()
+    expect(calls.puts).toHaveLength(1)
+  })
+
   it('9: Happy Path „Hund“/„dog“: Zeile neu, Erfolgsmeldung, Fokus auf "Hund bearbeiten"', async () => {
     const fixed = { ...hnud, sourceText: 'Hund', targetText: 'dog' }
     const calls = stubEntries(async () => Response.json(fixed), [hnud, katze], [fixed, katze])
@@ -844,6 +854,16 @@ describe('Erfassung', () => {
     await replaceTitle(english, 'dog')
     await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
     expect((await screen.findByRole('alert')).textContent).toBe(unreachable)
+  })
+
+  it('Hinzufügen nimmt eine alte Erfolgsmeldung weg', async () => {
+    stubEntries(noContent, [hnud, katze], [hnud])
+    await openEntryDelete()
+    await userEvent.click(screen.getByRole('button', { name: 'Endgültig löschen' }))
+    expect(await screen.findByText('„Katze“ ist gelöscht.')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Hinzufügen' }))
+    expect(await screen.findByText(sourceMissing)).toBeTruthy()
+    expect(screen.queryByText('„Katze“ ist gelöscht.')).toBeNull()
   })
 
   it('9: Happy Path „Hund“/„dog“ per Enter: ein POST, Zeile da, Felder leer, keine Fehlertexte', async () => {
