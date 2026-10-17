@@ -170,7 +170,14 @@ public static class SetEndpoints
         }
 
         // Nach der Leerpruefung bleibt nur die Laenge; laenger endete sonst als Datenbankfehler (500).
-        if (WordProblems(entry.SourceText, entry.TargetText) is { } tooLong)
+        Dictionary<string, string[]> tooLong = WordProblems(entry.SourceText, entry.TargetText) ?? new();
+        AddTooLong(tooLong, "emoji", entry.Emoji, ContentRules.MaxEmojiLength,
+            $"Das Emoji darf höchstens {ContentRules.MaxEmojiLength} Zeichen lang sein.");
+        AddTooLong(tooLong, "exampleSource", entry.ExampleSource, ContentRules.MaxExampleLength,
+            $"Das Beispiel darf höchstens {ContentRules.MaxExampleLength} Zeichen lang sein.");
+        AddTooLong(tooLong, "exampleTarget", entry.ExampleTarget, ContentRules.MaxExampleLength,
+            $"Das Beispiel darf höchstens {ContentRules.MaxExampleLength} Zeichen lang sein.");
+        if (tooLong.Count > 0)
         {
             return Results.ValidationProblem(tooLong);
         }
@@ -227,6 +234,14 @@ public static class SetEndpoints
             _ => null,
         };
         if (message is not null)
+        {
+            errors[key] = [message];
+        }
+    }
+
+    private static void AddTooLong(Dictionary<string, string[]> errors, string key, string? text, int max, string message)
+    {
+        if (text?.Length > max)
         {
             errors[key] = [message];
         }
@@ -307,8 +322,9 @@ public static class SetEndpoints
         new()
         {
             SetId = setId,
-            SourceText = request.SourceText.Trim(),
-            TargetText = request.TargetText.Trim(),
+            // Fehlt ein Wort im JSON, ist es null: leer, damit die Leerpruefung greift statt eines 500.
+            SourceText = request.SourceText?.Trim() ?? string.Empty,
+            TargetText = request.TargetText?.Trim() ?? string.Empty,
             TargetAlternatives = request.TargetAlternatives ?? [],
             SourceAlternatives = request.SourceAlternatives ?? [],
             PartOfSpeech = Enum.TryParse(request.PartOfSpeech, ignoreCase: true, out PartOfSpeech pos)

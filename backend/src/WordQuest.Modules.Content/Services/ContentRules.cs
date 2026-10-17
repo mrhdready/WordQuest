@@ -14,6 +14,12 @@ public static class ContentRules
     /// </summary>
     public const int MaxTextLength = 200;
 
+    /// <summary>Hoechstlaenge eines Emojis; entspricht <c>HasMaxLength(16)</c> der Spalte.</summary>
+    public const int MaxEmojiLength = 16;
+
+    /// <summary>Hoechstlaenge eines Beispielsatzes; entspricht <c>HasMaxLength(500)</c> der Spalten.</summary>
+    public const int MaxExampleLength = 500;
+
     /// <summary>Prueft nach dem Trimmen: leer fehlt, laenger als <see cref="MaxTextLength"/> ist zu lang, sonst <c>null</c>.</summary>
     public static ContentTextProblem? CheckText(string? text)
     {

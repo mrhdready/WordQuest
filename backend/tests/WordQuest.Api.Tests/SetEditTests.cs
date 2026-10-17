@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
@@ -421,5 +422,61 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
 
         Assert.Equal("Beide Spalten muessen befuellt sein.", errors["entry"][0]);
         Assert.Equal(1, await EntryCountAsync(set.Set.Id));
+    }
+
+    // Direkter API-Aufruf (Befund 02-05): fehlendes Wort oder zu lange Zusatzfelder ergeben 400 statt 500.
+    public static TheoryData<string, string, string> IncompleteOrTooLongEntries => new()
+    {
+        { JsonSerializer.Serialize(new { targetText = "dog" }), "entry", "Beide Spalten muessen befuellt sein." },
+        { JsonSerializer.Serialize(new { sourceText = "Hund" }), "entry", "Beide Spalten muessen befuellt sein." },
+        {
+            JsonSerializer.Serialize(new { sourceText = "Hund", targetText = "dog", emoji = new string('x', 17) }),
+            "emoji", "Das Emoji darf höchstens 16 Zeichen lang sein."
+        },
+        {
+            JsonSerializer.Serialize(new { sourceText = "Hund", targetText = "dog", exampleSource = new string('x', 501) }),
+            "exampleSource", "Das Beispiel darf höchstens 500 Zeichen lang sein."
+        },
+        {
+            JsonSerializer.Serialize(new { sourceText = "Hund", targetText = "dog", exampleTarget = new string('x', 501) }),
+            "exampleTarget", "Das Beispiel darf höchstens 500 Zeichen lang sein."
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(IncompleteOrTooLongEntries))]
+    public async Task Hinzufuegen_ohne_Wort_oder_mit_zu_langem_Zusatzfeld_ergibt_400_statt_500(string body, string key, string message)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.PostAsync(
+            $"/api/v1/sets/{set.Set.Id}/entries", new StringContent(body, Encoding.UTF8, "application/json"));
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(response);
+        Assert.Equal(new[] { key }, errors.Keys);
+        Assert.Equal(message, errors[key][0]);
+        Assert.Equal(1, await EntryCountAsync(set.Set.Id));
+    }
+
+    [Fact]
+    public async Task Hinzufuegen_mit_Zusatzfeldern_an_der_Grenze_ergibt_201()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/sets/{set.Set.Id}/entries", new
+        {
+            sourceText = "Hund",
+            targetText = "dog",
+            emoji = new string('x', 16),
+            exampleSource = new string('x', 500),
+            exampleTarget = new string('y', 500),
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(2, await EntryCountAsync(set.Set.Id));
     }
 }
