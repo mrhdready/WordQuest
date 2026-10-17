@@ -138,7 +138,24 @@ builder.Services.AddRateLimiter(options =>
         }));
 });
 
-builder.Services.AddProblemDetails();
+// Fehlender oder kaputter JSON-Body (direkter API-Aufruf): in jeder Umgebung 400 mit
+// deutschem Text. Ohne das: 500 in Development, englisches "Bad Request" in Production.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+builder.Services.Configure<ExceptionHandlerOptions>(options =>
+{
+    options.StatusCodeSelector = exception =>
+        exception is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status500InternalServerError;
+    // Fehler des Aufrufers, kein Serverfehler: nicht als Error protokollieren.
+    options.SuppressDiagnosticsCallback = context => context.Exception is BadHttpRequestException;
+});
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+{
+    if (context.Exception is BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest })
+    {
+        context.ProblemDetails.Title = "Ungültige Anfrage";
+        context.ProblemDetails.Detail = "Die Anfrage enthält keine lesbaren Daten.";
+    }
+});
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<WordQuestDbContext>("database");
 

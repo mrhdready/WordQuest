@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using WordQuest.Api.Contracts;
 using WordQuest.Modules.Identity.Entities;
@@ -17,6 +18,7 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 {
     private const string Auth = "/api/v1/auth";
     private const string Expired = "Sitzung abgelaufen. Bitte neu anmelden.";
+    private const string BadBody = "Die Anfrage enthält keine lesbaren Daten.";
 
     private readonly ApiFactory _factory = new ApiFactory();
 
@@ -51,6 +53,28 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 
     private static Task<HttpResponseMessage> RefreshAsync(HttpClient client, string refreshToken) =>
         client.PostAsJsonAsync($"{Auth}/refresh", new { refreshToken });
+
+    // ------------------------------------------------------------ Anfrage ohne lesbaren Body
+
+    // Direkter API-Aufruf ohne Body oder mit kaputtem JSON: 400 mit deutschem Text, nie 500
+    // (FIX-04-Geist). Die Oberflaeche sendet so etwas nie.
+    [Theory]
+    [InlineData("login", null)]
+    [InlineData("login", "")]
+    [InlineData("login", "{x")]
+    [InlineData("login", "null")]
+    [InlineData("learner-login", null)]
+    [InlineData("refresh", "{x")]
+    public async Task Anfrage_ohne_lesbaren_Body_ergibt_400_mit_deutschem_Text(string endpoint, string? body)
+    {
+        using HttpClient client = _factory.CreateClient();
+
+        HttpResponseMessage response = await client.PostAsync(
+            $"{Auth}/{endpoint}",
+            body is null ? null : new StringContent(body, Encoding.UTF8, "application/json"));
+
+        Assert.Equal(BadBody, await DetailAsync(response, HttpStatusCode.BadRequest));
+    }
 
     // ------------------------------------------------------------ Login
 
