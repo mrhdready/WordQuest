@@ -299,6 +299,19 @@ describe('Set umbenennen', () => {
     expect(calls.patches).toHaveLength(1)
   })
 
+  it('Neuer Versuch nimmt die alte Erfolgsmeldung weg', async () => {
+    stubSets()
+    const { input } = await openRename()
+    await replaceTitle(input, 'Unit 4')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect(await screen.findByText('Der neue Titel ist gespeichert.')).toBeTruthy()
+    await userEvent.click(screen.getByRole('button', { name: 'Umbenennen' }))
+    await replaceTitle(screen.getByLabelText('Titel') as HTMLInputElement, '')
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect(await screen.findByText('Ein Set braucht einen Titel.')).toBeTruthy()
+    expect(screen.queryByText('Der neue Titel ist gespeichert.')).toBeNull()
+  })
+
   it('8: Happy Path „Unit 3 — At the zoo“: neue Überschrift, Erfolgsmeldung, Fokus auf "Umbenennen"', async () => {
     const renamed = { ...unit, title: 'Unit 3 — At the zoo' }
     const calls = stubSets(async () => Response.json(renamed), [renamed])

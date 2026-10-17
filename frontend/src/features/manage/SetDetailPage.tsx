@@ -221,7 +221,7 @@ function RenameSet({
 }: {
   set: VocabularySet
   backRef: RefObject<HTMLAnchorElement | null>
-  onSaved: (message: string) => void
+  onSaved: (message: string | null) => void
 }) {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -251,6 +251,8 @@ function RenameSet({
     // Ref statt nur disabled: ein zweiter Klick kann vor dem naechsten Rendern ankommen.
     if (busyRef.current) return
     setError(null)
+    // Wie ChildForm: ein neuer Versuch nimmt die alte Erfolgsmeldung weg.
+    onSaved(null)
     const found = titleError(title)
     setFieldError(found)
     if (found) {

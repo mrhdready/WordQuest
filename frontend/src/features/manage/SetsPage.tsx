@@ -14,7 +14,7 @@ import type { VocabularySet } from '@/types'
 export function SetsPage() {
   const queryClient = useQueryClient()
   const location = useLocation()
-  // Erfolgsmeldung nach "Set löschen" (Router-State, ueberlebt kein Neuladen).
+  // Erfolgsmeldung nach "Set löschen" (Router-State, bleibt bis zur naechsten Navigation).
   const message = (location.state as { message?: string } | null)?.message
   const [title, setTitle] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
