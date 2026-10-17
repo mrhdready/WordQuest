@@ -585,8 +585,8 @@ GET    /sets/{id}/entries
 POST   /sets/{id}/entries               sourceText, targetText (je Pflicht, höchstens 200 Zeichen); emoji höchstens 16, exampleSource/exampleTarget höchstens 500 Zeichen; 404 für fremde oder unbekannte Sets
 PUT    /sets/{id}/entries/{entryId}     korrigiert Deutsch und Englisch, IDs und Lernstand bleiben; je Wort Pflicht, höchstens 200 Zeichen; 404 für fremde oder unbekannte Vokabeln
 DELETE /sets/{id}/entries/{entryId}     löscht den Lernstand aller Kinder zu dieser Vokabel; 404 für fremde oder unbekannte Vokabeln
-POST   /sets/import/preview             CSV-Text als JSON → Vorschau
-POST   /sets/{id}/import                bestätigte Einträge
+POST   /sets/import/preview             CSV-Text als JSON → Vorschau; Zeilen über den Grenzen von /entries (Wort 200, Emoji 16) sind Problemzeilen
+POST   /sets/{id}/import                bestätigte Einträge; Einträge außerhalb der Grenzen von /entries werden übersprungen
 
 POST   /sessions                        { learnerId, setId?, gameKey?, size? }
 POST   /sessions/{id}/answers

@@ -68,6 +68,33 @@ public sealed class CsvVocabularyParserTests
         Assert.NotNull(result.Rows[1].Problem);
     }
 
+    // Dieselben Grenzen wie beim Hinzufuegen einer Vokabel; laenger endete beim Bestaetigen als 500.
+    public static TheoryData<string, string> TooLongRows => new()
+    {
+        { $"{new string('a', 201)};dog", "Ein Wort darf höchstens 200 Zeichen lang sein." },
+        { $"Hund;{new string('b', 201)}", "Ein Wort darf höchstens 200 Zeichen lang sein." },
+        { $"Hund;dog;{new string('x', 17)}", "Das Emoji darf höchstens 16 Zeichen lang sein." },
+    };
+
+    [Theory]
+    [MemberData(nameof(TooLongRows))]
+    public void FlagsRowsBeyondTheEntryLimits(string line, string problem)
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse($"Haus;house\n{line}");
+
+        Assert.Equal(1, result.ValidCount);
+        Assert.Equal(problem, result.Rows[1].Problem);
+    }
+
+    [Fact]
+    public void AcceptsRowsExactlyAtTheEntryLimits()
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse(
+            $"{new string('a', 200)};{new string('b', 200)};{new string('x', 16)}");
+
+        Assert.Null(result.Rows[0].Problem);
+    }
+
     [Fact]
     public void SurvivesTheExcelByteOrderMark()
     {

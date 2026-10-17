@@ -169,14 +169,7 @@ public static class SetEndpoints
             });
         }
 
-        // Nach der Leerpruefung bleibt nur die Laenge; laenger endete sonst als Datenbankfehler (500).
-        Dictionary<string, string[]> tooLong = WordProblems(entry.SourceText, entry.TargetText) ?? new();
-        AddTooLong(tooLong, "emoji", entry.Emoji, ContentRules.MaxEmojiLength,
-            $"Das Emoji darf höchstens {ContentRules.MaxEmojiLength} Zeichen lang sein.");
-        AddTooLong(tooLong, "exampleSource", entry.ExampleSource, ContentRules.MaxExampleLength,
-            $"Das Beispiel darf höchstens {ContentRules.MaxExampleLength} Zeichen lang sein.");
-        AddTooLong(tooLong, "exampleTarget", entry.ExampleTarget, ContentRules.MaxExampleLength,
-            $"Das Beispiel darf höchstens {ContentRules.MaxExampleLength} Zeichen lang sein.");
+        Dictionary<string, string[]> tooLong = LengthProblems(entry);
         if (tooLong.Count > 0)
         {
             return Results.ValidationProblem(tooLong);
@@ -214,6 +207,20 @@ public static class SetEndpoints
         entry.TargetText = request.TargetText!.Trim();
         await db.SaveChangesAsync(ct);
         return Results.Ok(ToDto(entry));
+    }
+
+    // Nach der Leerpruefung bleibt nur die Laenge; laenger endete sonst als Datenbankfehler (500).
+    // Hinzufuegen und Import-Bestaetigung nutzen dieselbe Regel.
+    private static Dictionary<string, string[]> LengthProblems(VocabularyEntry entry)
+    {
+        Dictionary<string, string[]> tooLong = WordProblems(entry.SourceText, entry.TargetText) ?? new();
+        AddTooLong(tooLong, "emoji", entry.Emoji, ContentRules.MaxEmojiLength,
+            $"Das Emoji darf höchstens {ContentRules.MaxEmojiLength} Zeichen lang sein.");
+        AddTooLong(tooLong, "exampleSource", entry.ExampleSource, ContentRules.MaxExampleLength,
+            $"Das Beispiel darf höchstens {ContentRules.MaxExampleLength} Zeichen lang sein.");
+        AddTooLong(tooLong, "exampleTarget", entry.ExampleTarget, ContentRules.MaxExampleLength,
+            $"Das Beispiel darf höchstens {ContentRules.MaxExampleLength} Zeichen lang sein.");
+        return tooLong;
     }
 
     // Alle Feldfehler gemeinsam; null, wenn beide Woerter passen. Die Grenze steht in ContentRules.
@@ -303,8 +310,9 @@ public static class SetEndpoints
         var created = new List<VocabularyEntry>();
         foreach (CreateEntryRequest row in request.Entries)
         {
+            // Problemzeilen der Vorschau schickt die Oberflaeche nicht mit; direkte Aufrufe ueberspringen sie hier.
             VocabularyEntry entry = BuildEntry(setId, row, position++);
-            if (entry.SourceText.Length == 0 || entry.TargetText.Length == 0)
+            if (entry.SourceText.Length == 0 || entry.TargetText.Length == 0 || LengthProblems(entry).Count > 0)
             {
                 continue;
             }

@@ -479,4 +479,28 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(2, await EntryCountAsync(set.Set.Id));
     }
+
+    // Direkter Aufruf der Import-Bestaetigung: zu lange Zeilen endeten als 500 und rissen die gueltigen mit.
+    [Fact]
+    public async Task Import_bestaetigen_mit_zu_langer_Zeile_uebernimmt_nur_die_gueltigen()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.PostAsJsonAsync($"/api/v1/sets/{set.Set.Id}/import", new
+        {
+            entries = new object[]
+            {
+                new { sourceText = "Haus", targetText = "house" },
+                new { sourceText = new string('a', 201), targetText = "dog" },
+                new { sourceText = "Hund", targetText = "dog", emoji = new string('x', 17) },
+                new { sourceText = "Baum", targetText = new string('b', 200), emoji = new string('x', 16) },
+            },
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("imported").GetInt32());
+        Assert.Equal(3, await EntryCountAsync(set.Set.Id));
+    }
 }
