@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, tokenStore } from '@/lib/api'
 
 const unreachable =
   'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
@@ -22,6 +22,7 @@ async function caught(): Promise<ApiError> {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  tokenStore.clear()
 })
 
 describe('api() Fehlerform', () => {
@@ -84,5 +85,109 @@ describe('api() Fehlerform', () => {
     const error = await caught()
     expect(error.status).toBe(429)
     expect(error.message).toBe('Zu viele Versuche. Bitte in einer Minute nochmal probieren.')
+  })
+})
+
+// FIX-01 (UI-SPEC Token-Refresh): Nur 400/401 der Refresh-Antwort melden ab. Ein
+// Limit, ein Serverfehler oder ein Netzfehler zeigt den allgemeinen Text, nicht
+// das detail der urspruenglichen 401-Antwort.
+describe('Token-Refresh', () => {
+  const expired = JSON.stringify({
+    title: 'Unauthorized',
+    detail: 'Sitzung abgelaufen. Bitte neu anmelden.',
+  })
+
+  function signIn() {
+    tokenStore.save({
+      accessToken: 'alt-access',
+      refreshToken: 'alt-refresh',
+      expiresInSeconds: 900,
+      user: { id: 'u1', displayName: 'Kind', role: 'Learner', tenantId: 't1' },
+    })
+  }
+
+  // Erste Anfrage 401 mit detail; /auth/refresh antwortet mit refresh() bzw. wirft.
+  function stub(refresh: () => Promise<Response>) {
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshCalls++
+          return refresh()
+        }
+        return new Response(expired, { status: 401 })
+      }),
+    )
+    return () => refreshCalls
+  }
+
+  it.each([429, 503])('Refresh %i: allgemeiner Text, Anmeldung bleibt', async (status) => {
+    signIn()
+    stub(async () => new Response('', { status }))
+    const error = await caught()
+    expect(error.message).toBe(generic)
+    expect(error.status).toBe(status)
+    expect(tokenStore.access).toBe('alt-access')
+    expect(tokenStore.refresh).toBe('alt-refresh')
+  })
+
+  it('Netzfehler beim Refresh: ApiError mit Status 0, Anmeldung bleibt', async () => {
+    signIn()
+    stub(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const error = await caught()
+    expect(error.message).toBe(generic)
+    expect(error.status).toBe(0)
+    expect(tokenStore.refresh).toBe('alt-refresh')
+  })
+
+  it('zwei gleichzeitige 401er und Refresh 429: ein Refresh, beide mit allgemeinem Text', async () => {
+    signIn()
+    const refreshCalls = stub(async () => new Response('', { status: 429 }))
+    const results = await Promise.allSettled([api('/probe'), api('/probe')])
+    expect(refreshCalls()).toBe(1)
+    for (const result of results) {
+      expect(result.status).toBe('rejected')
+      if (result.status === 'rejected') {
+        expect(result.reason).toBeInstanceOf(ApiError)
+        expect((result.reason as ApiError).message).toBe(generic)
+      }
+    }
+  })
+
+  it.each([401, 400])('Refresh %i: Abmeldung, Tokens geloescht', async (status) => {
+    signIn()
+    stub(async () => new Response(expired, { status }))
+    const error = await caught()
+    expect(error.status).toBe(401)
+    expect(error.message).toBe('Sitzung abgelaufen. Bitte neu anmelden.')
+    expect(tokenStore.access).toBeNull()
+    expect(tokenStore.refresh).toBeNull()
+  })
+
+  it('erfolgreicher Refresh: zweite Anfrage mit neuem Token liefert das Ergebnis', async () => {
+    signIn()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        return new Response(
+          JSON.stringify({
+            accessToken: 'neu-access',
+            refreshToken: 'neu-refresh',
+            expiresInSeconds: 900,
+            user: { id: 'u1', displayName: 'Kind', role: 'Learner', tenantId: 't1' },
+          }),
+          { status: 200 },
+        )
+      }
+      const auth = (init?.headers as Record<string, string>).Authorization
+      return auth === 'Bearer neu-access'
+        ? new Response(JSON.stringify({ ok: true }), { status: 200 })
+        : new Response(expired, { status: 401 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await api('/probe')).toEqual({ ok: true })
+    expect(tokenStore.refresh).toBe('neu-refresh')
   })
 })

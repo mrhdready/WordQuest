@@ -87,16 +87,26 @@ async function refreshAccessToken(): Promise<boolean> {
   // komplett verwerfen.
   refreshInFlight ??= (async () => {
     try {
-      const response = await fetch(`${BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      })
+      let response: Response
+      try {
+        response = await fetch(`${BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        })
+      } catch {
+        throw new ApiError(GENERIC, 0)
+      }
 
-      if (!response.ok) {
+      // Nur 400/401 heissen "Anmeldung ungueltig". Ein Limit oder ein kurzer
+      // Serverausfall ist kein Grund, ein Kind abzumelden, und das detail der
+      // urspruenglichen 401-Antwort beschreibt den eigentlichen Fehler nicht;
+      // der Fehler geht ueber refreshInFlight an alle wartenden Aufrufer (FIX-01).
+      if (response.status === 400 || response.status === 401) {
         tokenStore.clear()
         return false
       }
+      if (!response.ok) throw new ApiError(GENERIC, response.status)
 
       tokenStore.save((await response.json()) as AuthResponse)
       return true
