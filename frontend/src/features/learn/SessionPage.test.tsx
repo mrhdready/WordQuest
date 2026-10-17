@@ -148,6 +148,16 @@ describe('Lernrunde', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Zurück' }))
   })
 
+  // Ohne Fehlertext (kein Error geworfen) gilt der Vertragstext der UI-SPEC.
+  it('Fehler ohne Text zeigt "Das hat nicht geklappt. Versuche es noch einmal."', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: () => Promise.reject('kaputt') }) as unknown as Response),
+    )
+    render()
+    expect((await screen.findByRole('alert')).textContent).toBe('Das hat nicht geklappt. Versuche es noch einmal.')
+  })
+
   it('404 zeigt den Server-Text', async () => {
     stubFetch(async () => problem(404, foreignCard))
     render()

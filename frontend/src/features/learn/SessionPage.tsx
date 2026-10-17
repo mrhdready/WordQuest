@@ -13,6 +13,9 @@ import type { AnswerResult, SessionItem, SessionSummary, SessionView } from '@/t
 
 type Phase = 'loading' | 'question' | 'feedback' | 'finishing' | 'done' | 'empty' | 'error'
 
+// Vertragstext fuer unerwartete Fehler ohne eigenen Text (UI-SPEC Copywriting "Error state").
+const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
+
 export function SessionPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -57,7 +60,7 @@ export function SessionPage() {
         shownAt.current = Date.now()
       })
       .catch((caught: unknown) => {
-        setErrorMessage(caught instanceof Error ? caught.message : 'Unbekannter Fehler')
+        setErrorMessage(caught instanceof Error ? caught.message : GENERIC)
         setPhase('error')
       })
   }, [user, setId])
@@ -83,7 +86,7 @@ export function SessionPage() {
       if (data.retryItem) setQueue((previous) => [...previous, data.retryItem!])
     },
     onError: (caught: unknown) => {
-      setErrorMessage(caught instanceof Error ? caught.message : 'Antwort kam nicht an')
+      setErrorMessage(caught instanceof Error ? caught.message : GENERIC)
       setPhase('error')
     },
     onSettled: () => {
@@ -116,7 +119,7 @@ export function SessionPage() {
         setSummary(done)
         setPhase('done')
       } catch (caught) {
-        setErrorMessage(caught instanceof Error ? caught.message : 'Abschluss fehlgeschlagen')
+        setErrorMessage(caught instanceof Error ? caught.message : GENERIC)
         setPhase('error')
       }
     },
@@ -152,7 +155,7 @@ export function SessionPage() {
   if (phase === 'error') {
     return (
       <main className="mx-auto w-full max-w-lg px-screen-margin pt-screen-top pb-8">
-        <ErrorNote message={errorMessage ?? 'Etwas ist schiefgegangen.'} />
+        <ErrorNote message={errorMessage ?? GENERIC} />
         {/* Das Antwortfeld verschwindet mit dem Fehler, der Fokus geht sonst verloren. */}
         <Button autoFocus className="mt-4 w-full" size="lg" onClick={() => navigate('/')}>
           Zurück
