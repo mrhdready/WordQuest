@@ -429,7 +429,7 @@ Level 100 ist absichtlich unerreichbar — ein erreichtes Maximum beendet die Mo
 
 **Münzen:** 1 Münze pro korrekter Antwort, 20 pro abgeschlossener Session. Ausgabe für Avatar-Items (50–300) und Schatzkisten (100) — **geplant, nicht umgesetzt**; Münzen werden derzeit nur gesammelt.
 
-**Streaks:** Zählt ein Tag mit ≥ 1 abgeschlossener Session. **Zwei „Streak-Retter" pro Monat** kompensieren automatisch genau einen verpassten Tag — ohne Rückfrage, ohne Kaufmöglichkeit. Ein an Tag 40 gerissener Streak ist ein realer Abbruchgrund, und ein krankes oder verreistes Kind hat den Ausfall nicht verschuldet. Kein Streak-Zähler auf dem Startbildschirm vor Tag 3 — **geplant, nicht umgesetzt**: `LearnHomePage.tsx` zeigt den Zähler immer. Bekannter Fehler: Eine gerissene Serie wird bis zur nächsten abgeschlossenen Session als laufend angezeigt (`FIX-05`).
+**Streaks:** Zählt ein Tag mit ≥ 1 abgeschlossener Session. **Zwei „Streak-Retter" pro Monat** kompensieren automatisch genau einen verpassten Tag — ohne Rückfrage, ohne Kaufmöglichkeit. Ein an Tag 40 gerissener Streak ist ein realer Abbruchgrund, und ein krankes oder verreistes Kind hat den Ausfall nicht verschuldet. Kein Streak-Zähler auf dem Startbildschirm vor Tag 3 — **geplant, nicht umgesetzt**: `LearnHomePage.tsx` zeigt den Zähler immer. Angezeigt wird die aktuelle Serie (`StreakRules.CurrentStreak`, `FIX-05`): Nach einer Pause ohne verfügbaren Retter ist sie 0, die Startseite zeigt dann „Starte heute deine Serie!“, die Eltern-Ansicht „Keine laufende Serie“. Die Übersicht berechnet sie beim Lesen aus dem letzten aktiven Tag (Ortszeit) und ändert nichts; gespeichert wird die Serie nur beim Abschluss einer Runde.
 
 **Sammelkarten (geplant, nicht umgesetzt):** Eine Karte je 20 **neu gefestigter** Vokabeln — nicht je 20 beantworteter Vokabeln, sonst lässt sich die Sammlung durch stumpfes Wiederholen derselben leichten Wörter farmen. „Gefestigt" folgt derselben Regel wie die grüne Ampel in §9 (`repetitions ≥ 3 && ease ≥ 2.1 && lapses ≤ 1`). Serien zu je 12 Karten (Tiere, Drachen, Ritter, Fahrzeuge), Raritäten 70 / 25 / 5 %. **Keine lizenzierten Inhalte** (im Ursprungskonzept standen Fußballstars) — Bildrechte an realen Personen sind für ein Open-Source-Projekt nicht handhabbar. Im Code existiert nur der Zähler `GamificationProfile.MasteredSinceLastCard`, er wird nicht fortgeschrieben.
 
@@ -448,9 +448,9 @@ Ampeleinstufung pro Vokabel (`VocabularyEntry`, aggregiert über beide Richtunge
 | 🔴 schwierig | `lapses ≥ 3` oder `ease < 1.8` (bei einer der beiden Karten) |
 | ⚪ neu | noch nie beantwortet |
 
-Dieselbe Schwelle (`ease ≥ 2.1`) gilt für „gefestigte Karten" in der Übersicht. Heute steht die Regel an zwei Stellen in `LearnerEndpoints.cs`; sie soll einmal definiert werden (`FIX-06`).
+Die Regel steht einmal in `MasteryRules` (Learning-Modul, `FIX-06`); Ampel und Übersicht benutzen sie. Die Übersicht zählt sicher gelernte Wörter, also genau die Wörter mit grüner Ampel, und alle Wörter der Familie. Die Felder `cardsMastered`/`cardsTotal` behalten ihren Namen und zählen Wörter.
 
-Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen, Streak, heute fällig, neue Karten übrig, gefestigte Karten) und die Ampel je Set. **Geplant, nicht umgesetzt** (v2, `PAR2-03`): Wochenübersicht (Minuten pro Tag, Antworten, Trefferquote) · Top-10-Problemwörter mit Fehlversuchen.
+Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen, Streak, heute fällig, neue Karten übrig, sicher gelernte Wörter) und die Ampel je Set. **Geplant, nicht umgesetzt** (v2, `PAR2-03`): Wochenübersicht (Minuten pro Tag, Antworten, Trefferquote) · Top-10-Problemwörter mit Fehlversuchen.
 
 **Was das Dashboard bewusst nicht zeigt:** keine Vergleiche mit anderen Kindern, keine Prognosen („wird die Arbeit nicht bestehen"), keine Minuten-Genauigkeit der Nutzungszeiten. Das Dashboard soll einem Elternteil zeigen, wo es helfen kann — es ist kein Überwachungswerkzeug. Das Kind sieht in seinem Profil, dass Eltern den Fortschritt sehen können; heimliche Überwachung ist ausgeschlossen.
 

@@ -78,7 +78,7 @@ export function LearnHomePage() {
               {`🪙 ${data.coins}`}
             </span>
             <span className="type-body-sm text-ink-soft">
-              {data.cardsMastered} von {data.cardsTotal} Karten sitzen
+              {`Sicher gelernt: ${data.cardsMastered} von ${data.cardsTotal} ${data.cardsTotal === 1 ? 'Wort' : 'Wörtern'}`}
             </span>
           </div>
         </Card>

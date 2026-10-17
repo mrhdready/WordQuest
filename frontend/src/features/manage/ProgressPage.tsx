@@ -97,7 +97,7 @@ export function ProgressPage() {
             <Stat label="heute fällig" value={overview.data.dueToday} />
             <Stat label="neue Wörter frei" value={overview.data.newRemainingToday} />
             <Stat
-              label="sitzen sicher"
+              label="Wörter sitzen sicher"
               value={`${overview.data.cardsMastered}/${overview.data.cardsTotal}`}
             />
           </dl>

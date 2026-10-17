@@ -234,13 +234,8 @@ public static class LearnerEndpoints
                  && r.LastReviewedAt != null
                  && r.FirstSeenAt >= dayStart, ct);
 
-        int mastered = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId
-                 && r.Repetitions >= 3
-                 && r.EaseFactor >= 2.1
-                 && r.Lapses <= 1, ct);
-
-        int total = await db.Cards.CountAsync(ct);
+        // Woerter, nicht Karten, mit derselben Regel wie die Ampel (FIX-06, D-16).
+        List<WordStates> words = await WordStatesAsync(db, learnerId, setId: null, ct);
 
         return Results.Ok(new LearnerOverviewDto(
             LearnerId: learnerId,
@@ -253,8 +248,9 @@ public static class LearnerEndpoints
             Streak: StreakRules.CurrentStreak(gamification, scheduler.LocalDate(now)),
             DueToday: dueToday,
             NewRemainingToday: Math.Max(0, profile.DailyNewLimit - introducedToday),
-            CardsMastered: mastered,
-            CardsTotal: total));
+            // Die Feldnamen bleiben (U7), gezaehlt werden Woerter.
+            CardsMastered: words.Count(w => MasteryRules.IsWordMastered(w.States)),
+            CardsTotal: words.Count));
     }
 
     /// <summary>
@@ -268,43 +264,20 @@ public static class LearnerEndpoints
         WordQuestDbContext db,
         CancellationToken ct)
     {
-        var rows = await db.Cards
-            .Where(c => setId == null || c.Entry!.SetId == setId)
-            .Select(c => new
+        List<TrafficLightDto> result = (await WordStatesAsync(db, learnerId, setId, ct))
+            .Select(w =>
             {
-                c.EntryId,
-                c.Entry!.SourceText,
-                c.Entry.TargetText,
-                // Nie beantwortete Lernstaende (Altbestand aus dem frueheren
-                // Rundenstart) gelten als neu, wie beim Tagesbudget (FIX-09).
-                State = db.ReviewStates
-                    .Where(r => r.LearnerId == learnerId && r.CardId == c.Id && r.LastReviewedAt != null)
-                    .Select(r => new { r.Repetitions, r.EaseFactor, r.Lapses })
-                    .FirstOrDefault(),
-            })
-            .ToListAsync(ct);
-
-        List<TrafficLightDto> result = rows
-            .GroupBy(r => new { r.EntryId, r.SourceText, r.TargetText })
-            .Select(g =>
-            {
-                bool anySeen = g.Any(x => x.State is not null);
-                int lapses = g.Max(x => x.State?.Lapses ?? 0);
-                double worstEase = g.Min(x => x.State?.EaseFactor ?? 2.5);
-                bool allMastered = g.All(x =>
-                    x.State is not null
-                    && x.State.Repetitions >= 3
-                    && x.State.EaseFactor >= 2.1
-                    && x.State.Lapses <= 1);
+                bool anySeen = w.States.Any(state => state is not null);
+                int lapses = w.States.Max(state => state?.Lapses ?? 0);
+                double worstEase = w.States.Min(state => state?.EaseFactor ?? 2.5);
 
                 string status =
                     !anySeen ? "new"
                     : lapses >= 3 || worstEase < 1.8 ? "red"
-                    : allMastered ? "green"
+                    : MasteryRules.IsWordMastered(w.States) ? "green"
                     : "yellow";
 
-                return new TrafficLightDto(
-                    g.Key.EntryId, g.Key.SourceText, g.Key.TargetText, status, lapses, worstEase);
+                return new TrafficLightDto(w.EntryId, w.SourceText, w.TargetText, status, lapses, worstEase);
             })
             .OrderBy(r => r.Status switch { "red" => 0, "yellow" => 1, "new" => 2, _ => 3 })
             .ThenBy(r => r.SourceText)
@@ -312,4 +285,32 @@ public static class LearnerEndpoints
 
         return Results.Ok(result);
     }
+
+    /// <summary>
+    /// Je Wort die Lernstaende seiner Karten (beide Richtungen), ohne Lernstand
+    /// <c>null</c>. Nie beantwortete Lernstaende (Altbestand aus dem frueheren
+    /// Rundenstart) gelten als neu, wie beim Tagesbudget (FIX-09).
+    /// </summary>
+    private static async Task<List<WordStates>> WordStatesAsync(
+        WordQuestDbContext db, Guid learnerId, Guid? setId, CancellationToken ct)
+    {
+        var cards = await db.Cards
+            .Where(c => setId == null || c.Entry!.SetId == setId)
+            .Select(c => new { c.Id, c.EntryId, c.Entry!.SourceText, c.Entry.TargetText })
+            .ToListAsync(ct);
+
+        Dictionary<Guid, ReviewState> states = await db.ReviewStates
+            .AsNoTracking()
+            .Where(r => r.LearnerId == learnerId && r.LastReviewedAt != null)
+            .ToDictionaryAsync(r => r.CardId, ct);
+
+        return cards
+            .GroupBy(c => new { c.EntryId, c.SourceText, c.TargetText })
+            .Select(g => new WordStates(
+                g.Key.EntryId, g.Key.SourceText, g.Key.TargetText,
+                g.Select(c => states.GetValueOrDefault(c.Id)).ToList()))
+            .ToList();
+    }
+
+    private sealed record WordStates(Guid EntryId, string SourceText, string TargetText, IReadOnlyList<ReviewState?> States);
 }

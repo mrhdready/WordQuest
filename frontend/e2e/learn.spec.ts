@@ -139,6 +139,31 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
   expect(logins.count).toBe(1)
 })
 
+// FIX-05: beide Zustaende des Serien-Badges ohne Verstoss. Nur das Feld streak der
+// echten Uebersicht wird ersetzt; page.route sieht Antworten ueber den Service
+// Worker nicht, deshalb ohne Worker (Muster manage.spec "Reflow").
+test.describe(() => {
+  test.use({ serviceWorkers: 'block' })
+
+  test('Startseite: axe 0 mit Serie 0 und Serie 3', async ({ page }) => {
+    let streak = 0
+    await page.route(/\/api\/v1\/learners\/[^/]+\/overview$/, async (route) => {
+      const response = await route.fetch()
+      await route.fulfill({ response, json: { ...((await response.json()) as object), streak } })
+    })
+
+    await openPicker(page)
+    await loginByKeyboard(page)
+    await expect(page.getByText('Starte heute deine Serie!', { exact: true })).toBeVisible()
+    await checkPage(page)
+
+    streak = 3
+    await page.reload()
+    await expect(page.getByText('3 Tage', { exact: true })).toBeVisible()
+    await checkPage(page)
+  })
+})
+
 // Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen über HTTP"
 // unberuehrt (das Tagesbudget neuer Karten reicht fuer genau eine Runde).
 test('Schließen in einer angefangenen Runde und Fehlerzustand', async ({ page }) => {

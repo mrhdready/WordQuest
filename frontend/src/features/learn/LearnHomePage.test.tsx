@@ -78,3 +78,37 @@ describe('Lern-Startseite', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(profileGone)
   })
 })
+
+// FIX-05/FIX-06: Texte zu den Serverwerten, das Frontend rechnet nichts nach (UI-SPEC zero-one-many).
+describe('Lern-Startseite: Serie und sicher gelernte Wörter', () => {
+  const sets = [{ id: 'set-1', title: 'Tiere', entryCount: 5 }]
+
+  async function renderWith(values: Partial<typeof overview>) {
+    stubFetch({ '/learners/kind-1/overview': { ...overview, ...values }, '/sets': sets })
+    render()
+    await screen.findByText('Level 2')
+  }
+
+  it('Serie 0 zeigt "Starte heute deine Serie!" ohne Flamme', async () => {
+    await renderWith({ streak: 0 })
+    expect(screen.getByText('Starte heute deine Serie!').querySelector('svg')).toBeNull()
+  })
+
+  it.each([
+    [1, '1 Tag'],
+    [3, '3 Tage'],
+  ])('Serie %i zeigt "%s" mit Flamme', async (streak, text) => {
+    await renderWith({ streak })
+    expect(screen.getByText(text).querySelector('svg')).not.toBeNull()
+    expect(screen.queryByText('Starte heute deine Serie!')).toBeNull()
+  })
+
+  it.each([
+    [0, 0, 'Sicher gelernt: 0 von 0 Wörtern'],
+    [0, 1, 'Sicher gelernt: 0 von 1 Wort'],
+    [2, 5, 'Sicher gelernt: 2 von 5 Wörtern'],
+  ])('Wörter %i/%i zeigt "%s"', async (cardsMastered, cardsTotal, text) => {
+    await renderWith({ cardsMastered, cardsTotal })
+    expect(screen.getByText(text, { exact: true })).toBeTruthy()
+  })
+})

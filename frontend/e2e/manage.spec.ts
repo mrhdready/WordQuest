@@ -436,6 +436,7 @@ test('Lange Vokabel bei 320 px', async ({ page }) => {
 test('Fortschritt: axe 0', async ({ page }) => {
   await page.goto('/verwalten/fortschritt')
   await expect(page.getByText(/^Level \d+$/)).toBeVisible()
+  await expect(page.getByText('Wörter sitzen sicher', { exact: true })).toBeVisible()
   await checkPage(page)
 })
 

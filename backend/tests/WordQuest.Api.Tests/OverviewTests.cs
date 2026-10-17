@@ -2,14 +2,17 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using WordQuest.Api.Contracts;
+using WordQuest.Modules.Content.Entities;
 using WordQuest.Modules.Gamification.Entities;
+using WordQuest.Modules.Learning.Entities;
 using WordQuest.Modules.Learning.Services;
 using static WordQuest.Api.Tests.TestData;
 
 namespace WordQuest.Api.Tests;
 
 /// <summary>
-/// GET /api/v1/learners/{id}/overview zeigt die aktuelle Serie (FIX-05, D-12).
+/// GET /api/v1/learners/{id}/overview zeigt die aktuelle Serie (FIX-05, D-12)
+/// und zaehlt sicher gelernte Woerter wie die Ampel (FIX-06, D-16).
 /// Gemeinsame Factory, jede Familie eindeutig (Isolationsregel ApiFactory).
 /// </summary>
 public sealed class OverviewTests : IClassFixture<ApiFactory>
@@ -70,5 +73,52 @@ public sealed class OverviewTests : IClassFixture<ApiFactory>
         GamificationProfile stored = await db.GamificationProfiles.AsNoTracking().SingleAsync(g => g.Id == family.Child.Id);
         Assert.Equal(5, stored.CurrentStreak);
         Assert.Equal(Today().AddDays(-3), stored.LastActiveDate);
+    }
+
+    private static ReviewState Answered(SeededFamily family, Card card, int repetitions = 3, double easeFactor = 2.3, int lapses = 0) => new()
+    {
+        TenantId = family.Tenant.Id,
+        LearnerId = family.Child.Id,
+        CardId = card.Id,
+        Repetitions = repetitions,
+        EaseFactor = easeFactor,
+        Lapses = lapses,
+        DueAt = DateTimeOffset.UtcNow.AddDays(3),
+        FirstSeenAt = DateTimeOffset.UtcNow.AddDays(-20),
+        LastReviewedAt = DateTimeOffset.UtcNow.AddDays(-1),
+        State = ReviewCardState.Review,
+    };
+
+    [Fact]
+    public async Task Uebersicht_zaehlt_sicher_gelernte_Woerter_wie_die_Ampel()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet first = await SeedSetAsync(_factory, family, entries: 3);
+        SeededSet second = await SeedSetAsync(_factory, family, entries: 2);
+
+        // Je Wort zwei Karten (beide Richtungen), in der Reihenfolge der Woerter.
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            db.ReviewStates.AddRange(
+                Answered(family, first.Cards[0]),                 // Wort 1: beide gemeistert
+                Answered(family, first.Cards[1]),
+                Answered(family, first.Cards[2]),                 // Wort 2: eine gemeistert, eine ohne Lernstand
+                                                                  // Wort 3: ohne Lernstand
+                Answered(family, second.Cards[0], lapses: 3),     // Wort 4: dreimal vergessen
+                Answered(family, second.Cards[2], repetitions: 0, easeFactor: 2.5), // Wort 5: neue Karten
+                Answered(family, second.Cards[3], repetitions: 0, easeFactor: 2.5));
+            await db.SaveChangesAsync();
+        }
+
+        LearnerOverviewDto overview = await OverviewAsync(family);
+        using HttpClient client = _factory.CreateClientFor(family.Owner);
+        List<TrafficLightDto> lights = (await client.GetFromJsonAsync<List<TrafficLightDto>>(
+            $"/api/v1/learners/{family.Child.Id}/traffic-light"))!;
+
+        Assert.Equal(1, overview.CardsMastered);
+        Assert.Equal(5, overview.CardsTotal);
+        Assert.Equal(5, lights.Count);
+        Assert.Equal(overview.CardsMastered, lights.Count(l => l.Status == "green"));
+        Assert.Equal(first.Entries[0].Id, lights.Single(l => l.Status == "green").EntryId);
     }
 }
