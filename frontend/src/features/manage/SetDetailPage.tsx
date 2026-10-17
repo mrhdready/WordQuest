@@ -709,7 +709,13 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
       <Textarea
         rows={6}
         value={content}
-        onChange={(event) => setContent(event.target.value)}
+        onChange={(event) => {
+          setContent(event.target.value)
+          // Die Vorschau gilt fuer den alten Text: sonst uebernaehme der Button nicht das, was da steht.
+          setPreview(null)
+        }}
+        // Waehrend der Vorschau gesperrt: sonst kaeme danach die Auswertung des alten Textes an.
+        readOnly={runPreview.isPending}
         placeholder={'Hund;dog\nHaus;house\ngehen;to go'}
         aria-labelledby="import-hinweis"
         className="font-mono"

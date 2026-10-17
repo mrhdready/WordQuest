@@ -989,12 +989,15 @@ describe('CSV-Import', () => {
   it('Vorschau läuft: „Einen Moment …“, gesperrt', async () => {
     const answer = held()
     stubImport([hundRow], { preview: answer.answer })
-    await openImport('Hund;dog')
+    const textarea = await openImport('Hund;dog')
     await userEvent.click(screen.getByRole('button', { name: 'Vorschau' }))
     const busy = await screen.findByRole('button', { name: 'Einen Moment …' })
     expect((busy as HTMLButtonElement).disabled).toBe(true)
+    // Sonst kaeme die Vorschau des alten Textes nach einer Aenderung noch an.
+    expect(textarea.readOnly).toBe(true)
     answer.release(Response.json(previewOf([hundRow])))
     expect(await screen.findByRole('button', { name: 'Vorschau' })).toBeTruthy()
+    expect(textarea.readOnly).toBe(false)
   })
 
   it('Übernehmen läuft: „Einen Moment …“, gesperrt', async () => {
@@ -1006,5 +1009,18 @@ describe('CSV-Import', () => {
     expect((busy as HTMLButtonElement).disabled).toBe(true)
     answer.release(Response.json({ imported: 2 }))
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Vorschau' })).toBeNull())
+  })
+
+  it('Text nach der Vorschau geändert: Vorschau verworfen, Übernehmen gesperrt, kein Import', async () => {
+    const calls = stubImport([hundRow])
+    const textarea = await runPreview('Hund;dog')
+    await userEvent.type(textarea, '\nKatze;cat')
+    expect(screen.queryByRole('region', { name: 'Vorschau' })).toBeNull()
+    expect(screen.queryByText('1 erkannt')).toBeNull()
+    const confirm = screen.getByRole('button', { name: 'Übernehmen' }) as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    await userEvent.click(confirm)
+    await settle()
+    expect(calls.imports).toHaveLength(0)
   })
 })
