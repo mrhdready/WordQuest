@@ -240,6 +240,34 @@ test('Set umbenennen', async ({ page }) => {
   await expect(page.getByRole('link').filter({ hasText: renamed })).toBeVisible()
 })
 
+test('Set löschen', async ({ page }) => {
+  const title = `Zz E2E Löschen ${Date.now()}`
+  await createAndOpenSet(page, title)
+  await page.getByLabel('Deutsch', { exact: true }).fill('Hund')
+  await page.getByLabel('Englisch', { exact: true }).fill('dog')
+  await page.getByRole('button', { name: 'Hinzufügen' }).click()
+  await expect(page.getByText('Hund → dog')).toBeVisible()
+
+  const trigger = page.getByRole('button', { name: 'Set löschen' })
+  const dialog = page.getByRole('alertdialog', { name: `Set „${title}“ löschen?` })
+  await trigger.click()
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveAccessibleDescription(
+    'Alle Vokabeln dieses Sets und der Lernstand aller Kinder dazu werden gelöscht. Das lässt sich nicht rückgängig machen.',
+  )
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+  await expect(trigger).toBeFocused()
+
+  await trigger.click()
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(page).toHaveURL(/\/verwalten$/)
+  await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
+  await expect(page.getByRole('link').filter({ hasText: title })).toHaveCount(0)
+})
+
 test('Fortschritt: axe 0', async ({ page }) => {
   await page.goto('/verwalten/fortschritt')
   await expect(page.getByText(/^Level \d+$/)).toBeVisible()

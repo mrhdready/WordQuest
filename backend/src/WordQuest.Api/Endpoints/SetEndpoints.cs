@@ -120,9 +120,11 @@ public static class SetEndpoints
         VocabularySet? set = await db.VocabularySets.FirstOrDefaultAsync(s => s.Id == setId, ct);
         if (set is null)
         {
-            return Results.NotFound();
+            return SetNotFound();
         }
 
+        // Vokabeln, Karten und Lernstand entfernt die Datenbank per Fremdschluessel (02-02);
+        // Sitzungsprotokolle bleiben ohne Set-Bezug stehen.
         db.VocabularySets.Remove(set);
         await db.SaveChangesAsync(ct);
         return Results.NoContent();

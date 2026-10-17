@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Pencil, Trash2, Upload } from 'lucide-react'
 import { useRef, useState, type FormEvent, type RefObject } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Dialog } from '@/components/ui/dialog'
+import { ConfirmDialog, Dialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
 import { Input, Textarea } from '@/components/ui/input'
 import { ListGroup, ListRow } from '@/components/ui/list'
@@ -103,6 +103,7 @@ export function SetDetailPage() {
         </h2>
         <div className="flex flex-wrap gap-2">
           <RenameSet key={set.id} set={set} backRef={backRef} onSaved={setSaved} />
+          <DeleteSet key={`loeschen-${set.id}`} set={set} backRef={backRef} />
         </div>
       </div>
 
@@ -191,6 +192,27 @@ function titleError(title: string): string | undefined {
   return undefined
 }
 
+/**
+ * 404 in einem Dialog der Set-Seite: das Set ist schon weg (anderer Tab). Neu
+ * geladen wird erst beim Schliessen: ein Neuladen bei offenem Dialog nimmt das
+ * Set aus der Liste, und Kopf, Dialog und Eingaben verschwinden. Solange gilt
+ * "Alle Sets" als Fokusziel, weil die Buttons im Kopf mit dem Set verschwinden.
+ */
+function useSetGone() {
+  const queryClient = useQueryClient()
+  const [gone, setGone] = useState(false)
+  return {
+    gone,
+    reset: () => setGone(false),
+    noteError: (caught: unknown) => {
+      if (caught instanceof ApiError && caught.status === 404) setGone(true)
+    },
+    closed: () => {
+      if (gone) void queryClient.invalidateQueries({ queryKey: ['sets'] })
+    },
+  }
+}
+
 // Umbenennen an Ort und Stelle (PAR-04, D-08): gleiche Set-ID, der Lernstand bleibt.
 function RenameSet({
   set,
@@ -207,8 +229,7 @@ function RenameSet({
   const [fieldError, setFieldError] = useState<string | undefined>()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  // 404: das Set ist schon weg (anderer Tab). Dann verschwindet "Umbenennen" mit dem Kopf.
-  const [gone, setGone] = useState(false)
+  const stale = useSetGone()
   const busyRef = useRef(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -220,12 +241,8 @@ function RenameSet({
       setTitle(set.title)
       setFieldError(undefined)
       setError(null)
-      setGone(false)
-    } else if (gone) {
-      // Erst beim Schliessen neu laden: ein Neuladen bei offenem Dialog nimmt das Set
-      // aus der Liste, und Kopf, Dialog und Eingaben verschwinden.
-      void queryClient.invalidateQueries({ queryKey: ['sets'] })
-    }
+      stale.reset()
+    } else stale.closed()
     setOpen(next)
   }
 
@@ -249,7 +266,7 @@ function RenameSet({
       onSaved('Der neue Titel ist gespeichert.')
       void queryClient.invalidateQueries({ queryKey: ['sets'] })
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 404) setGone(true)
+      stale.noteError(caught)
       // Feldfehler des Servers am Feld, alles andere im Hinweis ueber den Buttons.
       const fieldMessage = caught instanceof ApiError ? caught.errors?.title?.[0] : undefined
       if (fieldMessage) {
@@ -273,7 +290,7 @@ function RenameSet({
         onOpenChange={changeOpen}
         title="Set umbenennen"
         description="Der Lernstand der Kinder bleibt erhalten."
-        returnFocusRef={gone ? backRef : triggerRef}
+        returnFocusRef={stale.gone ? backRef : triggerRef}
       >
         <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <Field id="set-titel" label="Titel" error={fieldError}>
@@ -304,6 +321,68 @@ function RenameSet({
           </div>
         </form>
       </Dialog>
+    </>
+  )
+}
+
+// Loescht Vokabeln und Lernstand aller Kinder dazu (FIX-02, D-17), deshalb mit Bestaetigung.
+function DeleteSet({ set, backRef }: { set: VocabularySet; backRef: RefObject<HTMLAnchorElement | null> }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const stale = useSetGone()
+  const busyRef = useRef(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  function changeOpen(next: boolean) {
+    setOpen(next)
+    if (next) return
+    setError(null)
+    stale.closed()
+  }
+
+  async function confirm() {
+    // Ref statt nur disabled: ein zweiter Klick kann vor dem naechsten Rendern ankommen.
+    if (busyRef.current) return
+    busyRef.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      await api<void>(`/sets/${set.id}`, { method: 'DELETE' })
+      // Meisterschaft und Wortzahl aendern sich mit dem Set.
+      for (const key of ['sets', 'traffic-light', 'overview']) {
+        void queryClient.invalidateQueries({ queryKey: [key] })
+      }
+      queryClient.removeQueries({ queryKey: ['entries', set.id] })
+      navigate('/verwalten', { state: { message: `Das Set „${set.title}“ ist gelöscht.` } })
+    } catch (caught) {
+      stale.noteError(caught)
+      setError(caught instanceof Error ? caught.message : GENERIC)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Button ref={triggerRef} type="button" variant="danger" size="sm" onClick={() => changeOpen(true)}>
+        <Trash2 className="size-4" aria-hidden />
+        Set löschen
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={changeOpen}
+        title={`Set „${set.title}“ löschen?`}
+        description="Alle Vokabeln dieses Sets und der Lernstand aller Kinder dazu werden gelöscht. Das lässt sich nicht rückgängig machen."
+        confirmLabel="Endgültig löschen"
+        busy={busy}
+        error={error}
+        onConfirm={() => void confirm()}
+        returnFocusRef={stale.gone ? backRef : triggerRef}
+      />
     </>
   )
 }

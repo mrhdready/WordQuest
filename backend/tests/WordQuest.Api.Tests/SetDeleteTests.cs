@@ -172,6 +172,39 @@ public sealed class SetDeleteTests : IClassFixture<ApiFactory>
         Assert.Equal(CardGone, await DetailAsync(answer, HttpStatusCode.NotFound));
     }
 
+    // ------------------------------------------- Set loeschen: IDOR und Rolle
+
+    [Fact]
+    public async Task Set_einer_anderen_Familie_oder_unbekannt_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        SeededSet foreign = await SeedSetAsync(_factory, other);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.DeleteAsync($"/api/v1/sets/{foreign.Set.Id}");
+        HttpResponseMessage unknown = await owner.DeleteAsync($"/api/v1/sets/{Guid.NewGuid()}");
+
+        Assert.Equal(SetGone, await DetailAsync(response, HttpStatusCode.NotFound));
+        Assert.Equal(SetGone, await DetailAsync(unknown, HttpStatusCode.NotFound));
+        await using var db = _factory.CreateSystemDbContext();
+        Assert.True(await db.VocabularySets.AnyAsync(s => s.Id == foreign.Set.Id));
+    }
+
+    [Fact]
+    public async Task Set_loeschen_mit_Kinder_Token_ergibt_403()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        HttpResponseMessage response = await child.DeleteAsync($"/api/v1/sets/{set.Set.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await using var db = _factory.CreateSystemDbContext();
+        Assert.True(await db.VocabularySets.AnyAsync(s => s.Id == set.Set.Id));
+    }
+
     // ------------------------------------------------- Rundenstart mit setId
 
     [Fact]

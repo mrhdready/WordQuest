@@ -1,18 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight } from 'lucide-react'
 import { useRef, useState, type FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { ListGroup, ListRow } from '@/components/ui/list'
-import { EmptyState, ErrorNote, Spinner } from '@/components/ui/misc'
+import { EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api, ApiError } from '@/lib/api'
 import type { VocabularySet } from '@/types'
 
 export function SetsPage() {
   const queryClient = useQueryClient()
+  const location = useLocation()
+  // Erfolgsmeldung nach "Set löschen" (Router-State, ueberlebt kein Neuladen).
+  const message = (location.state as { message?: string } | null)?.message
   const [title, setTitle] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
   // Das Formular oeffnet der "+" neben der Tab-Leiste ueber ?neu=1.
@@ -58,6 +61,7 @@ export function SetsPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {message ? <SuccessNote message={message} /> : null}
       {showForm ? (
         <Card>
           <form onSubmit={submit} className="flex flex-col gap-4">
