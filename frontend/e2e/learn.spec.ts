@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Response } from '@playwright/test'
 import type { AnswerResult, SessionItem, SessionView } from '@/types'
 import { checkPage, expectGlassContrast, expectNoAxeViolations, expectReflow } from './axe'
+import { guardianStorageState } from './global-setup'
 
 // Demo-Kind aus DemoDataSeeder (Teststack laeuft mit WQ_SEED_DEMO_DATA).
 const childName = 'Max'
@@ -10,8 +11,9 @@ const demoPin = '1234'
 // Dateiebene (eigener Worker), localhost bleibt davon unberuehrt.
 test.use({ launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] } })
 
-// Rate-Limit "auth": 10 Aufrufe pro Minute je IP, GET /auth/profiles zaehlt mit.
-// Diese Datei bleibt bei hoechstens 8 Aufrufen: je Test ein Laden von / und eine Anmeldung.
+// Rate-Limit "auth": GET /auth/profiles zaehlt mit, je Test ein Laden von / und eine
+// Anmeldung. Der Teststack hebt das Limit an (Auth__RequestsPerMinute in
+// docker-compose.e2e.yml); bei 429 schlaegt der Test sichtbar fehl.
 function expectNotRateLimited(response: Response) {
   expect(response.status(), 'Rate-Limit auth erreicht').not.toBe(429)
 }
@@ -217,6 +219,50 @@ test('Schließen in einer angefangenen Runde und Fehlerzustand', async ({ page }
   await goButton(page).click()
   await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
   await checkPageWithoutGlass(page)
+})
+
+// FIX-03/FIX-09 im gebauten Stack: eigenes Kind, damit das Tagesbudget des
+// Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt.
+test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, browser, baseURL }) => {
+  const name = `Abbruchkind ${Date.now()}`
+  const pin = '4711'
+
+  const guardian = await browser.newContext({ baseURL, storageState: guardianStorageState })
+  const manage = await guardian.newPage()
+  await manage.goto('/verwalten/kinder/neu')
+  await manage.getByLabel('Name', { exact: true }).fill(name)
+  await manage.getByLabel('Neue Karten pro Tag').fill('5')
+  await manage.getByLabel('PIN', { exact: true }).fill(pin)
+  await manage.getByLabel('PIN', { exact: true }).press('Enter')
+  await expect(manage).toHaveURL(/\/verwalten\/kinder$/)
+  await guardian.close()
+
+  await openPicker(page)
+  await page.getByRole('button', { name }).click()
+  await expect(page.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
+  for (const digit of pin) await page.keyboard.press(digit)
+  await sendLogin(page, () => page.keyboard.press('Enter'))
+  const home = page.getByRole('heading', { name: 'Was möchtest du üben?' })
+  await expect(home).toBeVisible()
+
+  const isStart = (url: string) => url.endsWith('/api/v1/sessions')
+  const [first] = await Promise.all([
+    page.waitForResponse((candidate) => isStart(candidate.url())),
+    goButton(page).click(),
+  ])
+  const firstCard = ((await first.json()) as SessionView).items[0]?.cardId
+  expect(firstCard).toBeTruthy()
+  await expect(page.getByRole('textbox')).toBeVisible()
+
+  // Ohne Antwort schliessen: nur Navigation, nichts gewertet.
+  await page.getByRole('button', { name: 'Schließen' }).click()
+  await expect(home).toBeVisible()
+
+  const [second] = await Promise.all([
+    page.waitForResponse((candidate) => isStart(candidate.url())),
+    goButton(page).click(),
+  ])
+  expect(((await second.json()) as SessionView).items[0]?.cardId).toBe(firstCard)
 })
 
 // FIX-07: Heimnetz-HTTP mit nicht-lokalem Hostnamen, also ohne Secure Context

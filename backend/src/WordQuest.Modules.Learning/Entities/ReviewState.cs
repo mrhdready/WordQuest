@@ -45,9 +45,8 @@ public sealed class ReviewState : ITenantOwned
     public DateTimeOffset DueAt { get; set; }
 
     /// <summary>
-    /// Wann die Karte dem Kind zum ersten Mal vorgelegt wurde. Basis fuer das
-    /// Tagesbudget neuer Karten — ohne diesen Zeitstempel laesst sich
-    /// "heute schon eingefuehrt" nicht sauber zaehlen.
+    /// Wann das Kind die Karte zum ersten Mal beantwortet hat; Basis fuer das
+    /// Tagesbudget neuer Karten (FIX-09).
     /// </summary>
     public DateTimeOffset FirstSeenAt { get; set; } = DateTimeOffset.UtcNow;
 

@@ -62,18 +62,26 @@ public sealed class LearningService(
             .Take(scheduler.Options.MaxDuePerSession * 2)
             .ToListAsync(ct);
 
-        // 3. Neue Karten, begrenzt durch das Tagesbudget.
+        // 3. Neue Karten, begrenzt durch das Tagesbudget. Eingefuehrt ist eine
+        // Karte erst mit ihrer ersten Antwort (FIX-09, Konzept §6.3): Ansehen
+        // ohne Antwort kostet nichts. Dieselbe Regel zaehlt die Uebersicht
+        // (LearnerEndpoints.OverviewAsync).
         DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
         int introducedToday = await db.ReviewStates
-            .CountAsync(r => r.LearnerId == learnerId && r.FirstSeenAt >= dayStart, ct);
+            .CountAsync(r => r.LearnerId == learnerId
+                             && r.LastReviewedAt != null
+                             && r.FirstSeenAt >= dayStart, ct);
 
         int newBudget = Math.Max(0, profile.DailyNewLimit - introducedToday);
 
         List<SessionCandidate> fresh = [];
         if (newBudget > 0)
         {
+            // Lernstaende im Zustand New sind nie regulaer beantwortet worden
+            // (Altbestand aus dem frueheren Start oder nur im Cram-Modus
+            // geuebt). Sie bleiben neue Karten und kommen wieder (FIX-03).
             IQueryable<Guid> alreadySeen = db.ReviewStates
-                .Where(r => r.LearnerId == learnerId)
+                .Where(r => r.LearnerId == learnerId && r.State != ReviewCardState.New)
                 .Select(r => r.CardId);
 
             fresh = await cardsInScope
@@ -112,23 +120,6 @@ public sealed class LearningService(
         }
 
         db.LearningSessions.Add(session);
-
-        // Lernstand fuer neue Karten anlegen, damit das Tagesbudget schon beim
-        // Vorlegen zaehlt - sonst kann ein abgebrochener Start beliebig viele
-        // neue Karten "kostenlos" anschauen.
-        foreach (SessionCandidate candidate in selected.Where(c => c.State == ReviewCardState.New))
-        {
-            db.ReviewStates.Add(new ReviewState
-            {
-                LearnerId = learnerId,
-                CardId = candidate.CardId,
-                EaseFactor = scheduler.Options.InitialEaseFactor,
-                DueAt = now,
-                FirstSeenAt = now,
-                State = ReviewCardState.New,
-            });
-        }
-
         await db.SaveChangesAsync(ct);
 
         List<SessionItemView> views = await BuildItemViewsAsync(session.Items, game, ct);
@@ -188,9 +179,21 @@ public sealed class LearningService(
         item.AnswerMs = answerMs;
         item.ClientAnswerId = clientAnswerId;
 
-        ReviewState state = await db.ReviewStates
-            .FirstOrDefaultAsync(r => r.LearnerId == learnerId && r.CardId == card.Id, ct)
-            ?? CreateInitialState(learnerId, card.Id, now);
+        // Die erste Antwort legt den Lernstand an; beim Start entsteht keiner mehr (FIX-03).
+        ReviewState? state = await db.ReviewStates
+            .FirstOrDefaultAsync(r => r.LearnerId == learnerId && r.CardId == card.Id, ct);
+        if (state is null)
+        {
+            state = CreateInitialState(learnerId, card.Id, now);
+            db.ReviewStates.Add(state);
+        }
+
+        // Die erste Antwort ist der Zeitpunkt der Einfuehrung, auch fuer
+        // Altbestaende, die beim frueheren Start angelegt wurden (FIX-09).
+        if (state.LastReviewedAt is null)
+        {
+            state.FirstSeenAt = now;
+        }
 
         double resultingInterval = state.IntervalDays;
         if (game.AffectsScheduling)
@@ -315,11 +318,12 @@ public sealed class LearningService(
         return setId is null ? query : query.Where(c => c.Entry!.SetId == setId);
     }
 
-    private static ReviewState CreateInitialState(Guid learnerId, Guid cardId, DateTimeOffset now) =>
+    private ReviewState CreateInitialState(Guid learnerId, Guid cardId, DateTimeOffset now) =>
         new()
         {
             LearnerId = learnerId,
             CardId = cardId,
+            EaseFactor = scheduler.Options.InitialEaseFactor,
             DueAt = now,
             FirstSeenAt = now,
             State = ReviewCardState.New,

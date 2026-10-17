@@ -191,13 +191,18 @@ public static class LearnerEndpoints
         DateTimeOffset now = clock.GetUtcNow();
         DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
 
+        // Dieselben Mengen und dieselbe Budgetregel wie LearningService.StartSessionAsync:
+        // faellig sind nur Wiederholung und Neulernen, eingefuehrt ist eine
+        // neue Karte erst mit ihrer ersten Antwort (FIX-09).
         int dueToday = await db.ReviewStates.CountAsync(
             r => r.LearnerId == learnerId
-                 && r.State != ReviewCardState.Suspended
+                 && (r.State == ReviewCardState.Review || r.State == ReviewCardState.Relearning)
                  && r.DueAt <= now, ct);
 
         int introducedToday = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId && r.FirstSeenAt >= dayStart, ct);
+            r => r.LearnerId == learnerId
+                 && r.LastReviewedAt != null
+                 && r.FirstSeenAt >= dayStart, ct);
 
         int mastered = await db.ReviewStates.CountAsync(
             r => r.LearnerId == learnerId
