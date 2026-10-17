@@ -43,6 +43,12 @@ export function ProgressPage() {
     enabled: Boolean(learnerId),
   })
 
+  // Ladefehler ist nicht "gibt es nicht" (WR-05, Muster LearnHomePage): sonst fehlte die
+  // Karte still, und die Ampel eines geloeschten Kindes saehe aus wie zurueckgesetzt.
+  const loadError =
+    (overview.isError && !overview.data ? overview.error : null) ??
+    (trafficLight.isError && !trafficLight.data ? trafficLight.error : null)
+
   if (learners.isLoading) return <Spinner />
   // Ladefehler ist nicht "gibt es nicht" (WR-03, Muster ChildFormPage).
   if (learners.isError && !learners.data) return <ErrorNote message={learners.error.message} />
@@ -78,6 +84,8 @@ export function ProgressPage() {
           ))}
         </div>
       ) : null}
+
+      {loadError ? <ErrorNote message={loadError.message} /> : null}
 
       {overview.data ? (
         <Card>

@@ -16,6 +16,34 @@ describe('Fortschritt', () => {
     expect(screen.queryByText('Noch kein Kinderprofil')).toBeNull()
   })
 
+  // WR-05: Ladefehler von Uebersicht und Ampel stehen da, statt still zu fehlen.
+  const childGone = 'Dieses Kind gibt es nicht (mehr).'
+  function stubLoads(overview: () => Response, trafficLight: () => Response) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/overview')) return overview()
+        if (url.endsWith('/traffic-light')) return trafficLight()
+        return Response.json([{ id: 'kind-1', displayName: 'Mia', avatarKey: 'fox' }])
+      }),
+    )
+  }
+
+  it('Ladefehler der Übersicht zeigt den Fehler', async () => {
+    stubLoads(() => new Response('', { status: 500 }), () => Response.json([]))
+    renderWithProviders(<ProgressPage />, { route: '/verwalten/fortschritt', path: '/verwalten/fortschritt' })
+    expect((await screen.findByRole('alert')).textContent).toBe('Das hat nicht geklappt. Versuche es noch einmal.')
+  })
+
+  it('Ampel 404 (Kind gelöscht) zeigt den Servertext statt einer Wortliste', async () => {
+    stubLoads(
+      () => Response.json({ level: 1, levelProgress: 0, streak: 0, dueToday: 0, newRemainingToday: 0, cardsMastered: 0, cardsTotal: 0 }),
+      () => Response.json({ title: 'Nicht gefunden', detail: childGone }, { status: 404 }),
+    )
+    renderWithProviders(<ProgressPage />, { route: '/verwalten/fortschritt', path: '/verwalten/fortschritt' })
+    expect((await screen.findByRole('alert')).textContent).toBe(childGone)
+  })
+
   // FIX-05/FIX-06: Texte zu den Serverwerten (UI-SPEC zero-one-many).
   function stubOverview(streak: number) {
     const routes: Record<string, unknown> = {
