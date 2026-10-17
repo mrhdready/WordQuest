@@ -148,8 +148,8 @@ export function SetDetailPage() {
               />
             )}
           </Field>
-          {/* Label (18) + Abstand (8) + Feld (52) = Abstand (18) + Button (60): unten buendig mit den Feldern. */}
-          <Button type="submit" className="sm:mt-[var(--leading-label-section)]" disabled={addEntry.isPending}>
+          {/* Label (18) + Abstand (8) + Feld (52) = label-row (18) + Button (60): unten buendig mit den Feldern (DESIGN.md Layout). */}
+          <Button type="submit" className="sm:mt-label-row" disabled={addEntry.isPending}>
             Hinzufügen
           </Button>
         </form>

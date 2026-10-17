@@ -169,6 +169,14 @@ test('Eintrag-Formular: unvollständig sendet nichts, Enter und Knopf legen je e
   expect(posts).toHaveLength(2)
 })
 
+// Ab sm stehen Felder und Button nebeneinander; der Button sitzt unten buendig mit den Feldern.
+test('Erfassung: „Hinzufügen“ unten bündig mit den Feldern', async ({ page }) => {
+  await openFirstSet(page)
+  const field = (await page.getByLabel('Deutsch', { exact: true }).boundingBox())!
+  const button = (await page.getByRole('button', { name: 'Hinzufügen' }).boundingBox())!
+  expect(Math.abs(field.y + field.height - (button.y + button.height))).toBeLessThanOrEqual(1)
+})
+
 test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await openFirstSet(page)
   await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()

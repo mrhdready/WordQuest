@@ -117,6 +117,7 @@ spacing:
   sheet-inset: "{spacing.sm}"
   touch-min: 44px
   touch-default: 48px
+  label-row: 18px
 components:
   screen:
     backgroundColor: "{colors.backdrop-base}"
@@ -283,7 +284,7 @@ Systemschrift, abgerundet wo vorhanden (SF Pro Rounded auf Apple-Geräten). Gro�
 
 Einspaltig, Bildschirmrand `screen-margin` (16 px), oben `screen-top` (48 px, Raum für Statusleiste). Haupt-Button und Tab-Leiste schweben `float-bottom` (32 px) über dem unteren Rand. Bottom-Sheets haben `sheet-inset` (8 px) Abstand zu den Rändern.
 
-Alle Abstände (Innen- und Außenabstand, Lücken, Positionen) folgen ausschließlich der Skala 4/8/16/24/32/48/64 (`xs` bis `3xl`, Issue #3, Q8). `touch-min` und `touch-default` sind Größen von Tippflächen, keine Abstände, und gehören nicht zur Skala. PIN-Tasten 80 px, Haupt-Button 60–64 px.
+Alle Abstände (Innen- und Außenabstand, Lücken, Positionen) folgen ausschließlich der Skala 4/8/16/24/32/48/64 (`xs` bis `3xl`, Issue #3, Q8). `touch-min` und `touch-default` sind Größen von Tippflächen, keine Abstände, und gehören nicht zur Skala. Ebenso `label-row`: die Höhe der Beschriftungszeile über einem Feld (gleich der Zeilenhöhe von `label-section`, ändert sich mit ihr). Ein Button neben beschrifteten Feldern rückt um sie nach unten und steht dann unten bündig mit den Feldern (Beschriftung 18 + Lücke 8 + Feld 52 = 18 + Button 60). PIN-Tasten 80 px, Haupt-Button 60–64 px.
 
 ## Elevation & Depth
 
