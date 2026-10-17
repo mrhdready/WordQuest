@@ -9,7 +9,7 @@ import type { Learner } from '@/types'
 
 export function ChildrenPage() {
   const location = useLocation()
-  // Erfolgsmeldung vom Anlege-Formular (Router-State, ueberlebt kein Neuladen).
+  // Erfolgsmeldung vom Anlege-Formular (Router-State, bleibt bis zur naechsten Navigation).
   const message = (location.state as { message?: string } | null)?.message
 
   const learners = useQuery({
