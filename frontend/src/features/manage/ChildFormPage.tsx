@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
-import { useRef, useState, type FormEvent } from 'react'
+import { ArrowLeft, Trash2 } from 'lucide-react'
+import { useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/dialog'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
@@ -39,21 +40,23 @@ function validate(name: string, limit: string, pin: string, pinOptional: boolean
 
 // Ein Formular fuer Anlegen und Bearbeiten (D-08).
 export function ChildFormPage({ mode }: { mode: 'create' | 'edit' }) {
+  // Fokusziel, wenn das Kind beim Loeschen schon weg war und "Kind loeschen" mit dem Formular verschwindet.
+  const backRef = useRef<HTMLAnchorElement>(null)
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/verwalten/kinder" className="flex items-center gap-2 self-start type-body-md-strong text-ink">
+      <Link ref={backRef} to="/verwalten/kinder" className="flex items-center gap-2 self-start type-body-md-strong text-ink">
         <span className="glass-clear flex size-12 items-center justify-center rounded-full">
           <ArrowLeft className="size-5" aria-hidden />
         </span>
         Alle Kinder
       </Link>
-      {mode === 'create' ? <ChildForm /> : <EditChild />}
+      {mode === 'create' ? <ChildForm /> : <EditChild backRef={backRef} />}
     </div>
   )
 }
 
 // Es gibt keinen Einzelabruf: das Kind kommt aus der Liste ['learners'].
-function EditChild() {
+function EditChild({ backRef }: { backRef: RefObject<HTMLAnchorElement | null> }) {
   const { learnerId } = useParams()
   const learners = useQuery({
     queryKey: ['learners'],
@@ -67,7 +70,79 @@ function EditChild() {
   const learner = learners.data?.find((entry) => entry.id === learnerId)
   // Der Weg zurueck ist der Link "Alle Kinder" darueber.
   if (!learner) return <EmptyState title="Dieses Kind gibt es nicht (mehr). Gehe zurück zur Liste." />
-  return <ChildForm key={learner.id} learner={learner} />
+  return (
+    <>
+      <ChildForm key={learner.id} learner={learner} />
+      <DeleteChild key={`loeschen-${learner.id}`} learner={learner} backRef={backRef} />
+    </>
+  )
+}
+
+// Ausserhalb des <form>: Enter im Formular oeffnet nie den Loeschdialog.
+function DeleteChild({ learner, backRef }: { learner: Learner; backRef: RefObject<HTMLAnchorElement | null> }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // 404: das Kind ist schon weg (anderer Tab). Dann verschwindet "Kind loeschen" mit dem Formular.
+  const [gone, setGone] = useState(false)
+  const busyRef = useRef(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const name = learner.displayName
+
+  function changeOpen(next: boolean) {
+    setOpen(next)
+    if (next) return
+    setError(null)
+    // Erst beim Schliessen neu laden: ein Neuladen bei offenem Dialog nimmt das Kind
+    // aus der Liste, und das Formular verschwindet samt Dialog und Fehlertext.
+    if (gone) {
+      void queryClient.invalidateQueries({ queryKey: ['learners'] })
+      void queryClient.invalidateQueries({ queryKey: ['profiles'] })
+    }
+  }
+
+  async function confirm() {
+    // Ref statt nur disabled: ein zweiter Klick kann vor dem naechsten Rendern ankommen.
+    if (busyRef.current) return
+    busyRef.current = true
+    setBusy(true)
+    setError(null)
+    try {
+      await api<void>(`/learners/${learner.id}`, { method: 'DELETE' })
+      for (const key of ['learners', 'profiles', 'overview', 'traffic-light']) {
+        void queryClient.invalidateQueries({ queryKey: [key] })
+      }
+      navigate('/verwalten/kinder', { state: { message: `${name} ist gelöscht.` } })
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 404) setGone(true)
+      setError(caught instanceof Error ? caught.message : 'Das hat nicht geklappt. Versuche es noch einmal.')
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex max-w-md flex-col">
+      <Button ref={triggerRef} type="button" variant="danger" className="self-start" onClick={() => changeOpen(true)}>
+        <Trash2 className="size-5" aria-hidden />
+        Kind löschen
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={changeOpen}
+        title={`${name} löschen?`}
+        description={`Alle Lernfortschritte, XP und die Serie von ${name} werden gelöscht. Das lässt sich nicht rückgängig machen.`}
+        confirmLabel="Endgültig löschen"
+        busy={busy}
+        error={error}
+        onConfirm={() => void confirm()}
+        returnFocusRef={gone ? backRef : triggerRef}
+      />
+    </div>
+  )
 }
 
 function ChildForm({ learner }: { learner?: Learner }) {

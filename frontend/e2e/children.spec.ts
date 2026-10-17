@@ -27,8 +27,8 @@ async function learnerLogin(browser: Browser, baseURL: string | undefined, name:
   await context.close()
 }
 
-// Rate-Limit "auth": diese Datei nutzt hoechstens 5 Aufrufe
-// (globalSetup, je Anmeldetest Profilwahl und learner-login).
+// Rate-Limit "auth": diese Datei nutzt hoechstens 6 Aufrufe
+// (globalSetup, je Anmeldetest Profilwahl und learner-login, Profilwahl nach dem Loeschen).
 test('Kind anlegen und anmelden', async ({ page, browser, baseURL }) => {
   const name = `Testkind ${Date.now()}`
   const pin = '583920'
@@ -76,6 +76,49 @@ test('Kind bearbeiten und mit neuer PIN anmelden', async ({ page, browser, baseU
   await expect(page.getByLabel('Neue PIN')).toHaveValue('')
 
   await learnerLogin(browser, baseURL, renamed, '2580')
+})
+
+// Eigenes Testkind anlegen und dessen Bearbeiten-Seite oeffnen. "Zz E2E" am Anfang:
+// Demo-Kinder bleiben vorn in der sortierten Liste (keyboard-zoom.spec oeffnet das erste Kind).
+async function createAndOpen(page: Page, name: string) {
+  await page.goto('/verwalten/kinder/neu')
+  await page.getByLabel('Name', { exact: true }).fill(name)
+  await page.getByLabel('PIN', { exact: true }).fill('2468')
+  await page.getByRole('button', { name: 'Kind anlegen' }).click()
+  await expect(page.getByRole('status').filter({ hasText: created })).toBeVisible()
+  await page.getByRole('link', { name: new RegExp(name) }).click()
+  await expect(page.getByRole('heading', { name: 'Kind bearbeiten' })).toBeVisible()
+}
+
+// Nie ein Demo-Kind loeschen: andere Specs brauchen sie. Profilwahl: 1 Aufruf der Policy "auth".
+test('Kind löschen', async ({ page, browser, baseURL }) => {
+  const name = `Zz E2E Löschen ${Date.now()}`
+  await createAndOpen(page, name)
+
+  await page.getByRole('button', { name: 'Kind löschen' }).click()
+  const dialog = page.getByRole('alertdialog', { name: `${name} löschen?` })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveAccessibleDescription(
+    `Alle Lernfortschritte, XP und die Serie von ${name} werden gelöscht. Das lässt sich nicht rückgängig machen.`,
+  )
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+
+  await expect(page).toHaveURL(/\/verwalten\/kinder$/)
+  await expect(page.getByRole('status').filter({ hasText: `${name} ist gelöscht.` })).toBeVisible()
+  await expect(page.getByRole('main').getByText(name, { exact: true })).toHaveCount(0)
+
+  const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } })
+  const child = await context.newPage()
+  const [profiles] = await Promise.all([
+    child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/profiles')),
+    child.goto('/'),
+  ])
+  expect(profiles.status(), 'Rate-Limit auth erreicht').not.toBe(429)
+  await expect(child.getByRole('heading', { name: 'Wer lernt heute?' })).toBeVisible()
+  await expect(child.locator('main button').first()).toBeVisible()
+  await expect(child.getByRole('button', { name })).toHaveCount(0)
+  await context.close()
 })
 
 // Ungünstigster Fall nach D-15: 100 Zeichen ohne Trennstelle. Kein Aufruf im Rate-Limit "auth".

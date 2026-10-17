@@ -31,6 +31,7 @@ colors:
   separator: "rgba(40, 50, 90, 0.12)"
   border-control: "oklch(0.55 0.03 265)"
   track: "rgba(255, 255, 255, 0.55)"
+  scrim: "rgba(20, 28, 50, 0.4)"
 typography:
   display:
     fontFamily: "-apple-system, 'SF Pro Rounded', ui-rounded, 'Segoe UI Variable', system-ui, sans-serif"
@@ -184,6 +185,8 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.sheet}"
     padding: "{spacing.lg}"
+  sheet-scrim:
+    backgroundColor: "{colors.scrim}"
   glass-fallback:
     backgroundColor: "{colors.glass-opaque}"
     textColor: "{colors.ink-soft}"
@@ -290,6 +293,7 @@ Tiefe entsteht durch Glas, nicht durch Farbe:
 - Lichtkante: oben innen 1 px weiß (95 %), unten innen 1 px weiß (40 %). Kein zusätzlicher Verlaufsrand: als Pseudo-Element verhindert er, dass axe den Kontrast auf Glas berechnet.
 - Schatten: `0 12px 40px` in dunklem Blau mit 18 % Deckkraft; getönte Buttons werfen einen blauen Schatten.
 - Ebenen: Hintergrund → Inhaltskarten (`glass`) → schwebende Bedienung (`glass-clear`, getönte Buttons) → Sheets (`glass-sheet`).
+- Abdunklung (`scrim`, Komponente `sheet-scrim`): liegt hinter offenen Sheets über allem anderen, nur Fläche, nie Text.
 
 **Pflicht-Fallback:** Bei `prefers-reduced-transparency: reduce` und wenn `backdrop-filter` nicht unterstützt wird, werden alle Glasflächen außer getönten und Status-Flächen zu `glass-opaque` ohne Blur. Getönte Buttons behalten `primary` mit weißer Schrift.
 
