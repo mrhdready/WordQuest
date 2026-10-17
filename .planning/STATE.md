@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: verifying
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-10-17T18:40:12.499Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-10-17T19:05:40.194Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 09e7effd0c6ab60d5d3f67bfdb71b94b6b2250a5
+state_head: 2bb9f43dca1462604d6706bdbb389b4545471f42
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P08 | 20min | 3 tasks | 18 files |
 | Phase 02 P01 | 23min | 3 tasks | 12 files |
 | Phase 02 P02 | 18min | 2 tasks | 16 files |
+| Phase 02 P03 | 23min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Recent decisions affecting current work:
 - [Phase 02]: 02-01: Gutschrift XP/Muenzen nur per ExecuteUpdateAsync in Transaktion ueber CreateExecutionStrategy; Abschluss atomar beansprucht
 - [Phase 02]: D-18 umgesetzt: OrphanCleanup vor MigrateAsync, nur solange 20261017182305_ReferentialIntegrity aussteht; Migration unverändert aus dotnet ef
 - [Phase 02]: Startblock aus Program.cs läuft unter WebApplicationFactory (gemessen in 02-02); Migrationstests nutzen den echten Startpfad
+- [Phase 02]: ConfirmDialog-Buttons flex-auto statt flex-1: mit Basis 0 brach die Zeile nie um (02-03)
+- [Phase 02]: Dialog-Kontrast in e2e ohne Seiteninhalt messen (Backdrop-Farben und primary-deep), weil axe bei Glas ueber wechselndem Inhalt nicht misst (02-03)
 
 ### Pending Todos
 
@@ -131,6 +134,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T18:40:12.451Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-10-17T19:05:40.147Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
