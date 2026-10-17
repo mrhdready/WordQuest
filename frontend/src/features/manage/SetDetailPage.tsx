@@ -10,6 +10,7 @@ import { Input, Textarea } from '@/components/ui/input'
 import { ListGroup, ListRow } from '@/components/ui/list'
 import { Badge, EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api, ApiError } from '@/lib/api'
+import { useGone } from '@/lib/gone'
 import type { ImportPreview, VocabularyEntry, VocabularySet } from '@/types'
 
 // Spiegelt ContentRules.MaxTextLength (Titel und Woerter); massgeblich bleibt der Server.
@@ -263,29 +264,6 @@ function wordError(text: string, missing: string): string | undefined {
   if (!text.trim()) return missing
   if (text.trim().length > MAX_TEXT_LENGTH) return WORD_TOO_LONG
   return undefined
-}
-
-/**
- * 404 in einem Dialog der Set-Seite: Set oder Vokabel ist schon weg (anderer
- * Tab). Die Liste unter `queryKey` wird erst beim Schliessen neu geladen: ein
- * Neuladen bei offenem Dialog nimmt Set bzw. Zeile mitsamt Fokusziel weg, und
- * Dialog und Eingaben verschwinden.
- */
-function useGone(queryKey: string[]) {
-  const queryClient = useQueryClient()
-  const [gone, setGone] = useState(false)
-  return {
-    gone,
-    reset: () => setGone(false),
-    noteError: (caught: unknown) => {
-      const found = caught instanceof ApiError && caught.status === 404
-      if (found) setGone(true)
-      return found
-    },
-    closed: () => {
-      if (gone) void queryClient.invalidateQueries({ queryKey })
-    },
-  }
 }
 
 // Umbenennen an Ort und Stelle (PAR-04, D-08): gleiche Set-ID, der Lernstand bleibt.

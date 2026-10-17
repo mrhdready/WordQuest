@@ -9,6 +9,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api, ApiError } from '@/lib/api'
+import { useGone } from '@/lib/gone'
 import type { CreateLearnerRequest, Learner, UpdateLearnerSettingsRequest } from '@/types'
 
 // Spiegelt AccountRules (MaxDisplayNameLength, IsValidPin, Tageslimit 3 bis 15);
@@ -86,7 +87,7 @@ function DeleteChild({ learner, backRef }: { learner: Learner; backRef: RefObjec
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // 404: das Kind ist schon weg (anderer Tab). Dann verschwindet "Kind loeschen" mit dem Formular.
-  const [gone, setGone] = useState(false)
+  const stale = useGone(['learners'], ['profiles'])
   const busyRef = useRef(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const name = learner.displayName
@@ -95,12 +96,7 @@ function DeleteChild({ learner, backRef }: { learner: Learner; backRef: RefObjec
     setOpen(next)
     if (next) return
     setError(null)
-    // Erst beim Schliessen neu laden: ein Neuladen bei offenem Dialog nimmt das Kind
-    // aus der Liste, und das Formular verschwindet samt Dialog und Fehlertext.
-    if (gone) {
-      void queryClient.invalidateQueries({ queryKey: ['learners'] })
-      void queryClient.invalidateQueries({ queryKey: ['profiles'] })
-    }
+    stale.closed()
   }
 
   async function confirm() {
@@ -116,7 +112,7 @@ function DeleteChild({ learner, backRef }: { learner: Learner; backRef: RefObjec
       }
       navigate('/verwalten/kinder', { state: { message: `${name} ist gelöscht.` } })
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 404) setGone(true)
+      stale.noteError(caught)
       setError(caught instanceof Error ? caught.message : 'Das hat nicht geklappt. Versuche es noch einmal.')
     } finally {
       busyRef.current = false
@@ -139,7 +135,7 @@ function DeleteChild({ learner, backRef }: { learner: Learner; backRef: RefObjec
         busy={busy}
         error={error}
         onConfirm={() => void confirm()}
-        returnFocusRef={gone ? backRef : triggerRef}
+        returnFocusRef={stale.gone ? backRef : triggerRef}
       />
     </div>
   )
