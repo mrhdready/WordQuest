@@ -95,7 +95,8 @@ async function refreshAccessToken(): Promise<boolean> {
           body: JSON.stringify({ refreshToken }),
         })
       } catch {
-        throw new ApiError(GENERIC, 0)
+        // Derselbe Netzfehler wie in api(): derselbe Text (IN-04).
+        throw new ApiError(UNREACHABLE, 0)
       }
 
       // Nur 400/401 heissen "Anmeldung ungueltig". Ein Limit oder ein kurzer

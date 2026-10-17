@@ -132,13 +132,14 @@ describe('Token-Refresh', () => {
     expect(tokenStore.refresh).toBe('alt-refresh')
   })
 
-  it('Netzfehler beim Refresh: ApiError mit Status 0, Anmeldung bleibt', async () => {
+  // IN-04: derselbe Netzfehler wie bei jeder anderen Anfrage, derselbe Text.
+  it('Netzfehler beim Refresh: "nicht erreichbar", Status 0, Anmeldung bleibt', async () => {
     signIn()
     stub(async () => {
       throw new TypeError('Failed to fetch')
     })
     const error = await caught()
-    expect(error.message).toBe(generic)
+    expect(error.message).toBe(unreachable)
     expect(error.status).toBe(0)
     expect(tokenStore.refresh).toBe('alt-refresh')
   })

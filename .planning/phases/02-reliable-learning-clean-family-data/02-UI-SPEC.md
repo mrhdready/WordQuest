@@ -212,7 +212,7 @@ Button der Fehleransicht bleibt „Zurück“ (Bestand) und führt zur Startseit
 
 ### Token-Refresh (FIX-01)
 
-Kein neuer Text. Vertrag: `refreshAccessToken` löscht die Tokens nur bei 400/401 der Refresh-Antwort (heute bei jedem `!response.ok`, `api.ts:96-99`); bei 429, 5xx und Netzfehler bleibt die Anmeldung bestehen. Die auslösende Aktion zeigt dann den bestehenden Text „Das hat nicht geklappt. Versuche es noch einmal.“; beim nächsten Versuch wird erneut erneuert. Login und PIN-Anmeldung zeigen bei 429 unverändert „Zu viele Versuche. Bitte in einer Minute nochmal probieren.“.
+Kein neuer Text. Vertrag: `refreshAccessToken` löscht die Tokens nur bei 400/401 der Refresh-Antwort (heute bei jedem `!response.ok`, `api.ts:96-99`); bei 429, 5xx und Netzfehler bleibt die Anmeldung bestehen. Die auslösende Aktion zeigt dann bei 429 und 5xx den bestehenden Text „Das hat nicht geklappt. Versuche es noch einmal.“, bei einem Netzfehler wie jede andere Anfrage „Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.“ (IN-04); beim nächsten Versuch wird erneut erneuert. Login und PIN-Anmeldung zeigen bei 429 unverändert „Zu viele Versuche. Bitte in einer Minute nochmal probieren.“.
 
 ---
 
@@ -234,7 +234,7 @@ Applicable state considerations resolved: 14 covered, 2 backstop, 0 unresolved (
 | zero-one-many | Serie 0 / 1 / n | ✅ covered | 0: „Starte heute deine Serie!“ (Kind) bzw. „Keine laufende Serie“ (Eltern); 1: „1 Tag“; n: „{n} Tage“. |
 | zero-one-many | Meisterschaft 0 Wörter / 1 Wort / n | ✅ covered | „Sicher gelernt: 0 von 0 Wörtern“, „… von 1 Wort“, „… von {n} Wörtern“; Eltern-Kennzahl „{m}/{n}“. |
 | populated | Vokabelzeile mit zwei Aktionen | ✅ covered | Zeile: Emoji (falls vorhanden), Text `flex-1 break-words`, Stift (`ghost`, `icon`), Papierkorb (`ghost`, `icon`); beide 48 px. |
-| partial | Token-Refresh scheitert mit 429/5xx/Netzfehler | ✅ covered | Anmeldung bleibt, Aktion zeigt „Das hat nicht geklappt. Versuche es noch einmal.“; vitest in `api.test.ts` für 429, 503 und `fetch`-Fehler, Gegenprobe 401 meldet ab. |
+| partial | Token-Refresh scheitert mit 429/5xx/Netzfehler | ✅ covered | Anmeldung bleibt, Aktion zeigt „Das hat nicht geklappt. Versuche es noch einmal.“, beim Netzfehler „Der Server ist gerade nicht erreichbar. …“ (IN-04); vitest in `api.test.ts` für 429, 503 und `fetch`-Fehler, Gegenprobe 401 meldet ab. |
 | stale | Vokabel/Set/Kind in anderem Tab schon gelöscht | ✅ covered | 404 mit `detail` („… gibt es nicht (mehr).“) im Dialog. |
 | long-text | Set-Titel (200), Vokabel (200), Kindername (100) in Dialogtitel, Set-Kopf, Erfolgsmeldung | 🧪 backstop | `break-words`, nie abschneiden; visueller Test bei 320 px Breite und 200 % Zoom mit 200-Zeichen-Titel ohne Leerzeichen, kein waagerechtes Scrollen. |
 | overflow | Dialog bei 200 % Zoom (Viewport 640 × 400, `keyboard-zoom.spec.ts:8`) mit Fehlertexten | 🧪 backstop | Sheet höchstens Viewporthöhe minus 2 × `sheet-inset`, Inhalt scrollt im Sheet; jeder Button per Tab erreichbar und sichtbar (WCAG 2.4.11). |
