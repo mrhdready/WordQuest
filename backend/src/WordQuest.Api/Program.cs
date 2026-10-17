@@ -197,6 +197,9 @@ await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
     // Mandantenfilter — der Request-Kontext kennt hier noch keinen Mandanten.
     await using var db = new WordQuestDbContext(options, new SystemTenantContext());
 
+    // Waisen aus Altinstallationen vor den Fremdschluesseln entfernen (D-18).
+    // Die CLI-Verben oben migrieren nicht und brauchen das deshalb nicht.
+    await OrphanCleanup.RunAsync(db);
     await db.Database.MigrateAsync();
     logger.LogInformation("Datenbankschema ist aktuell.");
 

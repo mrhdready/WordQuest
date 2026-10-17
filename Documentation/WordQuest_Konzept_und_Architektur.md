@@ -216,7 +216,7 @@ CREATE TABLE review_log (          -- append-only, Basis aller Statistiken
 
 `review_log` ist bewusst append-only und wird nie aktualisiert. Alle Auswertungen (Ampel, Wochenreport, Problemwörter) sollen sich daraus ableiten lassen. Das erlaubt, den Lernalgorithmus später zu wechseln und den Fortschritt aus dem Log **neu zu berechnen**, statt ihn zu verlieren. (Die heutige Ampel in §9 liest `review_state`, nicht `review_log`.)
 
-Weil `review_state` und `review_log` keine Fremdschlüssel auf `card` bzw. Lernprofil haben, bleiben beim Löschen eines Sets oder Eintrags Lerndaten zurück. Die Bereinigung ist für v1.0 geplant (`FIX-02`, `PAR-03`).
+Lerndaten hängen über Fremdschlüssel mit `ON DELETE CASCADE` an Karte und Kind: `review_state`, `review_log`, `learning_session`, `session_item` und `gamification_profile` gehen mit der Karte bzw. dem Kind, `refresh_token` mit dem Konto. Der Sitzungsbezug des Protokolls (`review_log.session_id`) und der Set-Bezug einer Runde (`learning_session.set_id`) werden `SET NULL` (`FIX-02`, `PAR-03`). Verwaiste Zeilen aus Altinstallationen räumt die API beim Start vor der Migration auf (`OrphanCleanup`); danach ist der Schritt wirkungslos.
 
 ---
 
@@ -573,6 +573,7 @@ POST   /account/password                currentPassword, newPassword → 204 (El
 GET    /learners                        Kinder des Mandanten
 POST   /learners                        displayName, pin (Pflicht, 4–6 Ziffern), dailyNewLimit? (3–15, Standard 5), avatarKey? (höchstens 50 Zeichen)
 PATCH  /learners/{id}/settings          displayName?, dailyNewLimit?, speed?, soundEnabled?, pin? (4–6 Ziffern, leer = unverändert; Pflicht, solange das Kind keine PIN hat)
+DELETE /learners/{id}                   löscht das Kind samt Lernstand, XP, Serie und Anmeldungen; 404 für fremde oder unbekannte Kinder
 GET    /learners/{id}/overview          Level, XP, Streak, fällig, gefestigt
 GET    /learners/{id}/traffic-light?setId=
 
@@ -594,7 +595,7 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 
 `/sessions/sync` existiert serverseitig, wird vom Frontend aber nicht aufgerufen (Offline-Lernen ist v2, `LRN2-02`).
 
-Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409; eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP).
+Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; eine unbekannte oder fremde `setId` beim Start ergibt 404 („Dieses Set gibt es nicht (mehr).“); `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409; eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP).
 
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 
@@ -653,7 +654,7 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 
 **Datensparsamkeit:** Pflichtfeld für ein Kind ist ausschließlich ein Anzeigename — ein Spitzname genügt, kein Geburtsdatum, keine E-Mail, keine Klasse. Es existiert keine Telemetrie und kein externer Analytics-Dienst. Alle Schriften und Icons werden mitgeliefert, nicht von einem CDN geladen (ein Google-Fonts-Aufruf überträgt die IP des Kindes an einen Dritten); die CSP erlaubt Schriften nur von der eigenen Origin.
 
-**Löschung:** „Kind löschen" soll kaskadierend Profil, `review_state`, `review_log` und Gamification-Daten entfernen — **geplant für v1.0** (`PAR-03`); einen Endpunkt dafür gibt es heute nicht. Datenexport als JSON und Löschen der ganzen Familie: v2 (`PAR2-02`). Löschen ist als gute Praxis gedacht, nicht als Zusage, DSGVO-Pflichten zu erfüllen.
+**Löschung:** „Kind löschen" (`DELETE /learners/{id}`, nur Elternkonten) löscht hart: Der Endpunkt entfernt das Konto, die Datenbank über die Fremdschlüssel Profil, `review_state`, `review_log`, Runden, XP/Serie und Refresh-Tokens (`PAR-03`). Ein noch angemeldetes Gerät des Kindes bekommt danach beim Refresh 401 und auf Übersicht und Rundenstart 404. Die Oberfläche dafür folgt mit `02-03`. Datenexport als JSON und Löschen der ganzen Familie: v2 (`PAR2-02`). Löschen ist als gute Praxis gedacht, nicht als Zusage, DSGVO-Pflichten zu erfüllen.
 
 **Zum Familienbetrieb:** Solange die Instanz im eigenen Haushalt für die eigenen Kinder läuft, greift die DSGVO über die Haushaltsausnahme (Art. 2 Abs. 2 lit. c) nicht. Relevant würde sie, sobald fremde Kinder Zugang bekommen — etwa bei einem Schuleinsatz, der für v1.0 außer Scope ist. *(Keine Rechtsberatung — bei tatsächlichem Schuleinsatz gehört das dem schulischen Datenschutzbeauftragten vorgelegt.)*
 

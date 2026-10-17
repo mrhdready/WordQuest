@@ -71,8 +71,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     }
 
     /// <summary>
-    /// Migriert die Datenbank. Der Start-Block in Program.cs laeuft unter
-    /// WebApplicationFactory nicht (sie haelt das Programm bei Build an).
+    /// Migriert die Datenbank, damit Tests Daten anlegen koennen, bevor der
+    /// Host laeuft. Der Start-Block in Program.cs (Bereinigung, Migration)
+    /// laeuft zusaetzlich beim ersten Zugriff auf Services (MigrationTests).
     /// </summary>
     public async Task InitializeAsync()
     {

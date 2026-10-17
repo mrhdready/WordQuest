@@ -14,6 +14,7 @@ public static class SessionEndpoints
     private const string SessionGone = "Diese Runde gibt es nicht mehr. Starte eine neue Runde.";
     private const string CardGone = "Diese Karte gehört nicht zu dieser Runde. Starte eine neue Runde.";
     private const string ChildGone = "Dieses Kind gibt es nicht (mehr).";
+    private const string SetGone = "Dieses Set gibt es nicht (mehr).";
     private const string SizeInvalid = "Eine Runde hat 1 bis 50 Karten.";
     private const string AnswersMissing = "Es fehlen die Antworten.";
     private const string AlreadyAnswered = "Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.";
@@ -36,6 +37,7 @@ public static class SessionEndpoints
     private static async Task<IResult> StartAsync(
         StartSessionRequest request,
         LearningService learning,
+        WordQuestDbContext db,
         HttpContext http,
         CancellationToken ct)
     {
@@ -47,6 +49,14 @@ public static class SessionEndpoints
         if (!MayActFor(http, request.LearnerId, out IResult denied))
         {
             return denied;
+        }
+
+        // learning_session.set_id hat einen Fremdschluessel: Ein unbekanntes
+        // Set wuerde beim Speichern zum 500er. Der Mandantenfilter macht Sets
+        // anderer Familien unsichtbar, so entsteht auch kein Bezug auf sie.
+        if (request.SetId is { } setId && !await db.VocabularySets.AnyAsync(s => s.Id == setId, ct))
+        {
+            return NotFound(SetGone);
         }
 
         SessionView? view = await learning.StartSessionAsync(
