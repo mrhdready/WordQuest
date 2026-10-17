@@ -191,7 +191,7 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await page.getByRole('button', { name: 'Vorschau' }).click()
   await expect(page.getByText('1 erkannt')).toBeVisible()
   await expect(page.getByText('1 übersprungen')).toBeVisible()
-  await expect(page.getByText('Zeile hat keine zwei befuellten Spalten.')).toBeVisible()
+  await expect(page.getByText('Zeile hat keine zwei befüllten Spalten.')).toBeVisible()
   await checkPage(page)
 
   // Fehlerzustand: Server antwortet beim Übernehmen mit 500
