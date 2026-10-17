@@ -23,6 +23,7 @@ public static class LearnerEndpoints
         group.MapGet("/", ListAsync).RequireAuthorization("Guardian");
         group.MapPost("/", CreateAsync).RequireAuthorization("Guardian");
         group.MapPatch("/{learnerId:guid}/settings", UpdateSettingsAsync).RequireAuthorization("Guardian");
+        group.MapDelete("/{learnerId:guid}", DeleteAsync).RequireAuthorization("Guardian");
 
         group.MapGet("/{learnerId:guid}/overview", OverviewAsync);
         group.MapGet("/{learnerId:guid}/traffic-light", TrafficLightAsync).RequireAuthorization("Guardian");
@@ -162,6 +163,27 @@ public static class LearnerEndpoints
             })
             .ToDictionary(error => error.Field, error => new[] { error.Message }));
 
+    /// <summary>
+    /// Loescht ein Kind endgueltig (PAR-03, D-07). Der Code loescht nur das
+    /// Konto; Profil, Lernstand, Protokoll, Runden, XP/Serie und Anmeldungen
+    /// entfernt die Datenbank ueber die Fremdschluessel (AGENTS.md, D-06).
+    /// Der Mandantenfilter macht Kinder anderer Familien unsichtbar, die
+    /// Rollenbedingung schuetzt Elternkonten.
+    /// </summary>
+    private static async Task<IResult> DeleteAsync(Guid learnerId, WordQuestDbContext db, CancellationToken ct)
+    {
+        int deleted = await db.Users
+            .Where(u => u.Id == learnerId && u.Role == UserRole.Learner)
+            .ExecuteDeleteAsync(ct);
+
+        return deleted == 0
+            ? Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Kind gibt es nicht (mehr).",
+                statusCode: StatusCodes.Status404NotFound)
+            : Results.NoContent();
+    }
+
     private static async Task<IResult> OverviewAsync(
         Guid learnerId,
         WordQuestDbContext db,
@@ -181,7 +203,11 @@ public static class LearnerEndpoints
 
         if (profile is null)
         {
-            return Results.NotFound();
+            // Das Kind wurde geloescht, das Geraet ist noch angemeldet (FIX-04, D-11).
+            return Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Profil gibt es nicht mehr. Bitte melde dich ab.",
+                statusCode: StatusCodes.Status404NotFound);
         }
 
         GamificationProfile gamification =

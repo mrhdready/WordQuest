@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using WordQuest.Modules.Content.Entities;
+using WordQuest.Modules.Identity.Entities;
 using WordQuest.Modules.Learning.Entities;
 
 namespace WordQuest.Infrastructure.Configurations;
@@ -18,6 +20,12 @@ public sealed class ReviewStateConfiguration : IEntityTypeConfiguration<ReviewSt
         // Der Index, auf dem jede Session-Zusammenstellung laeuft.
         builder.HasIndex(s => new { s.LearnerId, s.DueAt });
         builder.HasIndex(s => new { s.LearnerId, s.State });
+
+        // Integritaet in der Datenbank (AGENTS.md, D-06): Wird die Karte oder
+        // das Kind geloescht, verschwindet der Lernstand mit, ohne Loeschliste
+        // im Code (FIX-02, PAR-03).
+        builder.HasOne<Card>().WithMany().HasForeignKey(s => s.CardId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<LearnerProfile>().WithMany().HasForeignKey(s => s.LearnerId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -35,6 +43,12 @@ public sealed class ReviewLogConfiguration : IEntityTypeConfiguration<ReviewLog>
 
         builder.HasIndex(l => new { l.LearnerId, l.ReviewedAt });
         builder.HasIndex(l => new { l.LearnerId, l.CardId });
+
+        // Das Protokoll gehoert zu Karte und Kind und geht mit ihnen (FIX-02,
+        // PAR-03). Eine geloeschte Runde laesst den Eintrag stehen, nur ohne Bezug.
+        builder.HasOne<Card>().WithMany().HasForeignKey(l => l.CardId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<LearnerProfile>().WithMany().HasForeignKey(l => l.LearnerId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<LearningSession>().WithMany().HasForeignKey(l => l.SessionId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -52,6 +66,11 @@ public sealed class LearningSessionConfiguration : IEntityTypeConfiguration<Lear
             .WithOne(i => i.Session)
             .HasForeignKey(i => i.SessionId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Runden gehen mit dem Kind (PAR-03). Ein geloeschtes Set laesst das
+        // Sitzungsprotokoll stehen, nur ohne Set-Bezug (FIX-02).
+        builder.HasOne<LearnerProfile>().WithMany().HasForeignKey(s => s.LearnerId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<VocabularySet>().WithMany().HasForeignKey(s => s.SetId).OnDelete(DeleteBehavior.SetNull);
     }
 }
 
@@ -78,5 +97,9 @@ public sealed class SessionItemConfiguration : IEntityTypeConfiguration<SessionI
         builder.HasIndex(i => i.ClientAnswerId)
             .IsUnique()
             .HasFilter("client_answer_id IS NOT NULL");
+
+        // Eine geloeschte Karte nimmt ihre Aufgaben mit; eine Antwort darauf
+        // ergibt danach 404 statt 500 (FIX-02).
+        builder.HasOne<Card>().WithMany().HasForeignKey(i => i.CardId).OnDelete(DeleteBehavior.Cascade);
     }
 }

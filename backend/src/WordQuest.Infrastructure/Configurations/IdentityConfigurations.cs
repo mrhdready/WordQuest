@@ -68,5 +68,9 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
 
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => new { t.UserId, t.ExpiresAt });
+
+        // Anmeldungen eines geloeschten Kontos verfallen mit ihm: Refresh
+        // ergibt danach 401 (PAR-03, FIX-04).
+        builder.HasOne<User>().WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

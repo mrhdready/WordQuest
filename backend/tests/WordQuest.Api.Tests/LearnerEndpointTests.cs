@@ -475,13 +475,16 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
     public async Task Patch_leaves_learning_and_gamification_state_unchanged()
     {
         (User owner, User child) = await SeedFamilyAsync(OldPin);
+        // Der Lernstand braucht eine echte Karte (Fremdschluessel review_state.card_id).
+        TestData.SeededSet set = await TestData.SeedSetAsync(_factory, new TestData.SeededFamily(
+            new Tenant { Id = owner.TenantId, Name = "Familie" }, owner, [child]), entries: 1);
         await using (var db = _factory.CreateSystemDbContext())
         {
             db.ReviewStates.Add(new ReviewState
             {
                 TenantId = owner.TenantId,
                 LearnerId = child.Id,
-                CardId = Guid.CreateVersion7(),
+                CardId = set.Cards[0].Id,
                 EaseFactor = 1.7,
                 IntervalDays = 12.5,
                 Repetitions = 4,
