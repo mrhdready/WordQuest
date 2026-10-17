@@ -218,6 +218,18 @@ AGENTS.md: „Keine Gott-Klassen und keine Gott-Dateien.“ `DeleteChild` baut d
 - **Dialog-Fokus (ohne Fehlerfall):** Startfokus „Abbrechen“, Fokusrückgabe an den Auslöser, an die Set-Überschrift (Zeile weg) bzw. an „Alle Sets“/„Alle Kinder“ (404). Der Klick auf die Abdunklung schließt nicht, Esc ist während `busy` gesperrt. Das ist e2e und in `dialog.test.tsx` belegt.
 - **FIX-05/FIX-06:** `StreakRules.CurrentStreak` wendet dieselbe Retter- und Monatsregel an wie `RegisterActivity` und schreibt nichts. Übersicht und Ampel zählen Wörter über `MasteryRules.IsWordMastered`. Nie beantwortete Altbestände gelten in beiden als neu.
 
+## Nachtrag: Behebung (2026-10-17)
+
+Behoben in `2078ae8..HEAD`, je Befund ein roter Test vor dem Fix, Gate `backend-test.sh` grün:
+- WR-01: `227a75d` (Escape `\0`, Datei ist für git Text)
+- WR-02: `9036894` (400 mit deutschem Feldfehler; zusätzlich `/auth/login` mit `{}`)
+- WR-04: `55cf0fe` (Ampelstufe in `MasteryRules.Light`, Wortzählung, fällige Karten und Tagesbudget im `LearningService`; verhaltensneutral)
+- WR-05: Backend-Teil `edae2d8` (Ampel 404 für unbekanntes Kind); der Frontend-Teil (`ProgressPage`) liegt beim Frontend-Strang
+- IN-01: `5cb7d95` (409 „Diese Runde ist schon beendet. …“; Restgrenze R-18)
+- IN-02: `2b22180` (404 bei Antwort und Sync; Rundenstart bleibt R-16)
+- IN-03: `73eb3ca` (`SetNotFound()`, Text mit Umlauten; die Leerprüfung bleibt mit Schlüssel `entry`)
+- WR-03, IN-04, IN-05: Frontend-Strang, hier nicht bearbeitet
+
 ---
 
 _Reviewed: 2026-10-17T21:13:50Z_

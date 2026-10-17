@@ -104,6 +104,7 @@ created: "2026-10-17"
 | R-15 | T-02-SC (02-01 bis 02-07) | Keine neue Dependency (D-15); Werkzeuge (`dotnet-ef`, `node:22`, nginx-Basisimage) laufen nur als Wegwerf-Container | jeweiliges Threat-Register; `git diff --stat c3534f1..3f55d4f` ohne Treffer auf `*.csproj`, `package.json`, `package-lock.json`, Dockerfiles | 2026-10-17 |
 | R-16 | IN-02 (Restrisiko) | Antwort und Sync bilden das Löschen von Karte oder Kind während des Speicherns auf 404 ab (Fremdschlüssel 23503 bzw. per Kaskade gelöschte Aufgabe, `SessionEndpoints.GoneOrConflictAsync`, Test `SessionEndpointTests.Waehrend_der_Antwort_geloeschte_Karte_oder_Kind_ergibt_404`). Beim Rundenstart bleibt es wie bei R-11: Wird eine ausgewählte Karte oder das Kind zwischen Auswahl und Speichern gelöscht, scheitert das Speichern am Fremdschlüssel (500 mit generischem Text). Das Fenster ist sehr schmal, ein neuer Start gelingt | `02-REVIEW.md` IN-02 | 2026-10-17 |
 | R-17 | W-3 | Das Anmelde-Limit gilt pro IP (`Program.cs:131-132`). Ein Gerät mit mehreren Adressen bekommt je Adresse 10 Versuche pro Minute, und das Elternpasswort hat keine Sperre pro Konto (die PIN schon, `AuthService.cs`). Eine Kontosperre wäre ein neuer Hebel, mit dem ein Gerät im Heimnetz das Elternkonto aussperren kann; im Heimnetz-Betrieb überwiegt das. Gegenmaßnahme bleibt ein starkes Elternpasswort (mindestens 8 Zeichen) | Konzept `Documentation/WordQuest_Konzept_und_Architektur.md:604` („für das Elternpasswort nur dieses Limit“) | 2026-10-17 |
+| R-18 | IN-01 (Restrisiko) | Eine Antwort auf eine abgeschlossene Runde ergibt 409 (`LearningService.SubmitAnswerAsync`, Test `SessionEndpointTests.Antwort_auf_abgeschlossene_Runde_ergibt_409_ohne_Wertung`). Die Prüfung läuft beim Lesen, nicht atomar mit dem Abschluss: Ein gleichzeitiger Abschluss kann eine letzte Antwort noch werten (wenige XP). Folgen kaum, Fenster sehr schmal | `02-REVIEW.md` IN-01 | 2026-10-17 |
 
 *Akzeptierte Risiken tauchen in späteren Audits nicht erneut auf.*
 
@@ -120,6 +121,8 @@ created: "2026-10-17"
 | W-5 | `backend/src/WordQuest.Modules.Content/Services/CsvVocabularyParser.cs:80` | Ein literales NUL-Byte als Trenner im Schlüssel (Bestand seit `0b49bf2`) lässt git die Datei als binär behandeln; `git diff` zeigt nur `Bin …`. Änderungen am CSV-Parser (zuletzt `0445f5b`, `3f55d4f`) sind deshalb in diff-basierten Reviews unsichtbar. Vorschlag: `\0` als Escape-Sequenz. |
 | W-6 | `02-VALIDATION.md:96-97` | Zwei manuelle Prüfungen sind offen: zwei echte Geräte im Heimnetz (T-02-23) und der Traefik-Stack mit Zertifikat (T-02-22, T-02-36). Kein Lauf in diesem Repo belegt, dass Traefik v3 ohne `forwardedHeaders.trustedIPs` eingehende Köpfe verwirft. UNBEKANNT: Ergebnis beider Prüfungen. |
 | W-7 | Commits `0445f5b`, `3f55d4f` | Der letzte festgehaltene Gate-Lauf ist `ebdca52` (`02-07-SUMMARY.md:125-130`). Für die beiden späteren CSV-Fixes steht kein Lauf in den SUMMARYs. UNBEKANNT: Testergebnis auf `3f55d4f`. |
+
+Nachtrag 2026-10-17 (nach dem Audit, `2078ae8..HEAD`): W-1 behoben (`9036894`), W-2 behoben (`688acc9`), W-3 → R-17, W-4 behoben (`0aabccd`, `proxy-xff-check.sh` prüft `/health/`), W-5 behoben (`227a75d`). Die Fundstellen in der Tabelle oben beziehen sich auf `3f55d4f`.
 
 Die SUMMARY-Dateien der Phase haben keinen Abschnitt `## Threat Flags`.
 
