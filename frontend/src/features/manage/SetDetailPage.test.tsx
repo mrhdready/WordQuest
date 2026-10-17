@@ -904,6 +904,7 @@ const previewOf = (rows: ImportRowStub[]) => ({
   rows,
 })
 const hundRow = importRow(1, 'Hund', 'dog')
+const katzeRow = importRow(2, 'Katze', 'cat')
 const noDelimiter = 'Zeile hat keine zwei befüllten Spalten.'
 
 /**
@@ -952,12 +953,58 @@ async function runPreview(text: string) {
   return textarea
 }
 
+function held() {
+  let release: (response: Response) => void = () => {}
+  const pending = new Promise<Response>((resolve) => {
+    release = resolve
+  })
+  return { answer: () => pending, release: (response: Response) => release(response) }
+}
+
 describe('CSV-Import', () => {
+  it.each([
+    [[hundRow], '1 Vokabel übernehmen'],
+    [[hundRow, katzeRow], '2 Vokabeln übernehmen'],
+  ])('%#: Anzahl im Button mit Singular und Plural', async (rows, label) => {
+    stubImport(rows)
+    await runPreview('Hund;dog')
+    expect(screen.getByRole('button', { name: label })).toBeTruthy()
+  })
+
   it('Problemzeile nennt das betroffene Wort', async () => {
     stubImport([hundRow, importRow(2, 'ohneTrennzeichen', '', noDelimiter)])
     await runPreview('Hund;dog\nohneTrennzeichen')
     const region = screen.getByRole('region', { name: 'Vorschau' })
     expect(within(region).getByText(noDelimiter)).toBeTruthy()
     expect(within(region).getByText('ohneTrennzeichen')).toBeTruthy()
+  })
+
+  it('Übernehmen scheitert: Servertext statt „Der Import ist fehlgeschlagen.“', async () => {
+    stubImport([hundRow, katzeRow], { confirm: notFound })
+    await runPreview('Hund;dog\nKatze;cat')
+    await userEvent.click(screen.getByRole('button', { name: '2 Vokabeln übernehmen' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(setGone)
+  })
+
+  it('Vorschau läuft: „Einen Moment …“, gesperrt', async () => {
+    const answer = held()
+    stubImport([hundRow], { preview: answer.answer })
+    await openImport('Hund;dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Vorschau' }))
+    const busy = await screen.findByRole('button', { name: 'Einen Moment …' })
+    expect((busy as HTMLButtonElement).disabled).toBe(true)
+    answer.release(Response.json(previewOf([hundRow])))
+    expect(await screen.findByRole('button', { name: 'Vorschau' })).toBeTruthy()
+  })
+
+  it('Übernehmen läuft: „Einen Moment …“, gesperrt', async () => {
+    const answer = held()
+    stubImport([hundRow, katzeRow], { confirm: answer.answer })
+    await runPreview('Hund;dog\nKatze;cat')
+    await userEvent.click(screen.getByRole('button', { name: '2 Vokabeln übernehmen' }))
+    const busy = await screen.findByRole('button', { name: 'Einen Moment …' })
+    expect((busy as HTMLButtonElement).disabled).toBe(true)
+    answer.release(Response.json({ imported: 2 }))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Vorschau' })).toBeNull())
   })
 })

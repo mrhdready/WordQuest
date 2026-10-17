@@ -196,16 +196,16 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Vorschau' }).getByText('ohneTrennzeichen')).toBeVisible()
   await checkPage(page)
 
-  // Fehlerzustand: Server antwortet beim Übernehmen mit 500
+  // Fehlerzustand: Server antwortet beim Übernehmen mit 500, der Text kommt aus ApiError.message
   const importUrl = '**/api/v1/sets/*/import'
   await page.route(importUrl, (route) => route.fulfill({ status: 500, body: '' }))
-  await page.getByRole('button', { name: '1 Vokabeln übernehmen' }).click()
-  await expect(page.getByText('Der Import ist fehlgeschlagen.')).toBeVisible()
+  await page.getByRole('button', { name: '1 Vokabel übernehmen' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
   await checkPage(page)
 
   // Happy Path zuletzt: Route entfernen, erneut übernehmen
   await page.unroute(importUrl)
-  await page.getByRole('button', { name: '1 Vokabeln übernehmen' }).click()
+  await page.getByRole('button', { name: '1 Vokabel übernehmen' }).click()
   await expect(page.getByRole('button', { name: 'Vorschau' })).toHaveCount(0)
   await expect(page.getByText(`house${stamp}`)).toBeVisible()
 })

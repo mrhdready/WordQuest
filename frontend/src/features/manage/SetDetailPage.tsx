@@ -764,7 +764,7 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
 
       {/* ApiError.message ist immer ein deutscher ganzer Satz (lib/api.ts). */}
       {runPreview.isError ? <ErrorNote message={runPreview.error.message} /> : null}
-      {confirm.isError ? <ErrorNote message="Der Import ist fehlgeschlagen." /> : null}
+      {confirm.isError ? <ErrorNote message={confirm.error.message} /> : null}
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -772,13 +772,17 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
           disabled={content.trim().length === 0 || runPreview.isPending}
           onClick={() => runPreview.mutate()}
         >
-          Vorschau
+          {runPreview.isPending ? 'Einen Moment …' : 'Vorschau'}
         </Button>
         <Button
           disabled={!preview || preview.validCount === 0 || confirm.isPending}
           onClick={() => confirm.mutate()}
         >
-          {preview ? `${preview.validCount} Vokabeln übernehmen` : 'Übernehmen'}
+          {confirm.isPending
+            ? 'Einen Moment …'
+            : preview
+              ? `${preview.validCount} ${preview.validCount === 1 ? 'Vokabel' : 'Vokabeln'} übernehmen`
+              : 'Übernehmen'}
         </Button>
       </div>
     </Card>
