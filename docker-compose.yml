@@ -76,6 +76,9 @@ services:
 
   proxy:
     image: traefik:v3
+    # Nie forwardedHeaders.trustedIPs oder forwardedHeaders.insecure setzen:
+    # Ohne diese Optionen verwirft Traefik X-Forwarded-For vom Geraet und setzt
+    # dessen Adresse, darauf baut das Anmelde-Limit pro Geraet auf (FIX-01).
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false

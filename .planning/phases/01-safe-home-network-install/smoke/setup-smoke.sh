@@ -199,6 +199,9 @@ echo "== Anmelde-Limit pro Geraet (FIX-01)"
 # Zwei Absender, eine Sperre: der Host sperrt nur sich selbst, ein zweiter
 # Absender im Compose-Netz meldet sich in derselben Minute an, ein gefaelschter
 # X-Forwarded-For-Kopf waehlt keinen neuen Topf, Refresh zaehlt nicht mit.
+# Belegt ist damit: nginx reicht je Absenderadresse einen eigenen Topf durch.
+# Ob nginx zwei echte Geraete im Heimnetz unterscheidet, haengt an Docker (siehe
+# Konzept, Grenze) und bleibt eine Pruefung mit zwei Geraeten (02-VALIDATION).
 wrong_login="{\"email\":\"$demo_email\",\"password\":\"falsches-passwort\"}"
 limited=0
 for attempt in $(seq 1 11); do

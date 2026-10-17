@@ -108,6 +108,12 @@ grep -q 'nginx-traefik-realip.conf' <<<"$config" \
 grep -q '/etc/nginx/conf.d/realip.conf' <<<"$config" \
   || fail "docker-compose.yml bindet die Datei nicht nach /etc/nginx/conf.d/realip.conf ein."
 git diff --quiet HEAD -- docker-compose.quick.yml \
-  || fail "docker-compose.quick.yml ist veraendert; der Heimnetz-Stack darf realip nicht einbinden."
+  || fail "docker-compose.quick.yml hat nicht committete Aenderungen."
+# Auch committet darf der Heimnetz-Stack realip nie einbinden.
+quick="$(docker compose -f docker-compose.quick.yml config 2>/dev/null)" \
+  || fail "docker compose -f docker-compose.quick.yml config schlaegt fehl."
+if grep -q 'realip' <<<"$quick"; then
+  fail "docker-compose.quick.yml bindet realip ein; Geraete im Heimnetz koennten ihre Adresse selbst waehlen."
+fi
 
 echo "PROXY-XFF OK"
