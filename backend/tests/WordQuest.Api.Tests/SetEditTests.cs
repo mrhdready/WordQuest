@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WordQuest.Api.Contracts;
+using WordQuest.Modules.Content.Entities;
 using WordQuest.Modules.Learning.Services;
 using static WordQuest.Api.Tests.TestData;
 
@@ -22,6 +23,10 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
     private const string SetGone = "Dieses Set gibt es nicht (mehr).";
     private const string TitleMissing = "Ein Set braucht einen Titel.";
     private const string TitleTooLong = "Der Titel darf höchstens 200 Zeichen lang sein.";
+    private const string EntryGone = "Diese Vokabel gibt es nicht (mehr).";
+    private const string SourceMissing = "Bitte gib das deutsche Wort ein.";
+    private const string TargetMissing = "Bitte gib das englische Wort ein.";
+    private const string WordTooLong = "Das Wort darf höchstens 200 Zeichen lang sein.";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -61,6 +66,25 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
             });
             Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
         }
+    }
+
+    private static Task<HttpResponseMessage> PutEntryAsync(
+        HttpClient client, Guid setId, Guid entryId, string? sourceText, string? targetText) =>
+        client.PutAsJsonAsync($"/api/v1/sets/{setId}/entries/{entryId}", new { sourceText, targetText });
+
+    private static async Task<IDictionary<string, string[]>> FieldErrorsAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        HttpValidationProblemDetails? problem = await response.Content.ReadFromJsonAsync<HttpValidationProblemDetails>();
+        Assert.NotNull(problem);
+        return problem.Errors;
+    }
+
+    private async Task<(string Source, string Target)> WordsAsync(Guid entryId)
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        return await db.VocabularyEntries.Where(e => e.Id == entryId)
+            .Select(e => new ValueTuple<string, string>(e.SourceText, e.TargetText)).SingleAsync();
     }
 
     private async Task<Snapshot> SnapshotAsync(Guid setId)
@@ -197,5 +221,143 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
         HttpResponseMessage response = await owner.PostAsJsonAsync("/api/v1/sets", new { title = new string('a', 201) });
 
         Assert.Equal(TitleTooLong, await TitleErrorAsync(response));
+    }
+
+    // ------------------------------------------------- PAR-04: Vokabel korrigieren
+
+    [Fact]
+    public async Task Vokabel_korrigieren_behaelt_IDs_Lernstand_und_Zusatzfelder()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory, children: 2, dailyNewLimit: 20);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 2);
+        VocabularyEntry typo = set.Entries[0];
+        typo.SourceText = "Hnud";
+        typo.TargetText = "dgo";
+        typo.Emoji = "🐶";
+        typo.TargetAlternatives = ["hound"];
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            db.VocabularyEntries.Update(typo);
+            await db.SaveChangesAsync();
+        }
+
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        await PlayAllAsync(child, family.Child.Id, set);
+        Snapshot before = await SnapshotAsync(set.Set.Id);
+        Assert.NotEmpty(before.States);
+
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        HttpResponseMessage response = await PutEntryAsync(owner, set.Set.Id, typo.Id, "  Hund ", "dog");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        VocabularyEntryDto? dto = await response.Content.ReadFromJsonAsync<VocabularyEntryDto>();
+        Assert.NotNull(dto);
+        Assert.Equal(typo.Id, dto.Id);
+        Assert.Equal("Hund", dto.SourceText);
+        Assert.Equal("dog", dto.TargetText);
+        Assert.Equal("🐶", dto.Emoji);
+        Assert.Equal(new[] { "hound" }, dto.TargetAlternatives);
+        Snapshot after = await SnapshotAsync(set.Set.Id);
+        Assert.Equal(before.Entries, after.Entries);
+        Assert.Equal(before.Cards, after.Cards);
+        Assert.Equal(before.States, after.States);
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            VocabularyEntry stored = await db.VocabularyEntries.SingleAsync(e => e.Id == typo.Id);
+            Assert.Equal("🐶", stored.Emoji);
+            Assert.Equal(new[] { "hound" }, stored.TargetAlternatives);
+        }
+
+        // Das zweite Kind hat die Karten noch nie gesehen: seine Runde zeigt den neuen Text.
+        using HttpClient sibling = _factory.CreateClientFor(family.Children[1]);
+        HttpResponseMessage start = await sibling.PostAsJsonAsync("/api/v1/sessions",
+            new { learnerId = family.Children[1].Id, setId = set.Set.Id, gameKey = "classic", size = (int?)null });
+        Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+        SessionView? view = await start.Content.ReadFromJsonAsync<SessionView>(Json);
+        Assert.NotNull(view);
+        string[] prompts = [.. view.Items.Select(i => i.Prompt)];
+        Assert.Contains(prompts, p => p is "Hund" or "dog");
+        Assert.DoesNotContain(prompts, p => p is "Hnud" or "dgo");
+    }
+
+    public static TheoryData<string, string, string, string> InvalidWords => new()
+    {
+        { "", "dog", "sourceText", SourceMissing },
+        { "   ", "dog", "sourceText", SourceMissing },
+        { new string('a', 201), "dog", "sourceText", WordTooLong },
+        { "Hund", "", "targetText", TargetMissing },
+        { "Hund", "   ", "targetText", TargetMissing },
+        { "Hund", new string('b', 201), "targetText", WordTooLong },
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidWords))]
+    public async Task Ungueltiges_Wort_ergibt_400_am_Feld_und_aendert_nichts(
+        string sourceText, string targetText, string key, string message)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        VocabularyEntry entry = set.Entries[0];
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await PutEntryAsync(owner, set.Set.Id, entry.Id, sourceText, targetText);
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(response);
+        Assert.Equal(new[] { key }, errors.Keys);
+        Assert.Equal(message, errors[key][0]);
+        Assert.Equal((entry.SourceText, entry.TargetText), await WordsAsync(entry.Id));
+    }
+
+    [Fact]
+    public async Task Beide_Woerter_leer_ergibt_beide_Feldfehler_200_Zeichen_sind_erlaubt()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        Guid entryId = set.Entries[0].Id;
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(await PutEntryAsync(owner, set.Set.Id, entryId, "", " "));
+        Assert.Equal(SourceMissing, errors["sourceText"][0]);
+        Assert.Equal(TargetMissing, errors["targetText"][0]);
+
+        HttpResponseMessage exact = await PutEntryAsync(owner, set.Set.Id, entryId, new string('a', 200), new string('b', 200));
+        Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
+        Assert.Equal((new string('a', 200), new string('b', 200)), await WordsAsync(entryId));
+    }
+
+    [Fact]
+    public async Task Vokabel_einer_anderen_Familie_unbekannt_oder_aus_anderem_Set_ergibt_404()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet own = await SeedSetAsync(_factory, family, entries: 1);
+        SeededSet ownOther = await SeedSetAsync(_factory, family, entries: 1);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        SeededSet foreign = await SeedSetAsync(_factory, other, entries: 1);
+        VocabularyEntry foreignEntry = foreign.Entries[0];
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage foreignResponse = await PutEntryAsync(owner, foreign.Set.Id, foreignEntry.Id, "Gekapert", "hijacked");
+        HttpResponseMessage unknown = await PutEntryAsync(owner, own.Set.Id, Guid.NewGuid(), "Hund", "dog");
+        HttpResponseMessage wrongSet = await PutEntryAsync(owner, ownOther.Set.Id, own.Entries[0].Id, "Hund", "dog");
+
+        Assert.Equal(EntryGone, await DetailAsync(foreignResponse));
+        Assert.Equal(EntryGone, await DetailAsync(unknown));
+        Assert.Equal(EntryGone, await DetailAsync(wrongSet));
+        Assert.Equal((foreignEntry.SourceText, foreignEntry.TargetText), await WordsAsync(foreignEntry.Id));
+        Assert.Equal((own.Entries[0].SourceText, own.Entries[0].TargetText), await WordsAsync(own.Entries[0].Id));
+    }
+
+    [Fact]
+    public async Task Vokabel_korrigieren_mit_Kinder_Token_ergibt_403()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        VocabularyEntry entry = set.Entries[0];
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        HttpResponseMessage response = await PutEntryAsync(child, set.Set.Id, entry.Id, "Vom", "Kind");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal((entry.SourceText, entry.TargetText), await WordsAsync(entry.Id));
     }
 }

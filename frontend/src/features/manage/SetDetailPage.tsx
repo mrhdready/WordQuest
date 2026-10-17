@@ -12,9 +12,12 @@ import { Badge, EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components
 import { api, ApiError } from '@/lib/api'
 import type { ImportPreview, VocabularyEntry, VocabularySet } from '@/types'
 
-// Spiegelt ContentRules.MaxTextLength (Spalte Titel); massgeblich bleibt der Server.
-const MAX_TITLE_LENGTH = 200
+// Spiegelt ContentRules.MaxTextLength (Titel und Woerter); massgeblich bleibt der Server.
+const MAX_TEXT_LENGTH = 200
 const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
+const SOURCE_MISSING = 'Bitte gib das deutsche Wort ein.'
+const TARGET_MISSING = 'Bitte gib das englische Wort ein.'
+const WORD_TOO_LONG = 'Das Wort darf höchstens 200 Zeichen lang sein.'
 
 export function SetDetailPage() {
   const { setId = '' } = useParams()
@@ -26,6 +29,11 @@ export function SetDetailPage() {
   const [saved, setSaved] = useState<string | null>(null)
   // Fokusziel, wenn das Set schon weg war und die Buttons im Kopf mit ihm verschwinden.
   const backRef = useRef<HTMLAnchorElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  // Stift und Papierkorb gibt es je Zeile: der angeklickte Button ist das Fokusziel beim
+  // Schliessen; verschwindet die Zeile (geloescht, 404), wird es die Set-Ueberschrift.
+  const rowFocusRef = useRef<HTMLElement | null>(null)
+  const [editing, setEditing] = useState<VocabularyEntry | null>(null)
 
   // Kein Einzelabruf: der Titel kommt aus der Liste ['sets'] (Muster ChildFormPage).
   const sets = useQuery({
@@ -98,7 +106,7 @@ export function SetDetailPage() {
       {back}
 
       <div className="flex flex-col gap-2">
-        <h2 tabIndex={-1} className="type-headline break-words text-ink">
+        <h2 ref={headingRef} tabIndex={-1} className="type-headline break-words text-ink">
           {set.title}
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -173,6 +181,17 @@ export function SetDetailPage() {
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={`${entry.sourceText} bearbeiten`}
+                onClick={(event) => {
+                  rowFocusRef.current = event.currentTarget
+                  setEditing(entry)
+                }}
+              >
+                <Pencil className="size-4" aria-hidden />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 aria-label={`${entry.sourceText} löschen`}
                 onClick={() => removeEntry.mutate(entry.id)}
               >
@@ -182,33 +201,60 @@ export function SetDetailPage() {
           ))}
         </ListGroup>
       ) : null}
+
+      {editing ? (
+        <EditEntry
+          key={editing.id}
+          setId={setId}
+          entry={editing}
+          returnFocusRef={rowFocusRef}
+          onRowGone={() => {
+            rowFocusRef.current = headingRef.current
+          }}
+          onSaved={setSaved}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </div>
   )
 }
 
+interface WordErrors {
+  sourceText?: string
+  targetText?: string
+}
+
 function titleError(title: string): string | undefined {
   if (!title.trim()) return 'Ein Set braucht einen Titel.'
-  if (title.trim().length > MAX_TITLE_LENGTH) return 'Der Titel darf höchstens 200 Zeichen lang sein.'
+  if (title.trim().length > MAX_TEXT_LENGTH) return 'Der Titel darf höchstens 200 Zeichen lang sein.'
+  return undefined
+}
+
+function wordError(text: string, missing: string): string | undefined {
+  if (!text.trim()) return missing
+  if (text.trim().length > MAX_TEXT_LENGTH) return WORD_TOO_LONG
   return undefined
 }
 
 /**
- * 404 in einem Dialog der Set-Seite: das Set ist schon weg (anderer Tab). Neu
- * geladen wird erst beim Schliessen: ein Neuladen bei offenem Dialog nimmt das
- * Set aus der Liste, und Kopf, Dialog und Eingaben verschwinden. Solange gilt
- * "Alle Sets" als Fokusziel, weil die Buttons im Kopf mit dem Set verschwinden.
+ * 404 in einem Dialog der Set-Seite: Set oder Vokabel ist schon weg (anderer
+ * Tab). Die Liste unter `queryKey` wird erst beim Schliessen neu geladen: ein
+ * Neuladen bei offenem Dialog nimmt Set bzw. Zeile mitsamt Fokusziel weg, und
+ * Dialog und Eingaben verschwinden.
  */
-function useSetGone() {
+function useGone(queryKey: string[]) {
   const queryClient = useQueryClient()
   const [gone, setGone] = useState(false)
   return {
     gone,
     reset: () => setGone(false),
     noteError: (caught: unknown) => {
-      if (caught instanceof ApiError && caught.status === 404) setGone(true)
+      const found = caught instanceof ApiError && caught.status === 404
+      if (found) setGone(true)
+      return found
     },
     closed: () => {
-      if (gone) void queryClient.invalidateQueries({ queryKey: ['sets'] })
+      if (gone) void queryClient.invalidateQueries({ queryKey })
     },
   }
 }
@@ -229,7 +275,7 @@ function RenameSet({
   const [fieldError, setFieldError] = useState<string | undefined>()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const stale = useSetGone()
+  const stale = useGone(['sets'])
   const busyRef = useRef(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -327,6 +373,132 @@ function RenameSet({
   )
 }
 
+// Korrigiert Deutsch und Englisch an Ort und Stelle (PAR-04, D-08): gleiche IDs, der Lernstand bleibt.
+function EditEntry({
+  setId,
+  entry,
+  returnFocusRef,
+  onRowGone,
+  onSaved,
+  onClose,
+}: {
+  setId: string
+  entry: VocabularyEntry
+  returnFocusRef: RefObject<HTMLElement | null>
+  onRowGone: () => void
+  onSaved: (message: string | null) => void
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [source, setSource] = useState(entry.sourceText)
+  const [target, setTarget] = useState(entry.targetText)
+  const [fieldErrors, setFieldErrors] = useState<WordErrors>({})
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const stale = useGone(['entries', setId])
+  const busyRef = useRef(false)
+  const sourceRef = useRef<HTMLInputElement>(null)
+  const targetRef = useRef<HTMLInputElement>(null)
+
+  function changeOpen(next: boolean) {
+    // Waehrend der Anfrage schliessen weder Esc noch "Abbrechen".
+    if (next || busyRef.current) return
+    stale.closed()
+    onClose()
+  }
+
+  function showFieldErrors(found: WordErrors) {
+    setFieldErrors(found)
+    if (found.sourceText) sourceRef.current?.focus()
+    else if (found.targetText) targetRef.current?.focus()
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    // Ref statt nur disabled: ein zweiter Klick kann vor dem naechsten Rendern ankommen.
+    if (busyRef.current) return
+    setError(null)
+    onSaved(null)
+    const found = { sourceText: wordError(source, SOURCE_MISSING), targetText: wordError(target, TARGET_MISSING) }
+    showFieldErrors(found)
+    if (found.sourceText || found.targetText) return
+    busyRef.current = true
+    setBusy(true)
+    try {
+      await api<VocabularyEntry>(`/sets/${setId}/entries/${entry.id}`, {
+        method: 'PUT',
+        body: { sourceText: source.trim(), targetText: target.trim() },
+      })
+      busyRef.current = false
+      onClose()
+      onSaved('Die Vokabel ist gespeichert.')
+      for (const key of [['entries', setId], ['traffic-light']]) {
+        void queryClient.invalidateQueries({ queryKey: key })
+      }
+    } catch (caught) {
+      if (stale.noteError(caught)) onRowGone()
+      // Feldfehler des Servers am Feld, alles andere im Hinweis ueber den Buttons.
+      const server = caught instanceof ApiError ? caught.errors : undefined
+      const fromServer = { sourceText: server?.sourceText?.[0], targetText: server?.targetText?.[0] }
+      if (fromServer.sourceText || fromServer.targetText) showFieldErrors(fromServer)
+      else setError(caught instanceof Error ? caught.message : GENERIC)
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={changeOpen}
+      title="Vokabel bearbeiten"
+      description="Der Lernstand der Kinder bleibt erhalten."
+      returnFocusRef={returnFocusRef}
+    >
+      <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
+        <Field id="vokabel-deutsch" label="Deutsch" error={fieldErrors.sourceText}>
+          {(control) => (
+            <Input
+              {...control}
+              ref={sourceRef}
+              autoComplete="off"
+              value={source}
+              onChange={(event) => setSource(event.target.value)}
+            />
+          )}
+        </Field>
+        <Field id="vokabel-englisch" label="Englisch" error={fieldErrors.targetText}>
+          {(control) => (
+            <Input
+              {...control}
+              ref={targetRef}
+              autoComplete="off"
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+            />
+          )}
+        </Field>
+        {error ? <ErrorNote message={error} /> : null}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-auto"
+            disabled={busy}
+            onClick={() => changeOpen(false)}
+          >
+            Abbrechen
+          </Button>
+          <Button type="submit" className="flex-auto" disabled={busy}>
+            {busy ? 'Einen Moment …' : 'Speichern'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
 // Loescht Vokabeln und Lernstand aller Kinder dazu (FIX-02, D-17), deshalb mit Bestaetigung.
 function DeleteSet({ set, backRef }: { set: VocabularySet; backRef: RefObject<HTMLAnchorElement | null> }) {
   const navigate = useNavigate()
@@ -334,7 +506,7 @@ function DeleteSet({ set, backRef }: { set: VocabularySet; backRef: RefObject<HT
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const stale = useSetGone()
+  const stale = useGone(['sets'])
   const busyRef = useRef(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
 

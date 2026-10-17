@@ -268,6 +268,34 @@ test('Set löschen', async ({ page }) => {
   await expect(page.getByRole('link').filter({ hasText: title })).toHaveCount(0)
 })
 
+// Eigene Vokabel ueber die Erfassung, damit die Demo-Sets unberuehrt bleiben.
+async function addEntry(page: Page, source: string, target: string) {
+  await page.getByLabel('Deutsch', { exact: true }).fill(source)
+  await page.getByLabel('Englisch', { exact: true }).fill(target)
+  await page.getByRole('button', { name: 'Hinzufügen' }).click()
+  await expect(page.getByText(`${source} → ${target}`)).toBeVisible()
+}
+
+test('Vokabel bearbeiten', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bearbeiten ${Date.now()}`)
+  await addEntry(page, 'Hnud', 'dgo')
+
+  await page.getByRole('button', { name: 'Hnud bearbeiten' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const german = dialog.getByLabel('Deutsch')
+  const english = dialog.getByLabel('Englisch')
+  await expect(german).toBeFocused()
+  await expect(german).toHaveValue('Hnud')
+  await german.fill('Hund')
+  await english.fill('dog')
+  await english.press('Enter')
+
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Hund → dog')).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Die Vokabel ist gespeichert.' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hund bearbeiten' })).toBeFocused()
+})
+
 // D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.
 test('Set-Dialoge barrierefrei', async ({ page }) => {
   const title = `Zz E2E Barrierefrei ${Date.now()}`

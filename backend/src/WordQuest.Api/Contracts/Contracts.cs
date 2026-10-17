@@ -81,6 +81,8 @@ public sealed record CreateEntryRequest(
     string? ExampleSource,
     string? ExampleTarget);
 
+public sealed record UpdateEntryRequest(string? SourceText, string? TargetText);
+
 public sealed record ImportRowDto(int LineNumber, string Source, string Target, string? Emoji, string? Problem);
 
 public sealed record ImportPreviewRequest(string Content);

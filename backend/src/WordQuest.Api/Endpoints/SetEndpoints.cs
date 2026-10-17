@@ -23,6 +23,7 @@ public static class SetEndpoints
         group.MapPatch("/{setId:guid}", UpdateAsync).RequireAuthorization("Guardian");
         group.MapDelete("/{setId:guid}", DeleteAsync).RequireAuthorization("Guardian");
         group.MapPost("/{setId:guid}/entries", AddEntryAsync).RequireAuthorization("Guardian");
+        group.MapPut("/{setId:guid}/entries/{entryId:guid}", UpdateEntryAsync).RequireAuthorization("Guardian");
         group.MapDelete("/{setId:guid}/entries/{entryId:guid}", DeleteEntryAsync).RequireAuthorization("Guardian");
         group.MapPost("/import/preview", PreviewImport).RequireAuthorization("Guardian");
         group.MapPost("/{setId:guid}/import", ConfirmImportAsync).RequireAuthorization("Guardian");
@@ -174,6 +175,63 @@ public static class SetEndpoints
 
         return Results.Created($"/api/v1/sets/{setId}/entries/{entry.Id}", ToDto(entry));
     }
+
+    /// <summary>
+    /// Korrigiert Deutsch und Englisch an Ort und Stelle (PAR-04, D-08): Eintrags- und
+    /// Karten-IDs bleiben, damit der Lernstand der Kinder erhalten bleibt.
+    /// </summary>
+    private static async Task<IResult> UpdateEntryAsync(
+        Guid setId, Guid entryId, UpdateEntryRequest request, WordQuestDbContext db, CancellationToken ct)
+    {
+        if (WordProblems(request.SourceText, request.TargetText) is { } errors)
+        {
+            return Results.ValidationProblem(errors);
+        }
+
+        // Mandantenfilter plus Set-Bedingung: fremd, unbekannt oder aus einem anderen Set ist "nicht gefunden".
+        VocabularyEntry? entry = await db.VocabularyEntries
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.SetId == setId, ct);
+        if (entry is null)
+        {
+            return EntryNotFound();
+        }
+
+        // Nur die beiden Woerter: Karten, Lernstand, Emoji, Alternativen und Beispiele bleiben.
+        entry.SourceText = request.SourceText!.Trim();
+        entry.TargetText = request.TargetText!.Trim();
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(ToDto(entry));
+    }
+
+    // Alle Feldfehler gemeinsam; null, wenn beide Woerter passen. Die Grenze steht in ContentRules.
+    private static Dictionary<string, string[]>? WordProblems(string? sourceText, string? targetText)
+    {
+        var errors = new Dictionary<string, string[]>();
+        AddWordProblem(errors, "sourceText", sourceText, "Bitte gib das deutsche Wort ein.");
+        AddWordProblem(errors, "targetText", targetText, "Bitte gib das englische Wort ein.");
+        return errors.Count == 0 ? null : errors;
+    }
+
+    private static void AddWordProblem(Dictionary<string, string[]> errors, string key, string? text, string missing)
+    {
+        string? message = ContentRules.CheckText(text) switch
+        {
+            ContentTextProblem.Missing => missing,
+            ContentTextProblem.TooLong => "Das Wort darf höchstens 200 Zeichen lang sein.",
+            _ => null,
+        };
+        if (message is not null)
+        {
+            errors[key] = [message];
+        }
+    }
+
+    // Mit Text: die Set-Seite zeigt ihn im Dialog, wenn die Vokabel in einem anderen Tab schon geloescht wurde.
+    private static IResult EntryNotFound() =>
+        Results.Problem(
+            title: "Nicht gefunden",
+            detail: "Diese Vokabel gibt es nicht (mehr).",
+            statusCode: StatusCodes.Status404NotFound);
 
     private static async Task<IResult> DeleteEntryAsync(
         Guid setId, Guid entryId, WordQuestDbContext db, CancellationToken ct)
