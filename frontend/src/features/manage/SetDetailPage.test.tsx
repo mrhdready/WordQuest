@@ -887,3 +887,77 @@ describe('Erfassung', () => {
     expect(calls.posts).toEqual([{ sourceText: 'Hund', targetText: 'dog' }])
   })
 })
+
+const importRow = (lineNumber: number, source: string, target: string, problem: string | null = null) => ({
+  lineNumber,
+  source,
+  target,
+  emoji: null,
+  problem,
+})
+type ImportRowStub = ReturnType<typeof importRow>
+const previewOf = (rows: ImportRowStub[]) => ({
+  delimiter: ';',
+  hadHeader: false,
+  validCount: rows.filter((row) => row.problem === null).length,
+  problemCount: rows.filter((row) => row.problem !== null).length,
+  rows,
+})
+const hundRow = importRow(1, 'Hund', 'dog')
+const noDelimiter = 'Zeile hat keine zwei befüllten Spalten.'
+
+/**
+ * fetch-Stub fuer den CSV-Import. Die Vorschau antwortet per `preview`, das
+ * Uebernehmen per `confirm`; gezaehlt werden die Koerper beider Anfragen.
+ */
+function stubImport(
+  rows: ImportRowStub[],
+  {
+    preview = async () => Response.json(previewOf(rows)),
+    confirm = async () => Response.json({ imported: rows.length }),
+  }: { preview?: () => Promise<Response>; confirm?: () => Promise<Response> } = {},
+) {
+  const calls = { previews: [] as unknown[], imports: [] as unknown[] }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/import/preview')) {
+        calls.previews.push(JSON.parse(String(init?.body)))
+        return preview()
+      }
+      if (url.endsWith('/import')) {
+        calls.imports.push(JSON.parse(String(init?.body)))
+        return confirm()
+      }
+      if (url.endsWith('/entries')) return Response.json([])
+      return Response.json([unit])
+    }),
+  )
+  return calls
+}
+
+async function openImport(text: string) {
+  renderPage()
+  await userEvent.click(await screen.findByRole('button', { name: 'Liste importieren (CSV)' }))
+  const textarea = screen.getByRole('textbox', { name: /^Eine Zeile pro Vokabel/ }) as HTMLTextAreaElement
+  await userEvent.click(textarea)
+  await userEvent.paste(text)
+  return textarea
+}
+
+async function runPreview(text: string) {
+  const textarea = await openImport(text)
+  await userEvent.click(screen.getByRole('button', { name: 'Vorschau' }))
+  await screen.findByRole('region', { name: 'Vorschau' })
+  return textarea
+}
+
+describe('CSV-Import', () => {
+  it('Problemzeile nennt das betroffene Wort', async () => {
+    stubImport([hundRow, importRow(2, 'ohneTrennzeichen', '', noDelimiter)])
+    await runPreview('Hund;dog\nohneTrennzeichen')
+    const region = screen.getByRole('region', { name: 'Vorschau' })
+    expect(within(region).getByText(noDelimiter)).toBeTruthy()
+    expect(within(region).getByText('ohneTrennzeichen')).toBeTruthy()
+  })
+})

@@ -192,6 +192,8 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await expect(page.getByText('1 erkannt')).toBeVisible()
   await expect(page.getByText('1 übersprungen')).toBeVisible()
   await expect(page.getByText('Zeile hat keine zwei befüllten Spalten.')).toBeVisible()
+  // Die Problemzeile nennt das betroffene Wort, nicht nur Grund und Nummer.
+  await expect(page.getByRole('region', { name: 'Vorschau' }).getByText('ohneTrennzeichen')).toBeVisible()
   await checkPage(page)
 
   // Fehlerzustand: Server antwortet beim Übernehmen mit 500
@@ -221,6 +223,10 @@ test('CSV-Vorschau bei 320 px mit langem Wort ohne Trennstelle', async ({ page }
   await expect(region.getByText('Ein Wort darf höchstens 200 Zeichen lang sein.')).toBeVisible()
   expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth), 'Vorschau scrollt waagerecht').toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  // Das Wort der Problemzeile steht da und bricht um.
+  const word = region.getByText(tooLong)
+  await expect(word).toBeVisible()
+  expect(await word.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   await checkPage(page)
 })
 

@@ -742,7 +742,15 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
                 <span className="w-8 shrink-0 text-ink-soft">{row.lineNumber}</span>
                 {/* min-w-0 und break-words: ein langes Wort bricht um, statt die Liste waagerecht scrollen zu lassen (WCAG 1.4.10). */}
                 {row.problem ? (
-                  <span className="min-w-0 flex-1 break-words text-danger-text">{row.problem}</span>
+                  // Mit dem betroffenen Wort: sonst muessten Eltern die Zeile per Nummer im Textfeld suchen.
+                  <span className="min-w-0 flex-1 break-words">
+                    <span className="block text-danger-text">{row.problem}</span>
+                    {row.source || row.target ? (
+                      <span className="block text-ink-soft">
+                        {[row.source, row.target].filter(Boolean).join(' → ')}
+                      </span>
+                    ) : null}
+                  </span>
                 ) : (
                   <span className="min-w-0 flex-1 break-words">
                     {row.source} → {row.target} {row.emoji ?? ''}
