@@ -178,7 +178,7 @@ public static class SetEndpoints
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["entry"] = ["Beide Spalten muessen befuellt sein."],
+                ["entry"] = ["Beide Spalten müssen befüllt sein."],
             });
         }
 
@@ -330,7 +330,7 @@ public static class SetEndpoints
 
         if (!await db.VocabularySets.AnyAsync(s => s.Id == setId, ct))
         {
-            return Results.NotFound();
+            return SetNotFound();
         }
 
         int position = (await db.VocabularyEntries

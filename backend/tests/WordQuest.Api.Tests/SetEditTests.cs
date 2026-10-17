@@ -451,7 +451,24 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Hinzufuegen_mit_leerer_Spalte_behaelt_den_Bestandstext()
+    public async Task Import_in_unbekanntes_oder_fremdes_Set_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        SeededSet foreign = await SeedSetAsync(_factory, other, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        object body = new { entries = new[] { new { sourceText = "Hund", targetText = "dog" } } };
+
+        HttpResponseMessage unknown = await owner.PostAsJsonAsync($"/api/v1/sets/{Guid.NewGuid()}/import", body);
+        HttpResponseMessage foreignResponse = await owner.PostAsJsonAsync($"/api/v1/sets/{foreign.Set.Id}/import", body);
+
+        Assert.Equal(SetGone, await DetailAsync(unknown));
+        Assert.Equal(SetGone, await DetailAsync(foreignResponse));
+        Assert.Equal(1, await EntryCountAsync(foreign.Set.Id));
+    }
+
+    [Fact]
+    public async Task Hinzufuegen_mit_leerer_Spalte_ergibt_400_mit_Text()
     {
         SeededFamily family = await SeedFamilyAsync(_factory);
         SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
@@ -459,15 +476,15 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
 
         IDictionary<string, string[]> errors = await FieldErrorsAsync(await PostEntryAsync(owner, set.Set.Id, "  ", "dog"));
 
-        Assert.Equal("Beide Spalten muessen befuellt sein.", errors["entry"][0]);
+        Assert.Equal("Beide Spalten müssen befüllt sein.", errors["entry"][0]);
         Assert.Equal(1, await EntryCountAsync(set.Set.Id));
     }
 
     // Direkter API-Aufruf (Befund 02-05): fehlendes Wort oder zu lange Zusatzfelder ergeben 400 statt 500.
     public static TheoryData<string, string, string> IncompleteOrTooLongEntries => new()
     {
-        { JsonSerializer.Serialize(new { targetText = "dog" }), "entry", "Beide Spalten muessen befuellt sein." },
-        { JsonSerializer.Serialize(new { sourceText = "Hund" }), "entry", "Beide Spalten muessen befuellt sein." },
+        { JsonSerializer.Serialize(new { targetText = "dog" }), "entry", "Beide Spalten müssen befüllt sein." },
+        { JsonSerializer.Serialize(new { sourceText = "Hund" }), "entry", "Beide Spalten müssen befüllt sein." },
         {
             JsonSerializer.Serialize(new { sourceText = "Hund", targetText = "dog", emoji = new string('x', 17) }),
             "emoji", "Das Emoji darf höchstens 16 Zeichen lang sein."
