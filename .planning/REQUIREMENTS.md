@@ -20,7 +20,7 @@
 - [ ] **PAR-02**: PIN must be 4–6 digits (validated server-side)
 - [ ] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
 - [x] **PAR-03**: Parent can delete a child including all learning history
-- [ ] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
+- [x] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
 
 ### Bug Fixes
 
@@ -99,7 +99,7 @@
 | PAR-05 | Phase 1 | Pending |
 | DESIGN-01 | Phase 1 | Pending |
 | PAR-03 | Phase 2 | Complete |
-| PAR-04 | Phase 2 | Pending |
+| PAR-04 | Phase 2 | Complete |
 | FIX-01 | Phase 2 | Pending |
 | FIX-02 | Phase 2 | Complete |
 | FIX-03 | Phase 2 | Complete |

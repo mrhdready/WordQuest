@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 1
 current_phase_name: Safe Home-Network Install
 status: verifying
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-10-17T19:31:00.457Z"
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-10-17T20:03:39.796Z"
 last_activity: 2026-10-16
 last_activity_desc: Phase 1 execution started
-state_head: 4eda3a1fc30af3a21cdee69f081eab04afdd0f1e
+state_head: e4809901497b8f66bd6184df50add7f3fcee6fc5
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -68,6 +68,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P02 | 18min | 2 tasks | 16 files |
 | Phase 02 P03 | 23min | 3 tasks | 14 files |
 | Phase 02 P04 | 22min | 3 tasks | 16 files |
+| Phase 02 P05 | 28min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Dialog-Kontrast in e2e ohne Seiteninhalt messen (Backdrop-Farben und primary-deep), weil axe bei Glas ueber wechselndem Inhalt nicht misst (02-03)
 - [Phase 02]: 02-04: Set-Seite zeigt Erfassung, Import und Liste erst mit gefundenem Set; Titel aus ['sets'], 404 im Dialog bleibt bis zum Schliessen (useSetGone)
 - [Phase 02]: 02-04: ContentRules.CheckText (200 Zeichen nach Trimmen) ist die eine Laengenregel fuer Titel und Woerter; CSV-Import ueber 200 Zeichen bleibt 500 (gemeldet, nicht gebaut)
+- [Phase 02]: 02-05: Fokusziel der Vokabel-Dialoge ist ein Ref (angeklickter Stift/Papierkorb, nach Loeschen oder 404 die Set-Ueberschrift); useSetGone zu useGone(queryKey) verallgemeinert
+- [Phase 02]: 02-05: PUT /sets/{id}/entries/{entryId} aendert nur Deutsch/Englisch (WordProblems ueber ContentRules); POST ohne Pflichtfelder bzw. mit zu langem Emoji/Beispiel bleibt per API 500 (gemeldet, nicht gebaut)
 
 ### Pending Todos
 
@@ -137,6 +140,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T19:31:00.415Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-10-17T20:03:39.731Z
+Stopped at: Completed 02-05-PLAN.md
 Resume file: None

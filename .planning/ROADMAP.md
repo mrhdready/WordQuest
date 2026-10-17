@@ -58,14 +58,14 @@ Plans:
   4. After a parent deletes a set, an entry or a child (with confirmation), none of the removed words appear in any session and no learning history of the deleted child remains; renaming a set or correcting an entry keeps the child's progress on that word; the new rename/edit forms and the delete dialog pass the edge-case matrix and axe (0 WCAG 2.2 AA violations) like the Phase 1 forms
   5. API integration tests run against a real PostgreSQL in CI and cover login, refresh, isolation between siblings and each FIX requirement, all green
 
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 - [x] 02-01-PLAN.md — Abgebrochene Runde verbraucht nichts und neue Karten kommen wieder (FIX-03/09), 404/400/409 statt 500 in der Lernrunde (FIX-04), Gate-Hilfe mit eigenem PostgreSQL
 - [x] 02-02-PLAN.md — Fremdschlüssel-Migration `ReferentialIntegrity` mit Waisenbereinigung (einzige Migration), `DELETE /learners/{id}`, Backend-Tests für Kind, Set und Migration
 - [x] 02-03-PLAN.md — Scrim-Token in DESIGN.md, Dialog-Baustein, „Kind löschen“ in der Oberfläche mit Matrix, axe, Tastatur und 200 % Zoom
 - [x] 02-04-PLAN.md — Set umbenennen und Set löschen mit Dialogen, Längenprüfung statt 500, Erfolgsmeldung in der Set-Liste
-- [ ] 02-05-PLAN.md — Vokabel korrigieren und nur nach Bestätigung löschen, Fehler der Erfassung sichtbar
+- [x] 02-05-PLAN.md — Vokabel korrigieren und nur nach Bestätigung löschen, Fehler der Erfassung sichtbar
 - [ ] 02-06-PLAN.md — Rate-Limit pro Gerät hinter dem Proxy, Refresh ohne Limit und ohne Abmelden bei 429/5xx, Tests für Anmeldung und Geschwister-Trennung
 - [ ] 02-07-PLAN.md — Aktuelle Serie, eine Meisterschaftsregel für Wörter, Phasen-Gate wie CI
 
@@ -93,5 +93,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Safe Home-Network Install | 8/8 | In Progress | - |
-| 2. Reliable Learning & Clean Family Data | 4/7 | In Progress | - |
+| 2. Reliable Learning & Clean Family Data | 5/7 | In Progress | - |
 | 3. Installable 1.0.0 Release | 0/TBD | Not started | - |
