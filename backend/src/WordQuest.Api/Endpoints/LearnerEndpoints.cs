@@ -264,6 +264,15 @@ public static class LearnerEndpoints
         WordQuestDbContext db,
         CancellationToken ct)
     {
+        // Ohne Kind waere jedes Wort "neu", als waere der Lernstand zurueckgesetzt (WR-05).
+        if (!await db.LearnerProfiles.AnyAsync(p => p.Id == learnerId, ct))
+        {
+            return Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Kind gibt es nicht (mehr).",
+                statusCode: StatusCodes.Status404NotFound);
+        }
+
         List<TrafficLightDto> result = (await WordStatesAsync(db, learnerId, setId, ct))
             .Select(w =>
             {

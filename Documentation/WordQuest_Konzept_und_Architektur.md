@@ -575,7 +575,7 @@ POST   /learners                        displayName, pin (Pflicht, 4–6 Ziffern
 PATCH  /learners/{id}/settings          displayName?, dailyNewLimit?, speed?, soundEnabled?, pin? (4–6 Ziffern, leer = unverändert; Pflicht, solange das Kind keine PIN hat)
 DELETE /learners/{id}                   löscht das Kind samt Lernstand, XP, Serie und Anmeldungen; 404 für fremde oder unbekannte Kinder
 GET    /learners/{id}/overview          Level, XP, Streak, fällig, gefestigt
-GET    /learners/{id}/traffic-light?setId=
+GET    /learners/{id}/traffic-light?setId=   404 für fremde oder unbekannte Kinder
 
 GET    /sets
 POST   /sets                            title (Pflicht, höchstens 200 Zeichen); description höchstens 2000, sourceLanguage/targetLanguage höchstens 5 Zeichen

@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using WordQuest.Api.Contracts;
@@ -120,5 +122,21 @@ public sealed class OverviewTests : IClassFixture<ApiFactory>
         Assert.Equal(5, lights.Count);
         Assert.Equal(overview.CardsMastered, lights.Count(l => l.Status == "green"));
         Assert.Equal(first.Entries[0].Id, lights.Single(l => l.Status == "green").EntryId);
+    }
+
+    // WR-05: Fuer ein geloeschtes oder unbekanntes Kind meldete die Ampel 200 mit
+    // jedem Wort als "neu", als waere der Lernstand zurueckgesetzt.
+    [Fact]
+    public async Task Ampel_fuer_unbekanntes_Kind_ergibt_404_mit_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        await SeedSetAsync(_factory, family, entries: 2);
+        using HttpClient client = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await client.GetAsync($"/api/v1/learners/{Guid.NewGuid()}/traffic-light");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        ProblemDetails? problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Dieses Kind gibt es nicht (mehr).", problem?.Detail);
     }
 }
