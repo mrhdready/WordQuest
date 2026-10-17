@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using WordQuest.Api;
@@ -101,16 +102,29 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Guardian", policy => policy.RequireRole("Owner", "Guardian"))
     .AddPolicy("Learner", policy => policy.RequireRole("Learner"));
 
-// Begrenzt Rateversuche auf Login und PIN (Konzept §12). Standard 10 pro Minute;
-// nur der e2e-Teststack setzt einen hoeheren Wert, weil dort alle Anfragen ueber
-// nginx mit einer IP kommen. Die Ursache "eine IP fuer alle Geraete" behebt FIX-01
-// in Phase 2.
+// Begrenzt Rateversuche auf Login und PIN (Konzept §12), Standard 10 pro Minute,
+// Partition pro echter Client-IP (FIX-01). nginx setzt X-Forwarded-For selbst auf
+// die Adresse seines Absenders (im Traefik-Stack auf die Adresse, die Traefik
+// meldet). Vertraut werden nur private Netze: Die API ist in keinem Stack
+// veroeffentlicht, nur nginx erreicht sie, und Docker-Pools weichen je nach Host
+// ab. ForwardLimit = 1, weil genau eine Stufe (nginx) direkt vor der API steht;
+// ein vom Geraet vorangestellter Wert zaehlt so nie. Der e2e-Teststack setzt
+// einen hoeheren Wert, weil Playwright alle Anfragen von einer IP schickt.
 int authRequestsPerMinute = builder.Configuration.GetValue("Auth:RequestsPerMinute", 10);
 if (authRequestsPerMinute < 1)
 {
     // Sonst startet die API und jeder Login endet erst beim ersten Aufruf mit 500.
     throw new InvalidOperationException("Start abgebrochen: Auth:RequestsPerMinute muss mindestens 1 sein.");
 }
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 1;
+    // Loopback bleibt aus dem Standard erhalten.
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("172.16.0.0/12"));
+    options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("192.168.0.0/16"));
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -159,6 +173,8 @@ if (AccountCommands.IsCommand(args))
 // --- Pipeline ---------------------------------------------------------------
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+// Vor dem Rate-Limiter: setzt Connection.RemoteIpAddress auf die Adresse des Geraets.
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {

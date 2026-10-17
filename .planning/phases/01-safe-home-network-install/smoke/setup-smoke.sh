@@ -194,4 +194,31 @@ code="$(login "$demo_email" "$demo_password")"
 [[ "$code" == 401 ]] || fail "Demo-Login nach reset-password: HTTP $code statt 401."
 echo "DEMO-ABBRUCH OK"
 
+echo "== Anmelde-Limit pro Geraet (FIX-01)"
+# Erst nach dem Demo-Block: die Sperre wuerde sonst dessen Login treffen.
+# Zwei Absender, eine Sperre: der Host sperrt nur sich selbst, ein zweiter
+# Absender im Compose-Netz meldet sich in derselben Minute an, ein gefaelschter
+# X-Forwarded-For-Kopf waehlt keinen neuen Topf, Refresh zaehlt nicht mit.
+wrong_login="{\"email\":\"$demo_email\",\"password\":\"falsches-passwort\"}"
+limited=0
+for attempt in $(seq 1 11); do
+  code="$(login "$demo_email" falsches-passwort)"
+  if [[ "$code" == 429 ]]; then limited=1; break; fi
+  [[ "$code" == 401 ]] || fail "Fehlversuch $attempt vom Host: HTTP $code statt 401."
+done
+[[ "$limited" == 1 ]] || fail "Der Host ist nach 11 Fehlversuchen nicht gesperrt."
+code="$(curl -s -o /dev/null -w '%{http_code}' \
+  -H 'Content-Type: application/json' -H 'X-Forwarded-For: 10.9.9.9' \
+  -d "$wrong_login" "http://localhost:${WQ_PORT}/api/v1/auth/login")"
+[[ "$code" == 429 ]] || fail "Ein gefaelschter X-Forwarded-For-Kopf oeffnet einen neuen Topf: HTTP $code statt 429."
+# busybox-wget endet bei 401 mit Exit ungleich 0; die Ausgabe wird trotzdem gebraucht.
+second="$(docker compose exec -T db sh -c "wget -S -O /dev/null --header 'Content-Type: application/json' --post-data '$wrong_login' http://web:8080/api/v1/auth/login 2>&1" </dev/null || true)"
+grep -q '401' <<<"$second" || fail "Der zweite Absender bekommt kein 401: $second"
+if grep -q '429' <<<"$second"; then fail "Der zweite Absender ist mitgesperrt (429): $second"; fi
+code="$(curl -s -o /dev/null -w '%{http_code}' \
+  -H 'Content-Type: application/json' -d '{"refreshToken":"ungueltig"}' \
+  "http://localhost:${WQ_PORT}/api/v1/auth/refresh")"
+[[ "$code" == 401 ]] || fail "Refresh vom gesperrten Host: HTTP $code statt 401."
+echo "RATE-LIMIT OK"
+
 echo "SMOKE OK"

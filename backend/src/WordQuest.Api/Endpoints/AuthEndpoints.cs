@@ -17,8 +17,11 @@ public static class AuthEndpoints
         group.MapGet("/profiles", GetProfilesAsync);
         group.MapPost("/login", LoginAsync);
         group.MapPost("/learner-login", LearnerLoginAsync);
-        group.MapPost("/refresh", RefreshAsync);
-        group.MapPost("/logout", LogoutAsync);
+        // Refresh und Abmelden erneuern bzw. beenden nur eine bestehende Anmeldung
+        // und duerfen das Login-Budget nicht verbrauchen (D-10). Raten ist
+        // aussichtslos: Refresh-Tokens sind 256 Bit Zufall.
+        group.MapPost("/refresh", RefreshAsync).DisableRateLimiting();
+        group.MapPost("/logout", LogoutAsync).DisableRateLimiting();
     }
 
     /// <summary>
