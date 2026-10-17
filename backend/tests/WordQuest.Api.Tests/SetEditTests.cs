@@ -224,6 +224,45 @@ public sealed class SetEditTests : IClassFixture<ApiFactory>
         Assert.Equal(TitleTooLong, await TitleErrorAsync(response));
     }
 
+    // Direkter API-Aufruf (W-2): zu lange Beschreibung oder Sprache endete als Datenbankfehler (500).
+    public static TheoryData<string, string, string> TooLongSetFields => new()
+    {
+        { JsonSerializer.Serialize(new { title = "Tiere", description = new string('x', 2001) }), "description", "Die Beschreibung darf höchstens 2000 Zeichen lang sein." },
+        { JsonSerializer.Serialize(new { title = "Tiere", sourceLanguage = "abcdef" }), "sourceLanguage", "Die Sprache darf höchstens 5 Zeichen lang sein." },
+        { JsonSerializer.Serialize(new { title = "Tiere", targetLanguage = "abcdef" }), "targetLanguage", "Die Sprache darf höchstens 5 Zeichen lang sein." },
+    };
+
+    [Theory]
+    [MemberData(nameof(TooLongSetFields))]
+    public async Task Anlegen_mit_zu_langer_Beschreibung_oder_Sprache_ergibt_400_statt_500(string body, string key, string message)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.PostAsync("/api/v1/sets", new StringContent(body, Encoding.UTF8, "application/json"));
+
+        IDictionary<string, string[]> errors = await FieldErrorsAsync(response);
+        Assert.Equal(new[] { key }, errors.Keys);
+        Assert.Equal(message, errors[key][0]);
+    }
+
+    [Fact]
+    public async Task Anlegen_mit_Beschreibung_und_Sprache_an_der_Grenze_ergibt_201()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await owner.PostAsJsonAsync("/api/v1/sets", new
+        {
+            title = "Tiere",
+            description = new string('x', 2000),
+            sourceLanguage = "de-DE",
+            targetLanguage = "en-GB",
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
     // ------------------------------------------------- PAR-04: Vokabel korrigieren
 
     [Fact]

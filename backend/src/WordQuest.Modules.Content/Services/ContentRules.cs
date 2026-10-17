@@ -20,6 +20,12 @@ public static class ContentRules
     /// <summary>Hoechstlaenge eines Beispielsatzes; entspricht <c>HasMaxLength(500)</c> der Spalten.</summary>
     public const int MaxExampleLength = 500;
 
+    /// <summary>Hoechstlaenge einer Set-Beschreibung; entspricht <c>HasMaxLength(2000)</c> der Spalte.</summary>
+    public const int MaxDescriptionLength = 2000;
+
+    /// <summary>Hoechstlaenge eines Sprachkuerzels (z. B. <c>de-DE</c>); entspricht <c>HasMaxLength(5)</c> der Spalten.</summary>
+    public const int MaxLanguageLength = 5;
+
     /// <summary>Prueft nach dem Trimmen: leer fehlt, laenger als <see cref="MaxTextLength"/> ist zu lang, sonst <c>null</c>.</summary>
     public static ContentTextProblem? CheckText(string? text)
     {

@@ -578,7 +578,7 @@ GET    /learners/{id}/overview          Level, XP, Streak, fällig, gefestigt
 GET    /learners/{id}/traffic-light?setId=
 
 GET    /sets
-POST   /sets                            title (Pflicht, höchstens 200 Zeichen)
+POST   /sets                            title (Pflicht, höchstens 200 Zeichen); description höchstens 2000, sourceLanguage/targetLanguage höchstens 5 Zeichen
 PATCH  /sets/{id}                       title: benennt das Set um, IDs und Lernstand bleiben; Titel Pflicht, höchstens 200 Zeichen; 404 für fremde oder unbekannte Sets
 DELETE /sets/{id}                       löscht Vokabeln und Lernstand aller Kinder dazu, Sitzungsprotokolle bleiben ohne Set-Bezug; 404 für fremde oder unbekannte Sets
 GET    /sets/{id}/entries

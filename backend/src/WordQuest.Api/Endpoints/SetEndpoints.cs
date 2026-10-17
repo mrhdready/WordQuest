@@ -51,6 +51,19 @@ public static class SetEndpoints
             return problem;
         }
 
+        // Laenger endete sonst als Datenbankfehler (500, W-2).
+        var tooLong = new Dictionary<string, string[]>();
+        AddTooLong(tooLong, "description", request.Description?.Trim(), ContentRules.MaxDescriptionLength,
+            $"Die Beschreibung darf höchstens {ContentRules.MaxDescriptionLength} Zeichen lang sein.");
+        AddTooLong(tooLong, "sourceLanguage", request.SourceLanguage, ContentRules.MaxLanguageLength,
+            $"Die Sprache darf höchstens {ContentRules.MaxLanguageLength} Zeichen lang sein.");
+        AddTooLong(tooLong, "targetLanguage", request.TargetLanguage, ContentRules.MaxLanguageLength,
+            $"Die Sprache darf höchstens {ContentRules.MaxLanguageLength} Zeichen lang sein.");
+        if (tooLong.Count > 0)
+        {
+            return Results.ValidationProblem(tooLong);
+        }
+
         var set = new VocabularySet
         {
             Title = request.Title.Trim(),
