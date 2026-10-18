@@ -31,6 +31,9 @@ fail() { echo "RELEASE-SMOKE FEHLER: $*" >&2; exit 1; }
 # auch ein Abbruch mitten im Build nichts zuruecklaesst (Review 03-01 MEDIUM).
 CLEANUP_TAGS=""
 
+# Bash 3.2 endet mit trap EXIT nach einer ungesetzten Variable mit Exit 0;
+# deshalb zaehlt nur ein Lauf bis zum Ende als Erfolg.
+SMOKE_DONE=0
 cleanup() {
   # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
   (cd "$WORK" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) || true
@@ -41,6 +44,7 @@ cleanup() {
     fi
   done
   rm -rf "$WORK"
+  [[ "$SMOKE_DONE" == 1 ]] || exit 1
 }
 trap cleanup EXIT
 
@@ -173,6 +177,136 @@ dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1 || true)"
 [[ -n "$dump" ]] || fail "Keine Datei backups/daily/wordquest-*.sql.gz nach der Sicherung."
 gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
 
+echo "== Wiederherstellung (REL-02)"
+# Fingerabdruck der Fachdaten in einer Zeile, ohne refresh_token (restore.sh
+# leert die Tabelle absichtlich).
+FP_TABLES='tenant app_user learner_profile vocabulary_set vocabulary_entry card review_state review_log gamification_profile learning_session session_item'
+fingerprint() {
+  local sql="select concat_ws(' '" table
+  for table in $FP_TABLES; do
+    sql="$sql, (select md5(coalesce(string_agg(t::text, '|' order by t::text), '')) from public.$table t)"
+  done
+  docker compose exec -T db psql -U wordquest -d wordquest -At -c "$sql)" </dev/null
+}
+count_rows() {
+  docker compose exec -T db psql -U wordquest -d wordquest -At -c "select count(*) from public.$1" </dev/null
+}
+api_started() { docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q api </dev/null)"; }
+# Login als Elternteil; die Tokens landen in Dateien, nie in der Ausgabe.
+token() {
+  local code
+  auth_budget 1
+  code="$(curl -s -o .smoke/login.json -w '%{http_code}' \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"eltern@example.de","password":"geheim-123"}' \
+    "http://localhost:${WQ_PORT}/api/v1/auth/login" || true)"
+  [[ "$code" == 200 ]] || fail "Login fuer die Tokens: HTTP $code statt 200."
+  sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' .smoke/login.json >.smoke/access-token
+  sed -n 's/.*"refreshToken":"\([^"]*\)".*/\1/p' .smoke/login.json >.smoke/refresh-token
+  [[ -s .smoke/access-token && -s .smoke/refresh-token ]] || fail "Tokens nicht in der Login-Antwort."
+}
+# GET /api/v1/learners mit dem Access-Token aus der Datei; Antwort in .smoke/learners.json.
+learners() {
+  curl -s -o .smoke/learners.json -w '%{http_code}' \
+    -H "Authorization: Bearer $(cat .smoke/access-token)" \
+    "http://localhost:${WQ_PORT}/api/v1/learners" || true
+}
+# restore.sh startet web zuletzt neu; nginx nimmt danach erst nach einem Moment an.
+wait_web() {
+  local _
+  for _ in $(seq 1 30); do
+    curl -s -o /dev/null "http://localhost:${WQ_PORT}/" && return 0
+    sleep 1
+  done
+  fail "web antwortet 30 s nach restore.sh nicht."
+}
+# restore.sh mit den Antworten auf stdin; Ausgabe in der Log-Datei und auf dem
+# Terminal, Exit-Code in $status. Antworten per < <(...), nicht per Pipe: In
+# einer Pipe liefe die Funktion in einer Subshell, und $status ginge verloren.
+restore_run() {
+  status=0
+  ./restore.sh "${@:2}" >"$1" 2>&1 || status=$?
+  cat "$1"
+}
+
+# Echter Lernstand: Kind, Set und eine Lernantwort ueber die Oberflaeche.
+# Anmelde-Limit: globalSetup, Profilwahl und learner-login (first-run.spec.ts:11-12).
+auth_budget 3
+# Das Passwort steht nur fuer diesen einen Aufruf in der Umgebung.
+WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
+  WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD=geheim-123 \
+  npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
+  || fail "Erstdurchlauf auf der Release-Installation fehlgeschlagen."
+for table in learner_profile vocabulary_entry review_log; do
+  [[ "$(count_rows "$table")" -ge 1 ]] || fail "Nach dem Erstdurchlauf ist $table leer."
+done
+
+token
+cp .smoke/refresh-token .smoke/refresh-token-s1
+
+page_cmd 'docker compose exec backup /backup.sh'
+# -T: Der Smoke hat kein Terminal.
+docker compose exec -T backup /backup.sh </dev/null >>.smoke/backup.log 2>&1 \
+  || fail "Sicherung S1 fehlgeschlagen."
+fp_s1="$(fingerprint)"
+daily="$(ls backups/daily/wordquest-[0-9]*.sql.gz 2>/dev/null || true)"
+[[ "$(printf '%s\n' "$daily" | grep -c .)" == 1 ]] || fail "Nicht genau ein Tagesdump: $(echo $daily)"
+
+# Aenderung nach der Sicherung: das Kind loeschen.
+code="$(learners)"
+[[ "$code" == 200 ]] || fail "GET /api/v1/learners: HTTP $code statt 200."
+child_id="$(sed -n 's/.*"id":"\([^"]*\)","displayName":"Erstes Kind".*/\1/p' .smoke/learners.json)"
+[[ -n "$child_id" ]] || fail "Erstes Kind nicht in /api/v1/learners."
+code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+  -H "Authorization: Bearer $(cat .smoke/access-token)" \
+  "http://localhost:${WQ_PORT}/api/v1/learners/$child_id" || true)"
+[[ "$code" == 204 ]] || fail "DELETE des Kindes: HTTP $code statt 204."
+[[ "$(fingerprint)" != "$fp_s1" ]] || fail "Fingerabdruck nach dem Loeschen unveraendert."
+
+[[ -x restore.sh ]] || fail "restore.sh fehlt oder ist nicht ausfuehrbar."
+restore_run .smoke/restore.log < <(printf '%s\n' 1 ja)
+[[ "$status" == 0 ]] || fail "restore.sh endete mit Exit $status."
+wait_web
+tail -n 1 .smoke/restore.log | tr -d '\033' | sed 's/\[[0-9;]*m//g' | grep -q '^Fertig\.' \
+  || fail "Letzte Zeile von restore.sh beginnt nicht mit 'Fertig.'."
+# Liste: Zeilen "  <n>) <Pfad>"; Hardlinks nur einmal, keine latest-Verweise.
+sed -n 's/^ *[0-9][0-9]*) //p' .smoke/restore.log >.smoke/restore-list
+[[ -s .smoke/restore-list ]] || fail "restore.sh zeigte keine Liste."
+if grep -q -- '-latest\.sql\.gz$' .smoke/restore-list; then fail "latest-Verweis in der Liste."; fi
+inodes="$(while IFS= read -r path; do ls -1i "$path" | awk '{ print $1 }'; done <.smoke/restore-list)"
+[[ "$(printf '%s\n' "$inodes" | sort | uniq -d)" == "" ]] || fail "Zwei Eintraege mit derselben Inode."
+[[ "$(printf '%s\n' "$inodes" | head -n 1)" == "$(ls -1i "$daily" | awk '{ print $1 }')" ]] \
+  || fail "Eintrag 1 ist nicht der Tagesdump $daily: $(head -n 1 .smoke/restore-list)"
+
+# Vor jeder neuen Anmeldung: Stand der Sicherung, keine erneuerbare Anmeldung.
+[[ "$(fingerprint)" == "$fp_s1" ]] || fail "Fingerabdruck nach restore.sh ungleich S1."
+[[ "$(count_rows refresh_token)" == 0 ]] || fail "refresh_token ist nach restore.sh nicht leer."
+# /auth/refresh hat kein Anmelde-Limit (AuthEndpoints.cs:23).
+code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+  -d "{\"refreshToken\":\"$(cat .smoke/refresh-token-s1)\"}" \
+  "http://localhost:${WQ_PORT}/api/v1/auth/refresh" || true)"
+echo "Refresh mit Token aus der Sicherung: HTTP $code"
+[[ "$code" == 401 ]] || fail "Refresh mit dem Token aus der Sicherung: HTTP $code statt 401."
+code="$(learners)"
+echo "Alter Access-Token nach restore.sh: HTTP $code"
+[[ "$code" == 200 ]] || fail "Alter Access-Token: HTTP $code statt 200 (laeuft erst nach 15 Minuten ab)."
+
+before_files="$(ls backups/vor-wiederherstellung-*.sql.gz 2>/dev/null || true)"
+[[ "$(printf '%s\n' "$before_files" | grep -c .)" == 1 ]] \
+  || fail "Nicht genau eine Vorher-Sicherung: $(echo $before_files)"
+gzip -t "$before_files" || fail "$before_files ist kein gueltiges gzip."
+gunzip -c "$before_files" | tail -n 5 | grep -q 'PostgreSQL database dump complete' \
+  || fail "$before_files hat die Endzeile nicht."
+[[ "$(gunzip -c "$before_files" | grep -c 'Erstes Kind' || true)" == 0 ]] \
+  || fail "$before_files enthaelt den Stand vor dem Loeschen."
+docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null \
+  || fail "API nach restore.sh nicht bereit."
+token
+code="$(learners)"
+[[ "$code" == 200 ]] && grep -qF '"displayName":"Erstes Kind"' .smoke/learners.json \
+  || fail "Erstes Kind nach restore.sh nicht da (HTTP $code)."
+echo "RESTORE OK"
+
 echo "== Seite gegen den Lauf"
 # Nur bash- und text-Bloecke werden geprueft; ein anderer Block liefe still vorbei.
 other="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { if (open) open = 0; else { open = 1; lang = substr($0, 4); if (lang != "bash" && lang != "text") print NR ": " $0 } }' "$PAGE")"
@@ -195,4 +329,5 @@ done < <(page_lines text | awk '{ gsub(/<[^>]*>/, "\n"); print }' | awk 'length(
 [[ "$checked" -gt 0 ]] || fail "Keine zitierte Ausgabe auf $PAGE gefunden; der Abgleich liefe leer."
 echo "SEITE OK"
 
+SMOKE_DONE=1
 echo "RELEASE-SMOKE OK"
