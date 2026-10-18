@@ -94,7 +94,7 @@ Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter La
 
 Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
 
-Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig. Gib den Port 8080 im Router nicht ins Internet frei, WordQuest ist nur für dein Heimnetz gedacht.
+Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig. Gib den Port von WordQuest (8080 oder deinen Wert bei `WQ_PORT`) im Router nicht ins Internet frei, WordQuest ist nur für dein Heimnetz gedacht.
 
 ## Update
 
