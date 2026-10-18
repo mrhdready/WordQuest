@@ -466,6 +466,7 @@ check_upd_backup() {
   gzip -t "$1" || fail "$1 ist kein gueltiges gzip."
   gunzip -c "$1" | tail -n 5 | grep -q 'PostgreSQL database dump complete' || fail "$1 hat die Endzeile nicht."
   [[ "$(gunzip -c "$1" | grep -c 'Erstes Kind' || true)" -gt 0 ]] || fail "$1 enthaelt 'Erstes Kind' nicht."
+  [[ "$(ls -l "$1" | cut -c1-10)" == -rw------- ]] || fail "$1 ist nicht nur fuer den Besitzer lesbar: $(ls -l "$1" | cut -c1-10)"
 }
 
 set_env WQ_VERSION "$OLD_VERSION"

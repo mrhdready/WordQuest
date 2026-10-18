@@ -50,7 +50,8 @@ check_dump() {
 # Die Funktion laeuft ueber if; dort greift set -e in ihr nicht, deshalb gibt
 # jeder Schritt seinen Fehler selbst weiter (wie restore.sh).
 backup_now() {
-  docker compose exec -T db pg_dump -U wordquest -d wordquest </dev/null | gzip >"$1" || return 1
+  # umask: Die Datei ist nur fuer dich lesbar, auch wenn backups/ gerade erst entstanden ist.
+  (umask 077 && docker compose exec -T db pg_dump -U wordquest -d wordquest </dev/null | gzip >"$1") || return 1
   check_dump "$1" || return 1
 }
 backup="backups/vor-update-$(date +%Y%m%d-%H%M%S).sql.gz"
@@ -66,14 +67,17 @@ say "✓ Sicherung geprüft: $backup"
 # (D-05, 03-RESEARCH Pitfall 9). Die Variable in der Shell schlaegt .env.
 say "Lade Version $target …"
 WQ_VERSION="$target" docker compose pull --ignore-buildable </dev/null \
-  || die "Die Version $target ließ sich nicht laden. Wenn sie gerade erst erschienen ist, versuche es in einer Viertelstunde erneut. Es wurde nichts geändert. Die Sicherung liegt in $backup."
+  || die "Die Version $target ließ sich nicht laden. Wenn sie gerade erst erschienen ist, versuche es in einer Viertelstunde erneut; sonst prüfe die Internetverbindung und WQ_IMAGE_PREFIX in .env. Es wurde nichts geändert. Die Sicherung liegt in $backup."
 
-# Ab hier ist .env umgestellt. Jeder Fehler endet mit dem Weg zurueck.
+# Ab dem Schreiben der .env endet jeder Fehler mit dem Weg zurueck.
 start_failed() {
   local back="Spiele die Sicherung mit ./restore.sh $backup ein."
   [[ -z "$current" ]] || back="Zurück zur Version $current: Trage in .env WQ_VERSION=$current ein und spiele danach die Sicherung mit ./restore.sh $backup ein."
   die "$1 Deine Daten von vorher liegen in $backup. Sieh mit \`docker compose logs api\` nach; die Meldung dort nennt meist den Ausweg. $back"
 }
+
+# Strg+C ab hier: .env und Container koennen halb umgestellt sein.
+trap 'start_failed "Abgebrochen."' INT TERM
 
 # BSD/GNU sed kompatibel: temporaere Datei statt -i (wie setup.sh).
 if grep -qE '^WQ_VERSION=' .env; then
@@ -83,9 +87,6 @@ else
   printf 'WQ_VERSION=%s\n' "$target" >>.env \
     || die "Die Datei .env ließ sich nicht schreiben. Es wurde nichts geändert. Die Sicherung liegt in $backup."
 fi
-
-# Strg+C ab hier: Container koennen halb umgestellt sein.
-trap 'start_failed "Abgebrochen."' INT TERM
 
 # --- Start ------------------------------------------------------------------------
 say "Starte Version $target …"
@@ -103,6 +104,9 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 [[ "$ready" == 1 ]] || start_failed "Die API ist nach zwei Minuten nicht bereit."
+# nginx loest api nur beim Start auf (frontend/nginx.conf:40, wie restore.sh):
+# Wurde nur api neu erzeugt, liefe web sonst ins Leere.
+docker compose restart web </dev/null || start_failed "Der Start der Version $target ist fehlgeschlagen."
 trap - INT TERM
 say "✓ API ist bereit."
 
