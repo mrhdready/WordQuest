@@ -121,3 +121,39 @@ done
 **Planübergreifend:** Die Reihenfolge `03-01 → 03-02 → 03-03 → 03-04` kann bleiben. Zusätzlich besteht ein **MEDIUM-Regelkonflikt**: Die ersten drei Pläne verschieben das vollständige Gate nach 03-04, obwohl [AGENTS.md:152](/Users/dennis/code/github.com/mrhdready/WordQuest/AGENTS.md:152) es vor jeder Fertig-Meldung verlangt; ausdrücklich sichtbar etwa in [03-01-PLAN.md:261](/Users/dennis/code/github.com/mrhdready/WordQuest/.planning/phases/03-installable-1-0-0-release/03-01-PLAN.md:261). Diesen Widerspruch vor Ausführung auflösen.
 
 Geprüft wurden Quellen und isolierte Bash-Reproduktionen. Docker-Smokes, Builds, Registry-Pulls und Hardware-Abnahmen wurden in diesem Review nicht ausgeführt.
+
+## Umsetzung im Replan
+
+Replan vom 2026-10-18 im Modus `--reviews`, Grundlage: Commit `892d3de`. Der frühere 03-01 ist geteilt (Budget-Warnung des Plan-Checkers); danach sind die Pläne fortlaufend nummeriert:
+
+| Früher | Jetzt | Inhalt |
+|---|---|---|
+| 03-01 Task 1-2 | 03-01 | Version `1.0.0`, Präfix mit Enter, Installationsseite, README-Verweis, Release-Smoke |
+| 03-01 Task 3 | 03-02 | `FROM --platform=$BUILDPLATFORM`, Buildx-Probe, Konzept §14, Gate mit e2e |
+| 03-02 | 03-03 | `restore.sh` |
+| 03-03 | 03-04 | `upgrade.sh` |
+| 03-04 | 03-05 | Seite belegt, automatisches Phasen-Gate |
+
+### Codex-Befunde
+
+| Befund | Plan und Task | Umsetzung |
+|---|---|---|
+| 03-02 HIGH `load_dump` unter `set -e` | 03-03 Task 1, Task 2 | Task 1: jeder Teilschritt von `load_dump` (Drop/Create, Einspielstrom) und die Vorher-Sicherung mit `\|\| return 1`, Einspielstrom mit `&&` und `pipefail`. Task 2: Smoke-Fälle Importfehler, Lesefehler (Datei verschwindet nach der Bestätigung, FIFO) und Drop-Fehler mit gescheitertem Rückfall (`IS_TEMPLATE`; API bleibt gestoppt, Vorher-Sicherung geprüft) |
+| 03-02 MEDIUM Access-Tokens bleiben gültig | 03-03 Task 1, Task 3 | Task 1: Smoke prüft `refresh_token` leer, Refresh mit altem Token 401, alten Access-Token 200. Task 3: Seite sagt „neu anmelden“ und „spätestens nach rund 15 Minuten“. Löschen der Refresh-Tokens bleibt |
+| 03-03 HIGH ungeschütztes `up -d` | 03-04 Task 1, Task 2 | Task 1: `start_failed` für `up -d` und Health-Timeout mit alter Version, Sicherungsdatei und Schritten zurück. Task 2: beide Fälle provoziert (Zielversion ohne Image, `WQ_SEED_DEMO_DATA=true`), der Smoke geht den Weg zurück über `restore.sh` |
+| 03-03 MEDIUM Pull im Erfolgsfall nicht belegt | 03-04 Task 1; 03-VALIDATION | Update-Abschnitt ohne Build-Overlay, Zielversion aus lokalen Tags, Pull-Spy protokolliert Zielversion und `.env`-Stand beim Pull. Echter Pull aus GHCR ist Nach-Release-Abnahme |
+| 03-04 HIGH Abnahme blockiert Tag | 03-05 Task 2; 03-VALIDATION Sign-Off | Automatisches Gate ist die Voraussetzung für das lokale Tag `v1.0.0` (Orchestrator). Prüfungen mit veröffentlichten Images stehen unter „Nach-Release-Abnahme (UAT)“ und sind keine Vorbedingung |
+| 03-04 MEDIUM `bash -n a b c` prüft nur `a` | 03-01 Task 1, 03-03 Task 1, 03-04 Task 1, 03-05 Task 2; 03-VALIDATION; 03-RESEARCH | Schleife je Datei; im Phasen-Gate einschließlich `release-smoke.sh` |
+| 03-01 MEDIUM Cleanup nach Teil-Build | 03-01 Task 1 | Tags nach der Vorprüfung und vor dem Build in der Aufräumliste; Gegenprobe mit scheiterndem Web-Build, danach keine Tags, Container oder Volumes |
+| Übergreifend MEDIUM Gate erst in 03-04 | 03-01 Task 2, 03-02 Task 2, 03-03 Task 3, 03-04 Task 3, 03-05 Task 2 | Jeder Plan läuft Backend- und Frontend-Gate; e2e in 03-02 (Dockerfiles) und 03-05 |
+
+### Befunde des Plan-Checkers
+
+| Befund | Plan und Task | Umsetzung |
+|---|---|---|
+| BLOCKER README „Demo-Daten“ widerspricht D-10 und der Begründung im Update-Plan | 03-04 Task 3 (früher 03-03 Task 3); Folge für die Seite in 03-01 Task 2 | README behält nur die Entwickler-Option; Akzeptanz `grep -c` auf den alten Absatz ergibt 0. Die Seite zitiert keine Demo-Konto-Meldung |
+| BLOCKER Open Questions in 03-RESEARCH | 03-RESEARCH.md (im Replan erledigt) | Frage 1 „RESOLVED durch D-06“; Fragen 3, 5, 6 „ersetzt durch 03-03/03-04“; Demo-Hinweis in `upgrade.sh` entfällt; Hinweis zum Stand oben in der Datei; Quick-Run als Schleife |
+| WARNUNG Budget | 03-01, 03-02 (neu); 03-03, 03-04 | Früherer 03-01 Task 3 ist 03-02; Schätzungen 80k/45k/100k/100k/80k; Flagged Assumptions und Lesestoff in 03-03 und 03-04 gekürzt |
+| Hinweis Anmelde-Limit | 03-01 Task 1; 03-03 Task 1; 03-04 Task 1-2 | `auth_budget` zählt Auth-Anfragen je API-Start und bricht vor der elften ab; erstes API-Leben 5 von 10, jede weitere Anmeldung nach einem Neustart |
+| Refresh-Tokens in `restore.sh` | 03-03 Task 1, Task 3 | Löschen bleibt; Seite: Geräte melden sich neu an, bestehende Sitzungen enden spätestens nach rund 15 Minuten |
+| Release-Ablauf | 03-05 Task 2; 03-VALIDATION | Phasen-Gate automatisch; lokales Tag durch den Orchestrator nach grünem Gate; GHCR-Installation, Pi und Folgeversion als Nach-Release-Abnahme |

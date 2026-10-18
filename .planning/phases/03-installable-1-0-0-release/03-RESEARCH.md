@@ -4,6 +4,8 @@
 **Domain:** GitHub Actions + GHCR (Multi-Arch-Images), Docker Compose v2, PostgreSQL 17 (pg_dump/psql), Bash-Betriebsskripte, Installationsdoku für Laien
 **Confidence:** HIGH für Code- und Laufzeitbefunde (Datei:Zeile gelesen, Docker-Proben in dieser Session), MEDIUM für das Verhalten auf einem echten Raspberry Pi (nicht verfügbar), eine Annahme in D-06 ist widerlegt (siehe Open Question 1)
 
+> **Stand nach dem Replan (2026-10-18):** Open Question 1 ist durch D-06 entschieden (kein Umstieg). Damit sind überholt: Umstieg Option A/B, Demo-Fall und PIN-Hinweis in `upgrade.sh`, gemeinsame Shell-Datei, Altinstallation im Smoke (Abschnitte 2 und 6, Code-Beispiele „Demo-Abbruch erkennen“ und „Altes Schnelltest-Volume sichern“, Test-Map-Zeile „Altinstallation“). Maßgeblich sind die Pläne 03-01 bis 03-05; die Nummern 03-03 (Wiederherstellen) und 03-04 (Update) gelten seit der Teilung des früheren 03-01.
+
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
@@ -554,6 +556,7 @@ Die Warteschleife braucht im Skript eine Obergrenze (Discretion).
    - Option A (Empfehlung): `docker compose -p wordquest-quick stop` → `git clone` → `./setup.sh` → `./upgrade.sh` erkennt das alte Volume und eine neue Installation ohne Kinder, fragt nach, sichert das alte Volume per Wegwerf-Container und spielt es mit der `restore.sh`-Funktion ein; danach Demo-Fall wie bei L2. Kein `ALTER ROLE`. Altes Volume bleibt als Rückweg. Nachteil: Das in `setup.sh` angelegte Konto wird durch das alte Demo-Konto ersetzt; Anmeldung danach mit `demo@wordquest.local` und dem einmal angezeigten Passwort (E-Mail ist nicht änderbar).
    - Option B (D-06 wörtlich): neue Installation übernimmt das alte Volume (`COMPOSE_PROJECT_NAME=wordquest-quick` in `.env` oder `external`-Volume) und setzt per `ALTER ROLE` das Secret. Braucht einen anderen Ablauf in `setup.sh` (die API darf vor dem `ALTER ROLE` nicht starten), behält den alten Projektnamen dauerhaft und ändert die alten Daten an Ort und Stelle.
    - Recommendation: Option A. Sie ist kleiner, ändert `setup.sh` nicht und hat einen Rückweg.
+   - RESOLVED durch D-06 (Dennis 2026-10-18: kein Umstieg). Alte Schnelltest-Installationen werden neu aufgesetzt; die Installationsseite sagt das in einem Satz (`docker compose -p wordquest-quick down`, das Volume bleibt). Weder Option A noch Option B wird umgesetzt.
 
 2. **Neuer Workflow nötig? (D-03)**
    - What we know: `ci.yml:3-8,96-144` baut bei Tag `v*` Multi-Arch und schiebt `1.0.0`, `latest`, `sha-…` nach `ghcr.io/mrhdready/wordquest-*`.
@@ -562,15 +565,18 @@ Die Warteschleife braucht im Skript eine Obergrenze (Discretion).
 3. **Demo-Kind mit PIN `1234`**
    - What we know: `DemoAccountCheck.cs:36` prüft nur Nicht-Learner; die PIN bricht nichts ab, und es gibt kein CLI-Verb dafür.
    - RESOLVED: `upgrade.sh` gibt nach jedem Demo-Reset den Hinweis aus, dem Kind „Max“ unter „Verwalten → Kinder“ eine neue PIN zu geben. Kein neues CLI-Verb.
+   - Ersetzt durch 03-04 (Update): `upgrade.sh` hat keinen Demo-Zweig, weil der Fall bei Installationen aus `setup.sh` nicht vorkommt (Begründung in 03-04 Flagged Assumptions). Der Demo-Hinweis in `upgrade.sh` entfällt; das README behält Demo-Daten nur als Entwickler-Option.
 
 4. **Automatisches Zurückspielen, wenn das Einspielen scheitert?**
    - RESOLVED (Claude's Discretion, D-08 erlaubt es): ja, mit derselben Funktion; die Meldung nennt beide Dateien. Andernfalls bliebe eine leere DB, und ein Laie startet daraus eine scheinbare Neuinstallation.
 
 5. **Gemeinsame Shell-Datei oder Kopien?**
    - RESOLVED: Hängt an Frage 1. Bei Option A spielen beide Skripte ein → eine kleine gemeinsame Datei (Prüfung, Einspielen, Health-Schleife). Bei Option B reichen Kopien der Health-Schleife.
+   - Ersetzt durch 03-03 (Wiederherstellen): Nach D-06 spielt nur `restore.sh` ein; `restore.sh` und `upgrade.sh` haben Kopien der kleinen Funktionen (03-03 Flagged Assumptions).
 
 6. **Alte Images im Smoke aus GHCR ziehen?**
    - RESOLVED: ja, `sha-4ce32da` ist öffentlich und hat arm64. Fallback ohne Netz: Images aus einem `git worktree` auf `4ce32da` bauen.
+   - Ersetzt durch 03-04 (Update): Kein Smoke-Teil für Altinstallationen (D-06). Der Update-Smoke nutzt lokale Tags `0.0.0-smoke` und `1.0.0` ohne Build-Overlay und einen Pull-Spy; der echte Pull aus GHCR ist Nach-Release-Abnahme (03-VALIDATION).
 
 ## Environment Availability
 
@@ -596,7 +602,7 @@ Die Warteschleife braucht im Skript eine Obergrenze (Discretion).
 |----------|-------|
 | Framework | Bash-Smoke im Docker (Muster `setup-smoke.sh`), `bash -n`, PyYAML-Parse, `docker buildx`; bestehende xUnit-/Vitest-/Playwright-Suiten als Gate |
 | Config file | `.planning/phases/03-installable-1-0-0-release/smoke/release-smoke.sh` (Wave 0) |
-| Quick run command | `bash -n setup.sh upgrade.sh restore.sh && python3 -c 'import sys,yaml;[yaml.safe_load(open(f)) for f in sys.argv[1:]]' .github/workflows/ci.yml docker-compose.quick.yml docker-compose.yml` |
+| Quick run command | `(for f in setup.sh upgrade.sh restore.sh; do bash -n "$f" \|\| exit 1; done) && python3 -c 'import sys,yaml;[yaml.safe_load(open(f)) for f in sys.argv[1:]]' .github/workflows/ci.yml docker-compose.quick.yml docker-compose.yml` |
 | Full suite command | `bash .planning/phases/03-installable-1-0-0-release/smoke/release-smoke.sh` + Gate aus AGENTS.md |
 
 Buildx-Probe (D-12), ohne Push:

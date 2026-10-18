@@ -21,7 +21,7 @@ Nicht in dieser Phase:
 ### Ablauf
 - **D-01:** Autonomer Lauf auf Branch `v1-fertig`.
   - Atomare Commits pro Plan, **kein Push**.
-  - Das Release wird nur lokal vorbereitet: Workflow, Skripte, Installationsseite und am Ende das lokale Tag `v1.0.0`. Das Tag legt der Orchestrator erst nach grünem Gate und Abnahme an, nicht ein Plan.
+  - Das Release wird nur lokal vorbereitet: Workflow, Skripte, Installationsseite und am Ende das lokale Tag `v1.0.0`. Das Tag legt der Orchestrator nach grünem automatischem Phasen-Gate an, nicht ein Plan. Prüfungen mit veröffentlichten Images sind Nach-Release-Abnahme (03-REVIEWS, Codex 03-04 HIGH).
   - Pläne laufen sequenziell im Arbeitsbaum, weil sie Docker-Stacks und Ports teilen.
 - **D-02:** Jede Änderung bekommt vor der Fertig-Meldung ein Subagent-Review (AGENTS.md). Shell-Skripte laufen zusätzlich durch `bash -n` und, falls installiert, `shellcheck`. shellcheck wird nicht neu installiert.
 
