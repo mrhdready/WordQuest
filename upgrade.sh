@@ -21,9 +21,10 @@ command -v docker >/dev/null || die "Docker ist nicht installiert."
 docker compose version >/dev/null 2>&1 || die "'docker compose' ist nicht verfügbar."
 [[ -f .env ]] || die "Keine .env gefunden. Ist WordQuest hier mit setup.sh eingerichtet?"
 
-# Zielversion ist die, die das ausgecheckte Repo mitbringt (D-05).
+# Zielversion ist die, die das ausgecheckte Repo mitbringt (D-05). Nur Zeichen
+# eines Image-Tags: Ein | oder & verdurbe sonst den sed-Ersatz unten (W-7).
 target="$(grep -E '^WQ_VERSION=' .env.example 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
-[[ -n "$target" ]] || die "In .env.example steht keine Version (WQ_VERSION=). Lade WordQuest mit git pull vollständig herunter und starte upgrade.sh erneut."
+[[ "$target" =~ ^[A-Za-z0-9._-]+$ ]] || die "In .env.example steht keine gültige Version (WQ_VERSION=). Lade WordQuest mit git pull vollständig herunter und starte upgrade.sh erneut. Es wurde nichts geändert."
 current="$(env_value WQ_VERSION)"
 say "Aktualisiere WordQuest von ${current:-unbekannt} auf ${target}."
 
@@ -79,12 +80,15 @@ start_failed() {
 # Strg+C ab hier: .env und Container koennen halb umgestellt sein.
 trap 'start_failed "Abgebrochen."' INT TERM
 
-# BSD/GNU sed kompatibel: temporaere Datei statt -i (wie setup.sh).
+# BSD/GNU sed kompatibel: temporaere Datei statt -i (wie setup.sh). cp -p
+# zuerst: Die Umleitung in eine bestehende Datei behaelt deren Rechte, sonst
+# waere .env danach fuer alle lesbar (Traefik-Variante: DNS-Token, WR-01).
 if grep -qE '^WQ_VERSION=' .env; then
-  sed -e "s|^WQ_VERSION=.*|WQ_VERSION=${target}|" .env >.env.tmp && mv .env.tmp .env \
-    || die "Die Datei .env ließ sich nicht schreiben. Es wurde nichts geändert. Die Sicherung liegt in $backup."
+  { cp -p .env .env.tmp && sed -e "s|^WQ_VERSION=.*|WQ_VERSION=${target}|" .env >.env.tmp && mv .env.tmp .env; } \
+    || { rm -f .env.tmp; die "Die Datei .env ließ sich nicht schreiben. Es wurde nichts geändert. Die Sicherung liegt in $backup."; }
 else
-  printf 'WQ_VERSION=%s\n' "$target" >>.env \
+  # Fehlt das letzte Zeilenende, klebte die neue Zeile an der letzten Variable (IN-02).
+  { [[ -z "$(tail -c 1 .env)" ]] || echo; printf 'WQ_VERSION=%s\n' "$target"; } >>.env \
     || die "Die Datei .env ließ sich nicht schreiben. Es wurde nichts geändert. Die Sicherung liegt in $backup."
 fi
 

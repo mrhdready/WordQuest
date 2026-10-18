@@ -17,6 +17,7 @@ dist-ssr/
 # NIEMALS committen. setup.sh erzeugt diese Dateien lokal.
 secrets/
 .env
+.env.tmp
 *.pem
 *.key
 

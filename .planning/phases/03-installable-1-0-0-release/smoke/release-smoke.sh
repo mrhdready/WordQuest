@@ -525,8 +525,14 @@ upgrade_run() {
 [[ -x upgrade.sh ]] || fail "upgrade.sh fehlt oder ist nicht ausfuehrbar."
 [[ "$(backup_count)" == 0 ]] || fail "Vor dem Update gibt es schon eine Sicherung vor-update-*."
 page_cmd './upgrade.sh'
+# Die .env behaelt ihre Rechte (WR-01): In der Traefik-Variante steht dort ein Token.
+chmod 600 .env
+env_mode="$(ls -l .env | cut -c1-10)"
 upgrade_run .smoke/upgrade.log spy
 [[ "$status" == 0 ]] || fail "upgrade.sh endete mit Exit $status."
+[[ "$(ls -l .env | cut -c1-10)" == "$env_mode" ]] \
+  || fail ".env hat nach dem Update die Rechte $(ls -l .env | cut -c1-10) statt $env_mode."
+[[ ! -e .env.tmp ]] || fail ".env.tmp liegt nach dem Update noch da."
 expect_msg .smoke/upgrade.log '✓ Sicherung geprüft:'
 upd="$(upd_file .smoke/upgrade.log)"
 last="$(tail -n 1 .smoke/upgrade.log | tr -d '\033' | sed 's/\[[0-9;]*m//g')"
@@ -582,6 +588,18 @@ assert_way_back_named() {
   expect_msg "$1" "./restore.sh $f"
   upd_way_back="$f"
 }
+
+# Ungueltige Zielversion in .env.example (W-7): Abbruch vor der Sicherung,
+# nichts geladen, nichts umgestellt. Ein | verdurbe sonst den sed-Ersatz.
+{ grep -v '^WQ_VERSION=' .smoke/env-example-orig; echo 'WQ_VERSION=1.0.0|x'; } >.env.example
+upd_snapshot
+upgrade_run .smoke/upgrade-version.log spy
+cp .smoke/env-example-orig .env.example
+assert_not_switched "Ungueltige Zielversion"
+expect_msg .smoke/upgrade-version.log 'In .env.example steht keine gültige Version'
+[[ "$(backup_count)" == "$n_upd" ]] || fail "Ungueltige Zielversion: neue Datei vor-update-*."
+[[ "$(spy_lines)" == "$n_spy" ]] || fail "Ungueltige Zielversion: trotzdem geladen ($(tail -n 1 "$SPY_LOG"))."
+echo "Fall ungueltige Zielversion: Exit $status"
 
 # Keine Sicherung moeglich: Dann wird nichts geladen und nichts umgestellt.
 upd_snapshot
@@ -651,11 +669,17 @@ wait_api
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "API nicht bereit, Weg zurueck: Login HTTP $code statt 200."
 
-# Zweiter Aufruf ohne neue Version: harmlos.
+# Zweiter Aufruf ohne neue Version: harmlos. Dazu fehlen in .env die Zeile
+# WQ_VERSION und das letzte Zeilenende (IN-02): Die neue Zeile darf nicht an
+# der letzten Variable kleben.
+printf '%s' "$(grep -v '^WQ_VERSION=' .env)" >.smoke/env-ohne-version
+cp .smoke/env-ohne-version .env
+last_env="$(tail -n 1 .env)"
 upd_snapshot
 upgrade_run .smoke/upgrade-nochmal.log spy
 [[ "$status" == 0 ]] || fail "Zweiter Aufruf: upgrade.sh endete mit Exit $status."
 grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail "Zweiter Aufruf: .env ohne WQ_VERSION=$EXPECTED_VERSION."
+grep -qxF -- "$last_env" .env || fail "Zweiter Aufruf: Die Zeile '$last_env' ist in .env verklebt."
 [[ "$(fingerprint)" == "$fp_before" ]] || fail "Zweiter Aufruf: Fingerabdruck geaendert."
 echo "UPDATE-ABBRUCH OK"
 
