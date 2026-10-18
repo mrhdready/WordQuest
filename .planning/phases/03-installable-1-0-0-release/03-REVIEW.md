@@ -129,6 +129,24 @@ Beide Smokes exportieren `COMPOSE_FILE` in der Shell, und die Shell schlägt `.e
 - **Secrets in Ausgaben:** Kein Skript gibt den Inhalt von `secrets/` oder Tokens aus. Der Smoke prüft das Passwort im Install-Log (`release-smoke.sh:155`) und legt Tokens nur in Dateien unter `$WORK` ab.
 - **Seite ↔ Skripte:** Alle zitierten Meldungen stimmen wörtlich: `upgrade.sh:28/62/68/70/76/92/97/111/113` und `restore.sh:52/73/105/154/162/165`. Dasselbe gilt für Port, Aufbewahrung 14/8/6, `docker compose ps` mit vier Diensten (Schnellstart), Ordnerrechte `0700` und die Hardlink-Entdopplung, die zum Listenbeispiel Z. 182-183 passt (zwei Läufe am selben Tag: `daily` = neues `last`, altes `last` einzeln). Die Konzept-Aussagen zu §14 decken sich mit `upgrade.sh`/`restore.sh`/`ci.yml:3-8`.
 
+## Behebungsstand (2026-10-18)
+
+Behoben auf `v1-fertig` in `d669fda`, `9658805`, `0b8aa34`, `1d90149` und `1ccdde4`. Rot vor dem Fix: Probe mit Fake-`docker` unter `/bin/bash` 3.2 gegen `git show 3717bda:upgrade.sh` bzw. `:restore.sh`, umask 022, dazu ein Release-Smoke mit den neuen Prüfungen gegen die alten Skripte (endete bei W-2/IN-01).
+
+| Befund | Stand | Commit | Beleg |
+|---|---|---|---|
+| WR-01 | behoben | `9658805` | `cp -p` vor der Umleitung, `rm -f .env.tmp` im Fehlerpfad, `.env.tmp` in `.gitignore`. Smoke: `chmod 600 .env` vor dem Update, danach gleiche Rechte und keine `.env.tmp`. Rot: `-rw-------` → `-rw-r--r--` |
+| WR-02 | Satz auf der Seite (Update), Code unverändert | `1d90149` | „Starte das Update, wenn gerade niemand lernt …“. Kein Satz bei `restore.sh` (Review-Befund LOW zurückgewiesen): Dort sichert nur `pg_dump` vor dem Stopp, kein Laden von Images; die Vorher-Datei dient nur dazu, eine Wiederherstellung zurückzudrehen |
+| WR-03 | offen, Empfehlung an Dennis | – | Branch-Modell `master`/`stable` ist eine Release-Entscheidung |
+| IN-01 | behoben | `d669fda` | `umask 077` wie in `upgrade.sh`. Smoke prüft `-rw-------`. Rot im Release-Smoke: `… vor-wiederherstellung-….sql.gz ist nicht nur fuer den Besitzer lesbar: -rw-r--r--` |
+| IN-02 | behoben | `9658805` | Zeilenende vor dem Anhängen. Smoke: zweiter Aufruf mit `.env` ohne `WQ_VERSION` und ohne letztes Zeilenende. Rot: `WQ_PORT=9000WQ_VERSION=1.0.0` |
+| IN-03 | behoben | `1d90149` | Kommentar: `upgrade.sh` trägt den Wert ein, von Hand nur für den Weg zurück. Bestehende `.env` behalten den alten Kommentar |
+| IN-04 | behoben | `d669fda` | Pfad wird vor dem `cd` aufgelöst, im Installationsordner bleibt er wie eingegeben. Smoke: Aufruf aus `.smoke/`. Rot: „Die Datei ../backups/s.sql.gz gibt es nicht.“ |
+| IN-05, IN-06 | offen, nicht im Auftrag | – | – |
+| `setup.sh:178` | behoben | `0b8aa34` | „Lege unter „Kinder“ das erste Kind an, dann unter „Vokabeln“ ein Vokabelset.“ (`ManageLayout.tsx:8-11`), Seite folgt |
+
+Gate: `bash -n` für fünf Skripte ok. Release-Smoke zweimal grün mit allen Markern bis `RELEASE-SMOKE OK`, zuletzt auf `1ccdde4`. `setup-smoke.sh` grün (`SMOKE OK`, 79 s). Backend und Frontend nicht berührt. Review per `claude -p`, nur lesend: 0 BLOCKER, 0 HIGH, 1 MEDIUM (Beleg zu W-1 fehlte im Diff, jetzt in `03-SECURITY.md`), 2 LOW (Port mit eigenem `WQ_PORT`, behoben in `1ccdde4`; WR-02 bei `restore.sh`, zurückgewiesen), 4 INFO ohne Änderung.
+
 ---
 
 _Reviewed: 2026-10-18T13:35:49Z_

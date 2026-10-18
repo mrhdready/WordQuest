@@ -102,6 +102,22 @@ created: "2026-10-18"
 
 Die SUMMARY-Dateien der Phase haben keinen Abschnitt `## Threat Flags`. Jede führt `## Bedrohungen` mit Zuordnung zu den Threat-IDs; als neue Fläche gemeldet ist nur `03-03-SUMMARY.md:224` (→ W-11).
 
+
+## Behebungsstand (2026-10-18)
+
+Behoben auf `v1-fertig` in `d669fda`, `9658805`, `1d90149` und `1ccdde4`. W-2 entspricht IN-01 aus `03-REVIEW.md`; Gate, Review und die übrigen Rot-Belege stehen dort unter „Behebungsstand“.
+
+| Hinweis | Stand | Beleg |
+|---|---|---|
+| W-1 | belegt, `-f -` ergänzt (`d669fda`) | Probe im Container `postgres:17-alpine` (psql 17.11), je in einer frischen Datenbank, Strom per stdin mit `-v ON_ERROR_STOP=1`. Strom `CREATE TABLE t …; COPY public.t … FROM stdin; …; INSERT …; SELECT 1/0;`: mit `-1 -q` Exit 3, Tabelle `t` fehlt; mit `-1 -q -f -` Exit 3, Tabelle fehlt; ohne `-1` Exit 3, Tabelle vorhanden. Ohne COPY dasselbe Ergebnis. Ein Strom, der ohne Fehler abbricht, wird committet (`-1 -f -`: Exit 0, Tabelle vorhanden), dagegen hilft weiter `pipefail`. Der alte Aufruf war also schon transaktional; `-f -` stützt das auf das dokumentierte Verhalten. Konzept §14 und `03-03-SUMMARY.md:12` nennen jetzt beides. „In derselben Transaktion“ aus T-03-10 ist damit belegt |
+| W-2 | behoben (`d669fda`) | `umask 077`, Smoke prüft `-rw-------` |
+| W-3 | Halbsatz auf der Seite (`1d90149`) | „dorthin gehören nur Sicherungen von WordQuest“ |
+| W-4 | offen, Empfehlung an Dennis | SHA-Pins und `permissions: contents: read` in `ci.yml` |
+| W-5 | offen, Empfehlung an Dennis | Digests für die Fremd-Images |
+| W-6 | je ein Satz auf der Seite (`1d90149`, `1ccdde4`) | Gruppe `docker` gibt Rechte wie root (Docker-Anleitung in dieser Session erneut abgerufen: „The docker group grants root-level privileges to the user.“). Port von WordQuest (8080 oder `WQ_PORT`) nicht im Router freigeben |
+| W-7 | behoben (`9658805`) | `^[A-Za-z0-9._-]+$` vor der Sicherung. Smoke-Fall mit `WQ_VERSION=1.0.0\|x`: Abbruch, keine Sicherung, kein Pull. Rot mit dem alten Skript: Sicherung angelegt, geladen, dann „Die Datei .env ließ sich nicht schreiben.“ |
+| W-8 bis W-11 | unverändert | Release-Schritt, spätere Prüfung, Nach-Release-Abnahme, kein Bedarf |
+
 ---
 
 ## Prüfspur

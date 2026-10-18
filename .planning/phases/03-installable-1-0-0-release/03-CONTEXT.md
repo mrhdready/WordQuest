@@ -66,7 +66,7 @@ Nicht in dieser Phase:
 ### Belege
 - **D-11:** Die Erfolgskriterien 2 bis 4 werden mechanisch belegt, im Muster von `.planning/phases/01-safe-home-network-install/smoke/setup-smoke.sh`, also lokal gebauter Images im Docker:
   - Installation nach der Seite.
-  - Altinstallation (Schnellstart mit Passwort `wordquest` und Demo-Account) mit Kindern, Sets und Lernstand, dann `upgrade.sh`, dann sind die Daten unverändert.
+  - ~~Altinstallation (Schnellstart mit Passwort `wordquest` und Demo-Account) mit Kindern, Sets und Lernstand, dann `upgrade.sh`, dann sind die Daten unverändert.~~ **Überholt durch D-06** (kein Umstieg alter Schnelltest-Installationen): Der Smoke prüft das Update auf einer Installation aus `setup.sh` mit Kindern, Sets und Lernstand.
   - `restore.sh` auf einen früheren Stand zeigt die Daten dieses Stands.
   - Die Images sind nicht veröffentlicht. Der Smoke baut sie lokal und taggt sie als `1.0.0`.
 - **D-12:** Erfolgskriterium 1 (veröffentlichte Images) lässt sich lokal nur teilweise belegen.
