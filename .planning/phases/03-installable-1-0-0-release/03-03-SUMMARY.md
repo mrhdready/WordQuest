@@ -9,7 +9,7 @@ requires:
   - phase: 03-02
     provides: "Stand nach Cross-Build; release-smoke.sh mit auth_budget, page_cmd, Handgriff-Liste"
 provides:
-  - "restore.sh (100755): Liste aus backups/ (neueste zuerst, Hardlinks einmal, ohne latest), Auswahl oder Pfad, Prüfung vor jeder Änderung, Bestätigung mit ja, Vorher-Sicherung, Einspielen in neu angelegte DB in einer Transaktion, Rückfall, Start mit restart web"
+  - "restore.sh (100755): Liste aus backups/ (neueste zuerst, Hardlinks einmal, ohne latest), Auswahl oder Pfad, Prüfung vor jeder Änderung, Bestätigung mit ja, Vorher-Sicherung, Einspielen in neu angelegte DB in einer Transaktion (seit dem Behebungsstand mit -f -, im Container belegt, W-1), Rückfall, Start mit restart web"
   - "Release-Smoke: RESTORE OK (echter Lernstand, Fingerabdruck, Sitzungen) und RESTORE-FEHLER OK (Eingaben, fremde Datei, Import-, Lese-, Drop-Fehler, Weg zurück bei fehlender DB)"
   - "Installationsseite: Abschnitt „Sicherung und Wiederherstellung“; README-Betrieb und Konzept §14 auf dem umgesetzten Stand"
 affects: [03-04, 03-05]

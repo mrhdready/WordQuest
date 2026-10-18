@@ -299,6 +299,9 @@ before_files="$(ls backups/vor-wiederherstellung-*.sql.gz 2>/dev/null || true)"
 [[ "$(printf '%s\n' "$before_files" | grep -c .)" == 1 ]] \
   || fail "Nicht genau eine Vorher-Sicherung: $(echo $before_files)"
 gzip -t "$before_files" || fail "$before_files ist kein gueltiges gzip."
+# Nur fuer den Besitzer lesbar wie vor-update-… (W-2, IN-01).
+[[ "$(ls -l "$before_files" | cut -c1-10)" == -rw------- ]] \
+  || fail "$before_files ist nicht nur fuer den Besitzer lesbar: $(ls -l "$before_files" | cut -c1-10)"
 gunzip -c "$before_files" | tail -n 5 | grep -q 'PostgreSQL database dump complete' \
   || fail "$before_files hat die Endzeile nicht."
 [[ "$(gunzip -c "$before_files" | grep -c 'Erstes Kind' || true)" == 0 ]] \
@@ -369,6 +372,14 @@ printf 'kaputt\n' | gzip >backups/kaputt.sql.gz
 restore_run .smoke/restore-kaputt.log backups/kaputt.sql.gz < <(printf 'ja\n')
 expect_msg .smoke/restore-kaputt.log 'backups/kaputt.sql.gz ist keine vollständige WordQuest-Sicherung. Es wurde nichts geändert.'
 assert_unchanged "Kaputte Datei"
+
+# Relativer Pfad aus einem anderen Ordner: gilt ab dem Aufrufort, nicht ab dem
+# Installationsordner (IN-04). Sonst kaeme "gibt es nicht".
+status=0
+(cd .smoke && ../restore.sh ../backups/kaputt.sql.gz) < <(printf 'ja\n') >.smoke/restore-relativ.log 2>&1 || status=$?
+cat .smoke/restore-relativ.log
+expect_msg .smoke/restore-relativ.log 'backups/kaputt.sql.gz ist keine vollständige WordQuest-Sicherung. Es wurde nichts geändert.'
+assert_unchanged "Relativer Pfad"
 
 # Importfehler: besteht die Pruefung, scheitert beim Einspielen.
 printf '%s\n' 'SELECT 1/0;' '-- COPY public.app_user' '-- PostgreSQL database dump complete' \

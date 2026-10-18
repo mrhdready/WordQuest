@@ -9,6 +9,8 @@
 #
 set -euo pipefail
 
+# Ein Pfad-Argument gilt ab dem Aufrufort, nicht ab dem Installationsordner (IN-04).
+here="$PWD"
 cd "$(dirname "$0")"
 
 say()  { printf '\033[1;36m%s\033[0m\n' "$*"; }
@@ -35,6 +37,7 @@ check_dump() {
 # --- Datei waehlen -----------------------------------------------------------
 if [[ $# -gt 0 ]]; then
   file="$1"
+  [[ "$file" == /* || "$here" == "$PWD" ]] || file="$here/$file"
   [[ -f "$file" ]] || die "Die Datei $file gibt es nicht. Es wurde nichts geändert."
 else
   # Neueste zuerst. Der Sicherungsdienst legt dieselbe Datei per Hardlink in
@@ -92,7 +95,8 @@ fi
 
 before="backups/vor-wiederherstellung-$(date +%Y%m%d-%H%M%S).sql.gz"
 backup_now() {
-  docker compose exec -T db pg_dump -U wordquest -d wordquest </dev/null | gzip >"$1" || return 1
+  # umask: Die Datei ist nur fuer dich lesbar, wie in upgrade.sh (W-2).
+  (umask 077 && docker compose exec -T db pg_dump -U wordquest -d wordquest </dev/null | gzip >"$1") || return 1
   # Ohne Kontopruefung: Auch eine leere Datenbank nach einem gescheiterten
   # Rueckfall muss sich sichern lassen, sonst liesse sich die Vorher-Datei
   # aus der Fehlermeldung nicht mehr einspielen.
@@ -123,8 +127,10 @@ load_dump() {
   # Refresh-Tokens: Seit der Sicherung widerrufene Anmeldungen duerfen nicht
   # wieder gueltig werden. Access-Tokens laufen nach hoechstens 15 Minuten aus
   # (AuthOptions.cs:15).
+  # -1 -f -: eine Transaktion; laut psql-Doku gilt -1 nur zusammen mit -f/-c.
+  # Scheitert eine Anweisung, bleibt nichts davon (im Container geprueft, W-1).
   { gunzip -c "$1" && echo 'DELETE FROM public.refresh_token;'; } \
-    | docker compose exec -T db psql -U wordquest -d wordquest -v ON_ERROR_STOP=1 -1 -q >/dev/null \
+    | docker compose exec -T db psql -U wordquest -d wordquest -v ON_ERROR_STOP=1 -1 -q -f - >/dev/null \
     || return 1
 }
 
