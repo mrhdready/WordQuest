@@ -564,14 +564,14 @@ Die Warteschleife braucht im Skript eine Obergrenze (Discretion).
 
 3. **Demo-Kind mit PIN `1234`**
    - What we know: `DemoAccountCheck.cs:36` prüft nur Nicht-Learner; die PIN bricht nichts ab, und es gibt kein CLI-Verb dafür.
-   - RESOLVED: `upgrade.sh` gibt nach jedem Demo-Reset den Hinweis aus, dem Kind „Max“ unter „Verwalten → Kinder“ eine neue PIN zu geben. Kein neues CLI-Verb.
+   - ÜBERHOLT (gilt nicht mehr): `upgrade.sh` gibt nach jedem Demo-Reset den Hinweis aus, dem Kind „Max“ unter „Verwalten → Kinder“ eine neue PIN zu geben. Kein neues CLI-Verb.
    - Ersetzt durch 03-04 (Update): `upgrade.sh` hat keinen Demo-Zweig, weil der Fall bei Installationen aus `setup.sh` nicht vorkommt (Begründung in 03-04 Flagged Assumptions). Der Demo-Hinweis in `upgrade.sh` entfällt; das README behält Demo-Daten nur als Entwickler-Option.
 
 4. **Automatisches Zurückspielen, wenn das Einspielen scheitert?**
    - RESOLVED (Claude's Discretion, D-08 erlaubt es): ja, mit derselben Funktion; die Meldung nennt beide Dateien. Andernfalls bliebe eine leere DB, und ein Laie startet daraus eine scheinbare Neuinstallation.
 
 5. **Gemeinsame Shell-Datei oder Kopien?**
-   - RESOLVED: Hängt an Frage 1. Bei Option A spielen beide Skripte ein → eine kleine gemeinsame Datei (Prüfung, Einspielen, Health-Schleife). Bei Option B reichen Kopien der Health-Schleife.
+   - ÜBERHOLT (gilt nicht mehr): Hängt an Frage 1. Bei Option A spielen beide Skripte ein → eine kleine gemeinsame Datei (Prüfung, Einspielen, Health-Schleife). Bei Option B reichen Kopien der Health-Schleife.
    - Ersetzt durch 03-03 (Wiederherstellen): Nach D-06 spielt nur `restore.sh` ein; `restore.sh` und `upgrade.sh` haben Kopien der kleinen Funktionen (03-03 Flagged Assumptions).
 
 6. **Alte Images im Smoke aus GHCR ziehen?**
