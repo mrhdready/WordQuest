@@ -2,7 +2,9 @@
 # Build-Kontext ist das Repository-Wurzelverzeichnis:
 #   docker build -f frontend/Dockerfile .
 
-FROM node:22-alpine AS build
+# Build-Stage auf der Build-Plattform: die Ausgabe ist statisches dist/,
+# unabhaengig von der Zielplattform (D-03).
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./

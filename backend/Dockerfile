@@ -2,7 +2,11 @@
 # Build-Kontext ist das Repository-Wurzelverzeichnis:
 #   docker build -f backend/Dockerfile .
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+# .NET wird unter QEMU nicht unterstuetzt, deshalb laeuft der Build-Stage auf der
+# Build-Plattform. Die Ausgabe ist framework-abhaengig ohne RID (publish unten mit
+# /p:UseAppHost=false), dieselbe IL laeuft auf arm64 und amd64; nur der
+# Runtime-Stage wird je Zielplattform gebaut (D-03).
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /src
 
 # Erst nur die Projektdateien kopieren, damit das Restore-Ergebnis
