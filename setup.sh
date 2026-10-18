@@ -61,8 +61,12 @@ if [[ -f .env ]]; then
   say "✓ .env existiert bereits — unverändert."
 else
   # Erst fragen, dann .env in einem Schritt schreiben: ein Abbruch hinterlaesst keine halbe .env.
+  # Eltern sollen keinen Registry-Pfad kennen muessen: Enter uebernimmt den Standard.
+  # Eine Quelle fuer den Wert ist .env.example, nicht eine zweite Stelle hier (D-04).
+  default_prefix="$(grep -E '^WQ_IMAGE_PREFIX=' .env.example | tail -n 1 | cut -d= -f2- || true)"
   while true; do
-    read -rp "Image-Präfix (ghcr.io/<account>/wordquest): " prefix || die "Eingabe beendet, bevor .env fertig war."
+    read -rp "Image-Präfix [${default_prefix}], Enter übernimmt ihn: " prefix || die "Eingabe beendet, bevor .env fertig war."
+    prefix="${prefix:-$default_prefix}"
     [[ "$prefix" =~ ^[a-z0-9._/:-]+$ ]] && break
     warn "Das Image-Präfix besteht aus Kleinbuchstaben, Ziffern und . _ / : - (z. B. ghcr.io/mein-account/wordquest)."
   done
