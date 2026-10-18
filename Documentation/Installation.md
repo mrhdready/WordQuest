@@ -96,7 +96,7 @@ Als Nächstes legst du unter „Verwalten → Kinder“ das erste Kind mit einer
 
 Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig.
 
-## Sicherung
+## Sicherung und Wiederherstellung
 
 Der Dienst `backup` sichert die Datenbank jeden Tag in den Ordner `backups/` und hebt 14 tägliche, 8 wöchentliche und 6 monatliche Stände auf. Die Sicherungen enthalten alle Familiendaten, deshalb ist der Ordner nur für dich lesbar.
 
@@ -115,6 +115,44 @@ SQL backup created successfully
 Danach liegt in `backups/daily/` eine Datei `wordquest-<Datum>.sql.gz`.
 
 Der Ordner `backups/` muss auf einem Linux-Dateisystem liegen (zum Beispiel auf der SD-Karte oder einer Platte mit ext4), nicht auf einer Windows-Freigabe oder einem exFAT-Stick. Der Sicherungsdienst läuft als root; unter Linux gehören die Sicherungsdateien deshalb root, und alte Stände löschst du mit `sudo`.
+
+### Wiederherstellen
+
+Im Ordner `wordquest`:
+
+```bash
+./restore.sh
+```
+
+Das Skript zeigt die vorhandenen Sicherungen, die neueste zuerst. Gib die Nummer der Sicherung ein, die du zurückholen willst. Danach fragt es, ob du fortfahren willst: Nur die Eingabe `ja` ersetzt den heutigen Stand, jede andere Antwort bricht ab, ohne etwas zu ändern. Die Ausgabe sieht so aus:
+
+```text
+Vorhandene Sicherungen, die neueste zuerst:
+  1) backups/daily/wordquest-<Datum>.sql.gz
+  2) backups/last/wordquest-<Datum>-<Uhrzeit>.sql.gz
+Der heutige Stand von WordQuest wird durch den Stand aus <Datei> ersetzt. Vorher wird der heutige Stand gesichert.
+✓ Heutiger Stand gesichert in backups/vor-wiederherstellung-<Datum>-<Uhrzeit>.sql.gz.
+Starte WordQuest …
+Fertig. WordQuest zeigt jetzt den Stand aus <Datei>. Der Stand von vorher liegt in <Vorher-Datei>.
+```
+
+Bevor etwas ersetzt wird, prüft das Skript die gewählte Datei und sichert den heutigen Stand nach `backups/vor-wiederherstellung-<Datum>-<Uhrzeit>.sql.gz`. Diese Datei steht beim nächsten Aufruf mit in der Liste; so kommst du auch wieder zum Stand von vor der Wiederherstellung zurück. Während des Einspielens ist WordQuest kurz nicht erreichbar.
+
+Wenn etwas schiefgeht:
+
+- Ist die gewählte Datei unvollständig oder keine WordQuest-Sicherung, lehnt das Skript sie ab und ändert nichts.
+- Scheitert das Einspielen, spielt das Skript den Stand von vorher automatisch zurück, und WordQuest läuft weiter. Die Meldung nennt beide Dateien.
+- Scheitert auch das, bleibt die API von WordQuest gestoppt, damit sie nicht mit einer leeren Datenbank startet; anmelden geht dann nicht. Die Meldung enthält „Die API bleibt gestoppt. Deine Daten liegen in <Datei>.“ Diese Datei kannst du mit `./restore.sh` wieder einspielen, sobald die Ursache behoben ist.
+
+Für Fortgeschrittene: Mit einem Pfad nimmt das Skript direkt diese Datei, Prüfung und Rückfrage bleiben gleich, zum Beispiel:
+
+```bash
+./restore.sh backups/daily/wordquest-20261001.sql.gz
+```
+
+Eigene Sicherungen mit der Endung `.sql.gz` kannst du direkt in `backups/` legen, sie stehen dann mit in der Liste. Der Sicherungsdienst räumt nur seine Ordner `last`, `daily`, `weekly` und `monthly` auf; Dateien direkt in `backups/`, auch die `vor-wiederherstellung-…`-Dateien, löschst du selbst, wenn du sie nicht mehr brauchst.
+
+Nach der Wiederherstellung müssen sich alle Geräte neu anmelden, Kinder wieder mit Profil und PIN. Wer gerade angemeldet ist, wird spätestens nach rund 15 Minuten abgemeldet. Passwörter und PINs gelten so, wie sie zur Zeit der Sicherung waren. Hast du dein Passwort nach der Sicherung geändert, weil du einen Verdacht hattest, setze es mit dem Befehl unter „Passwort vergessen“ (Hilfe bei Problemen) erneut zurück.
 
 ## Hilfe bei Problemen
 

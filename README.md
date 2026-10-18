@@ -240,7 +240,8 @@ Drei Bremsen tragen das ganze System:
 | Secrets | Dateien unter `./secrets/`, nie als Umgebungsvariable |
 | Logs | `docker compose logs -f api` |
 
-Die Wiederherstellung aus einem Backup kommt mit `restore.sh` (Phase 3). Ein
+Wiederherstellen aus einer Sicherung geht mit `./restore.sh`; die Anleitung steht
+in [`Documentation/Installation.md`](Documentation/Installation.md). Ein
 einfaches `psql` in die laufende Datenbank stellt nichts wieder her, weil die
 Tabellen dort schon existieren.
 

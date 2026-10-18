@@ -137,7 +137,8 @@ docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D
 sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
 docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.de — belegt in setup-smoke.sh (RESET OK)
 docker compose logs api — nur Ansehen im Fehlerfall; die Startabbrueche belegt setup-smoke.sh (STARTABBRUCH OK)
-hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht'
+hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht
+./restore.sh backups/daily/wordquest-20261001.sql.gz — Beispielname; die Form mit Pfad laeuft im Smoke mit dem Tagesdump und den Testdateien'
 
 echo "== Installation"
 # Grossbuchstaben im Praefix werden abgelehnt, danach uebernimmt Enter den Standard.
@@ -264,6 +265,7 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
 [[ "$(fingerprint)" != "$fp_s1" ]] || fail "Fingerabdruck nach dem Loeschen unveraendert."
 
 [[ -x restore.sh ]] || fail "restore.sh fehlt oder ist nicht ausfuehrbar."
+page_cmd './restore.sh'
 restore_run .smoke/restore.log < <(printf '%s\n' 1 ja)
 [[ "$status" == 0 ]] || fail "restore.sh endete mit Exit $status."
 wait_web
