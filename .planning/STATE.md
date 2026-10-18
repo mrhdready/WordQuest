@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 03
 current_phase_name: Installable 1.0.0 Release
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-10-18T12:58:04.936Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-10-18T13:26:12.569Z"
 last_activity: 2026-10-18
-last_activity_desc: 03-04 ausgefuehrt; manuelle Abnahme Phase 1 und 2 offen
-state_head: eac22ca885e3ecc92c0dc553a126d605e92948f4
+last_activity_desc: 03-05 ausgefuehrt, automatisches Phasen-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
+state_head: 106e54c0cda10ad293d35d301dd236f813c989c4
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 Phase: 03 (Installable 1.0.0 Release) — EXECUTING
 Plan: 5 of 5
-Status: 03-04 fertig, als Naechstes 03-05; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen
-Last activity: 2026-10-18 — 03-04 ausgefuehrt (upgrade.sh mit gepruefter Sicherung vor dem Laden, Pull vor .env, abgesichertem Start mit Weg zurueck; Smoke UPDATE OK und UPDATE-ABBRUCH OK, Seitenabschnitt Update, README bereinigt, Plan-Gate gruen)
+Status: 03-05 fertig, alle Plaene der Phase 3 ausgefuehrt; automatisches Phasen-Gate gruen, lokales Tag v1.0.0 setzt der Orchestrator; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen; Nach-Release-Abnahme Phase 3 offen (03-VALIDATION.md)
+Last activity: 2026-10-18 — 03-05 ausgefuehrt (Abschnittsfolge der Seite im Release-Smoke, Faktenpruefung der Seite mit fuenf Korrekturen, volles automatisches Phasen-Gate gruen: 16 Schritte mit Exit 0, e2e 48 passed mit axe)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -75,6 +75,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P02 | 30min | 2 tasks | 3 files |
 | Phase 03 P03 | 33min | 3 tasks | 5 files |
 | Phase 03 P04 | 31min | 3 tasks | 5 files |
+| Phase 03 P05 | 25min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -134,11 +135,14 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-04: upgrade.sh behält die Reihenfolge aus D-05 (Sicherung, Prüfung, Pull, .env, up -d, Health); .env erst nach Bereitschaft zu schreiben ist verworfen (Abbruch hinterließe alte Version neben migrierter DB)
 - [Phase 03]: 03-04: Regel für künftige Releases: Compose-Änderungen bleiben mit der Vorversion lauffähig, kein Postgres-Major ohne eigenen Plan; sonst trägt der Weg zurück aus upgrade.sh (alte Version in .env, restore.sh) nicht
 - [Phase 03]: 03-04: Sicherung vor dem Update mit umask 077 statt chmod an backups/; db vor der Sicherung mit --no-recreate
+- [Phase 03]: 03-05: REL-01, REL-02, REL-03 erledigt (Code und Smoke belegen sie); REL-04 bleibt offen bis zur Veroeffentlichung der Images (Nach-Release-Abnahme)
+- [Phase 03]: 03-05: automatisches Phasen-Gate gruen (16 Schritte, Exit 0); Voraussetzung fuer das lokale Tag v1.0.0 erfuellt, das Tag setzt der Orchestrator; vor dem Push master auf den Stand von v1-fertig bringen
 
 ### Pending Todos
 
 - Quick 261006-r7l: axe auf `/lernen` nachholen — erledigt sich mit Plan 01-04 (axe-Werkzeug seit 01-01 vorhanden, `checkPage` auf den Lernseiten).
 - [Phase-1-Abschluss]: manuelle Abnahme Tab-Leiste bei 200 % Zoom, leere Zustände, Glas-Wirkung auf dem Tablet; `hostname -I` und Backup-Dienst auf einem Raspberry Pi prüfen.
+- [Phase-3-Nach-Release]: Nach-Release-Abnahme aus 03-VALIDATION.md (veroeffentlichte Images arm64/amd64, Pi-Installation nur nach der Seite, Person ohne Vorwissen, root-eigene Tagesdumps mit restore.sh, upgrade.sh aus GHCR, Traefik-Variante). Vor dem Push master auf den Stand von v1-fertig bringen (die Seite klont den Standardbranch).
 
 ### Quick Tasks
 
@@ -160,6 +164,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T12:58:04.809Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-10-18T13:26:12.513Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None

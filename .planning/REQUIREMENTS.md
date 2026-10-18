@@ -45,9 +45,9 @@
 
 ### Release
 
-- [ ] **REL-01**: Operator updates with `upgrade.sh`, which takes a DB backup before pulling the new version
-- [ ] **REL-02**: Operator restores a backup with `restore.sh`
-- [ ] **REL-03**: One install page explains home-network setup step by step for non-experts (install, update, backup/restore)
+- [x] **REL-01**: Operator updates with `upgrade.sh`, which takes a DB backup before pulling the new version
+- [x] **REL-02**: Operator restores a backup with `restore.sh`
+- [x] **REL-03**: One install page explains home-network setup step by step for non-experts (install, update, backup/restore)
 - [ ] **REL-04**: Images are published with a version tag (e.g. `1.0.0`) and the install uses that tag instead of `master`
 
 ## v2 Requirements
@@ -111,9 +111,9 @@
 | FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
 | QUAL-01 | Phase 2 | Complete |
 | QUAL-02 | Phase 1 | Pending |
-| REL-01 | Phase 3 | Pending |
-| REL-02 | Phase 3 | Pending |
-| REL-03 | Phase 3 | Pending |
+| REL-01 | Phase 3 | Complete |
+| REL-02 | Phase 3 | Complete |
+| REL-03 | Phase 3 | Complete |
 | REL-04 | Phase 3 | Pending |
 
 **Coverage:**
