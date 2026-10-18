@@ -83,13 +83,13 @@ Plans:
   3. `upgrade.sh` writes a DB backup before pulling the new version, and the family's children, sets and progress are intact after the upgrade
   4. `restore.sh` restores a chosen backup, and afterwards the parent sees the data as of that backup
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 
 Plans:
 - [x] 03-01-PLAN.md — Standard `1.0.0` und `ghcr.io/mrhdready/wordquest` (Präfix mit Enter), Installationsseite (Voraussetzungen, Installation, Sicherung, Hilfe), README auf Verweis, Release-Smoke mit Seitenabgleich
 - [x] 03-02-PLAN.md — Cross-Build mit `$BUILDPLATFORM` für arm64 und amd64, Konzept §14, Plan-Gate mit e2e
 - [x] 03-03-PLAN.md — `restore.sh` mit Liste, Bestätigung, Vorher-Sicherung, ausdrücklicher Fehlerweitergabe und Rückfall; Seitenabschnitt Wiederherstellen
-- [ ] 03-04-PLAN.md — `upgrade.sh` mit geprüfter Sicherung vor dem Laden der Zielversion, abgesichertem Start mit Weg zurück; Seitenabschnitt Update
+- [x] 03-04-PLAN.md — `upgrade.sh` mit geprüfter Sicherung vor dem Laden der Zielversion, abgesichertem Start mit Weg zurück; Seitenabschnitt Update
 - [ ] 03-05-PLAN.md — Seite nach D-09 vollständig und gegen den Code belegt, automatisches Phasen-Gate, Übergabe der Nach-Release-Abnahme
 
 ## Progress
@@ -101,4 +101,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Safe Home-Network Install | 8/8 | In Progress | - |
 | 2. Reliable Learning & Clean Family Data | 7/7 | In Progress | - |
-| 3. Installable 1.0.0 Release | 3/5 | In Progress | - |
+| 3. Installable 1.0.0 Release | 4/5 | In Progress | - |

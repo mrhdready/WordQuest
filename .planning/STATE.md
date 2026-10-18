@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 03
 current_phase_name: Installable 1.0.0 Release
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-10-18T12:24:06.359Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-10-18T12:58:04.936Z"
 last_activity: 2026-10-18
-last_activity_desc: 03-03 ausgefuehrt; manuelle Abnahme Phase 1 und 2 offen
-state_head: 53ff81ed17b7dc96d3b32341f23c4a2443153658
+last_activity_desc: 03-04 ausgefuehrt; manuelle Abnahme Phase 1 und 2 offen
+state_head: eac22ca885e3ecc92c0dc553a126d605e92948f4
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03 (Installable 1.0.0 Release) — EXECUTING
-Plan: 4 of 5
-Status: 03-03 fertig, als Naechstes 03-04; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen
-Last activity: 2026-10-18 — 03-03 ausgefuehrt (restore.sh mit Vorher-Sicherung und Rueckfall, Smoke RESTORE OK und RESTORE-FEHLER OK, Seitenabschnitt Wiederherstellen, Plan-Gate gruen)
+Plan: 5 of 5
+Status: 03-04 fertig, als Naechstes 03-05; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen
+Last activity: 2026-10-18 — 03-04 ausgefuehrt (upgrade.sh mit gepruefter Sicherung vor dem Laden, Pull vor .env, abgesichertem Start mit Weg zurueck; Smoke UPDATE OK und UPDATE-ABBRUCH OK, Seitenabschnitt Update, README bereinigt, Plan-Gate gruen)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -74,6 +74,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P01 | 24min | 2 tasks | 8 files |
 | Phase 03 P02 | 30min | 2 tasks | 3 files |
 | Phase 03 P03 | 33min | 3 tasks | 5 files |
+| Phase 03 P04 | 31min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,9 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-03: Vorher-Sicherung nur auf Vollstaendigkeit geprueft (gzip, Endzeile), gewaehlte Datei zusaetzlich auf app_user; fehlende DB wird vor der Vorher-Sicherung leer angelegt
 - [Phase 03]: 03-03: Rueckfall bei gescheitertem Einspielen mit derselben load_dump-Funktion; bei doppeltem Fehlschlag oder Strg+C bleibt die API gestoppt, Meldung nennt ./restore.sh <Vorher-Datei>
 - [Phase 03]: 03-03: Release-Smoke zaehlt nur bis SMOKE_DONE als Erfolg (Bash 3.2 meldet mit trap EXIT nach ungesetzter Variable Exit 0)
+- [Phase 03]: 03-04: upgrade.sh behält die Reihenfolge aus D-05 (Sicherung, Prüfung, Pull, .env, up -d, Health); .env erst nach Bereitschaft zu schreiben ist verworfen (Abbruch hinterließe alte Version neben migrierter DB)
+- [Phase 03]: 03-04: Regel für künftige Releases: Compose-Änderungen bleiben mit der Vorversion lauffähig, kein Postgres-Major ohne eigenen Plan; sonst trägt der Weg zurück aus upgrade.sh (alte Version in .env, restore.sh) nicht
+- [Phase 03]: 03-04: Sicherung vor dem Update mit umask 077 statt chmod an backups/; db vor der Sicherung mit --no-recreate
 
 ### Pending Todos
 
@@ -156,6 +160,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T12:24:06.303Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-10-18T12:58:04.809Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
