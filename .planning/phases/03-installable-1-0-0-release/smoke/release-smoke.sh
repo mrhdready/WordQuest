@@ -649,6 +649,27 @@ grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail "Zweiter Aufruf: .env ohne 
 echo "UPDATE-ABBRUCH OK"
 
 echo "== Seite gegen den Lauf"
+# Abschnitte nach D-09: genau diese Ueberschriften zweiter Ebene, in dieser
+# Reihenfolge; Zeilen in Codebloecken zaehlen nicht.
+D09_SECTIONS='Voraussetzungen
+Installation
+Update
+Sicherung und Wiederherstellung
+Hilfe bei Problemen'
+sections="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { open = !open; next } !open && /^## / { print substr($0, 4) }' "$PAGE")"
+[[ "$sections" == "$D09_SECTIONS" ]] \
+  || fail "Abschnitte der Seite weichen von D-09 ab: $(printf '%s' "$sections" | tr '\n' '|')"
+# Jeder Abschnitt ausser der Hilfe hat einen Befehl (bash) und ein erwartetes Ergebnis (text).
+missing="$(awk '{ sub(/^[ \t]+/, "") }
+  /^```/ { if (open) open = 0; else { open = 1; seen[sec, substr($0, 4)] = 1 } next }
+  !open && /^## / { sec = substr($0, 4); order[++n] = sec }
+  END { for (i = 1; i <= n; i++) { s = order[i]; if (s == "Hilfe bei Problemen") continue
+    if (!seen[s, "bash"]) print s " ohne bash-Block"; if (!seen[s, "text"]) print s " ohne text-Block" } }' "$PAGE")"
+[[ -z "$missing" ]] || fail "Abschnitt ohne Befehl oder erwartetes Ergebnis (D-09): $(printf '%s' "$missing" | tr '\n' '|')"
+# Keine Empfehlung, die die Installation unsicher macht (T-03-16).
+for bad in 'chmod 777' 'chmod -R 777' '0.0.0.0'; do
+  if grep -qF -- "$bad" "$PAGE"; then fail "Unsichere Empfehlung auf $PAGE (T-03-16): $bad"; fi
+done
 # Nur bash- und text-Bloecke werden geprueft; ein anderer Block liefe still vorbei.
 other="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { if (open) open = 0; else { open = 1; lang = substr($0, 4); if (lang != "bash" && lang != "text") print NR ": " $0 } }' "$PAGE")"
 [[ -z "$other" ]] || fail "Codeblock ohne Sprache bash oder text auf $PAGE, Zeile $other"
