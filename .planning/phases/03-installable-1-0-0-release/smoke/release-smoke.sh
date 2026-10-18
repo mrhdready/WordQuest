@@ -307,6 +307,124 @@ code="$(learners)"
   || fail "Erstes Kind nach restore.sh nicht da (HTTP $code)."
 echo "RESTORE OK"
 
+echo "== Wiederherstellung: Fehlerpfade (D-08, Review 03-02 HIGH)"
+before_count() { ls backups/vor-wiederherstellung-*.sql.gz 2>/dev/null | grep -c . || true; }
+snapshot() { fp_before="$(fingerprint)"; n_before="$(before_count)"; started_before="$(api_started)"; }
+# Abgelehnt: Datenbank, Vorher-Sicherungen und laufende API wie vorher.
+assert_unchanged() {
+  [[ "$status" != 0 ]] || fail "$1: restore.sh endete mit Exit 0."
+  [[ "$(fingerprint)" == "$fp_before" ]] || fail "$1: Fingerabdruck geaendert."
+  [[ "$(before_count)" == "$n_before" ]] || fail "$1: neue Vorher-Sicherung."
+  [[ "$(api_started)" == "$started_before" ]] || fail "$1: api wurde neu gestartet."
+}
+expect_msg() { grep -qF -- "$2" "$1" || fail "Meldung fehlt in $1: $2"; }
+wait_api() {
+  local _
+  for _ in $(seq 1 60); do
+    docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null 2>&1 && return 0
+    sleep 2
+  done
+  fail "API nach zwei Minuten nicht bereit."
+}
+# Rueckfall: nie Erfolg gemeldet, Meldung nennt beide Dateien, Stand wie vorher,
+# WordQuest laeuft weiter.
+assert_fallback() {
+  local before
+  [[ "$status" != 0 ]] || fail "$2: restore.sh endete mit Exit 0."
+  before="$(grep -o 'backups/vor-wiederherstellung-[0-9-]*\.sql\.gz' "$1" | tail -n 1 || true)"
+  [[ -n "$before" && -f "$before" ]] || fail "$2: Meldung nennt keine vorhandene Vorher-Datei."
+  expect_msg "$1" "Das Einspielen von $2 ist fehlgeschlagen. Der vorherige Stand aus $before ist wieder eingespielt"
+  wait_web
+  [[ "$(fingerprint)" == "$fp_before" ]] || fail "$2: Fingerabdruck nach dem Rueckfall ungleich vorher."
+  wait_api
+  code="$(login eltern@example.de geheim-123)"
+  [[ "$code" == 200 ]] || fail "$2: Login nach dem Rueckfall: HTTP $code statt 200."
+}
+
+# Falsche Nummer, keine Zahl, dann Nummer 1 und eine andere Antwort als ja.
+snapshot
+restore_run .smoke/restore-eingabe.log < <(printf '%s\n' 99 x 1 nein)
+[[ "$(grep -cF 'Bitte eine Nummer zwischen' .smoke/restore-eingabe.log)" == 2 ]] \
+  || fail "Nicht je ein Hinweis zu 99 und x."
+expect_msg .smoke/restore-eingabe.log 'Abgebrochen. Es wurde nichts geändert.'
+assert_unchanged "Falsche Eingabe"
+
+# Ende der Eingabe vor der Auswahl.
+restore_run .smoke/restore-eof.log </dev/null
+grep -q '^ *1) ' .smoke/restore-eof.log || fail "Ohne Eingabe keine Liste."
+expect_msg .smoke/restore-eof.log 'Eingabe beendet. Es wurde nichts geändert.'
+assert_unchanged "Ende der Eingabe"
+
+# Pfad, den es nicht gibt.
+restore_run .smoke/restore-fehlt.log backups/gibt-es-nicht.sql.gz </dev/null
+expect_msg .smoke/restore-fehlt.log 'backups/gibt-es-nicht.sql.gz'
+assert_unchanged "Fehlender Pfad"
+
+# Fremde Datei: wird vor der Bestaetigung abgelehnt.
+printf 'kaputt\n' | gzip >backups/kaputt.sql.gz
+restore_run .smoke/restore-kaputt.log backups/kaputt.sql.gz < <(printf 'ja\n')
+expect_msg .smoke/restore-kaputt.log 'backups/kaputt.sql.gz ist keine vollständige WordQuest-Sicherung. Es wurde nichts geändert.'
+assert_unchanged "Kaputte Datei"
+
+# Importfehler: besteht die Pruefung, scheitert beim Einspielen.
+printf '%s\n' 'SELECT 1/0;' '-- COPY public.app_user' '-- PostgreSQL database dump complete' \
+  | gzip >backups/fehlerhaft.sql.gz
+snapshot
+restore_run .smoke/restore-import.log backups/fehlerhaft.sql.gz < <(printf 'ja\n')
+assert_fallback .smoke/restore-import.log backups/fehlerhaft.sql.gz
+
+# Lesefehler: Die Datei verschwindet nach der Bestaetigung. Ohne ausdrueckliche
+# Fehlerweitergabe committet psql den leeren Strom, und restore.sh meldet eine
+# leere Datenbank als Erfolg (Review 03-02 HIGH).
+cp "$daily" backups/lesefehler.sql.gz
+snapshot
+mkfifo .smoke/restore-in
+./restore.sh backups/lesefehler.sql.gz <.smoke/restore-in >.smoke/restore-lesen.log 2>&1 &
+restore_pid=$!
+exec 3>.smoke/restore-in
+seen=0
+for _ in $(seq 1 60); do
+  if grep -qF 'durch den Stand aus backups/lesefehler.sql.gz ersetzt' .smoke/restore-lesen.log; then
+    seen=1
+    break
+  fi
+  sleep 1
+done
+[[ "$seen" == 1 ]] || fail "Lesefehler: Bestaetigungssatz nach 60 s nicht in der Ausgabe."
+rm backups/lesefehler.sql.gz
+echo ja >&3
+exec 3>&-
+status=0
+wait "$restore_pid" || status=$?
+cat .smoke/restore-lesen.log
+assert_fallback .smoke/restore-lesen.log backups/lesefehler.sql.gz
+
+# Drop-Fehler, und auch der Rueckfall scheitert: Eine Template-Datenbank laesst
+# sich nicht loeschen. Bricht der Smoke hier ab, entfernt cleanup das Volume.
+db_admin() { docker compose exec -T db psql -U wordquest -d postgres -qc "$1" </dev/null; }
+snapshot
+db_admin 'ALTER DATABASE wordquest IS_TEMPLATE true'
+restore_run .smoke/restore-drop.log "$daily" < <(printf 'ja\n')
+[[ "$status" != 0 ]] || fail "Drop-Fehler: restore.sh endete mit Exit 0."
+expect_msg .smoke/restore-drop.log 'Die API bleibt gestoppt'
+[[ "$(before_count)" == $((n_before + 1)) ]] || fail "Drop-Fehler: keine neue Vorher-Sicherung."
+newest="$(ls -t backups/vor-wiederherstellung-*.sql.gz | head -n 1)"
+expect_msg .smoke/restore-drop.log "$newest"
+[[ -z "$(docker compose ps --status running -q api </dev/null)" ]] \
+  || fail "Drop-Fehler: api laeuft nach doppeltem Fehlschlag."
+gzip -t "$newest" || fail "$newest ist kein gueltiges gzip."
+gunzip -c "$newest" | tail -n 5 | grep -q 'PostgreSQL database dump complete' \
+  || fail "$newest hat die Endzeile nicht."
+db_admin 'ALTER DATABASE wordquest IS_TEMPLATE false'
+docker compose up -d </dev/null >/dev/null 2>&1
+wait_api
+docker compose restart web </dev/null >/dev/null 2>&1
+wait_web
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "Drop-Fehler: Fingerabdruck ungleich vorher."
+
+rm -f backups/kaputt.sql.gz backups/fehlerhaft.sql.gz .smoke/restore-in
+echo "RESTORE-FEHLER OK"
+
 echo "== Seite gegen den Lauf"
 # Nur bash- und text-Bloecke werden geprueft; ein anderer Block liefe still vorbei.
 other="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { if (open) open = 0; else { open = 1; lang = substr($0, 4); if (lang != "bash" && lang != "text") print NR ": " $0 } }' "$PAGE")"

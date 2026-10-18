@@ -133,7 +133,14 @@ start_app() {
 }
 
 if ! load_dump "$file"; then
-  die "Das Einspielen von $file ist fehlgeschlagen. Die API bleibt gestoppt. Deine Daten von vorher liegen in $before."
+  warn "Das Einspielen von $file ist fehlgeschlagen. Der Stand von vorher wird aus $before zurückgespielt …"
+  # Die API darf nicht auf einer leeren Datenbank starten: Sie legte ein neues
+  # Schema an, und das saehe wie eine Neuinstallation aus.
+  load_dump "$before" \
+    || die "Das Einspielen ist fehlgeschlagen, und der vorherige Stand ließ sich nicht zurückspielen. Die API bleibt gestoppt. Deine Daten liegen in $before. Sieh mit \`docker compose logs db\` nach."
+  start_app \
+    || die "Der vorherige Stand aus $before ist wieder eingespielt, aber die API ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs api\` nach."
+  die "Das Einspielen von $file ist fehlgeschlagen. Der vorherige Stand aus $before ist wieder eingespielt, WordQuest läuft weiter."
 fi
 
 say "Starte WordQuest …"
