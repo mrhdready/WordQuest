@@ -3,7 +3,7 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 03
 current_phase_name: Installable 1.0.0 Release
-status: executing
+status: verifying
 stopped_at: Completed 03-05-PLAN.md
 last_updated: "2026-10-18T13:26:12.569Z"
 last_activity: 2026-10-18
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 
 ## Current Position
 
-Phase: 03 (Installable 1.0.0 Release) — EXECUTING
+Phase: 03 (Installable 1.0.0 Release) — VERIFYING (human_needed)
 Plan: 5 of 5
-Status: 03-05 fertig, alle Plaene der Phase 3 ausgefuehrt; automatisches Phasen-Gate gruen, lokales Tag v1.0.0 setzt der Orchestrator; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen; Nach-Release-Abnahme Phase 3 offen (03-VALIDATION.md)
+Status: Alle Plaene ausgefuehrt, Audits (Verifikation, Review, Security) und Fixes erledigt, Release-Smoke gruen; lokales Tag v1.0.0 gesetzt (nicht gepusht); vor dem Push master auf v1-fertig bringen; Nach-Release-Abnahme in 03-UAT.md; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen; Nach-Release-Abnahme Phase 3 offen (03-VALIDATION.md)
 Last activity: 2026-10-18 — 03-05 ausgefuehrt (Abschnittsfolge der Seite im Release-Smoke, Faktenpruefung der Seite mit fuenf Korrekturen, volles automatisches Phasen-Gate gruen: 16 Schritte mit Exit 0, e2e 48 passed mit axe)
 
 Progress: [░░░░░░░░░░] 0%
