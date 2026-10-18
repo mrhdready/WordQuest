@@ -9,7 +9,7 @@ Zielgerät ist ein **Raspberry Pi 5 mit Raspberry Pi OS (64-bit)**. Ein NAS mit 
 Auf dem Gerät brauchst du:
 
 1. **Docker mit Compose.** Für Raspberry Pi OS (64-bit) installierst du Docker nach der offiziellen [Anleitung für Debian](https://docs.docker.com/engine/install/debian/); die [Seite für Raspberry Pi OS](https://docs.docker.com/engine/install/raspberry-pi-os/) verweist für 64-bit selbst dorthin.
-2. **Deinen Benutzer in der Gruppe `docker`**, damit die Befehle ohne `sudo` laufen ([Docker-Anleitung](https://docs.docker.com/engine/install/linux-postinstall/)). Melde dich danach einmal ab und wieder an, erst dann wirkt die Gruppe.
+2. **Deinen Benutzer in der Gruppe `docker`**, damit die Befehle ohne `sudo` laufen ([Docker-Anleitung](https://docs.docker.com/engine/install/linux-postinstall/)). Melde dich danach einmal ab und wieder an, erst dann wirkt die Gruppe. Die Gruppe `docker` gibt Rechte wie root; nimm deshalb nur deinen eigenen Benutzer auf.
 
    ```bash
    sudo usermod -aG docker $USER
@@ -94,11 +94,11 @@ Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter La
 
 Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
 
-Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig.
+Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig. Gib den Port 8080 im Router nicht ins Internet frei, WordQuest ist nur für dein Heimnetz gedacht.
 
 ## Update
 
-Wechsle in den Ordner `wordquest`, lade den neuen Stand von WordQuest herunter und starte das Update:
+Starte das Update, wenn gerade niemand lernt: Was während des Updates gelernt wird, steht nicht in der Sicherung. Wechsle in den Ordner `wordquest`, lade den neuen Stand von WordQuest herunter und starte das Update:
 
 ```bash
 cd wordquest
@@ -118,7 +118,7 @@ Warte auf die API …
 Fertig. WordQuest läuft jetzt mit Version <neue Version>. Die Sicherung von vorher liegt in <Datei>.
 ```
 
-Die Sicherung steht danach in der Liste von `./restore.sh` (siehe „Wiederherstellen“). Gibt es keine neue Version, legt `./upgrade.sh` eine weitere Sicherung an und lädt höchstens neuere Images für die Datenbank und den Sicherungsdienst; deine Daten bleiben unverändert.
+Die Sicherung steht danach in der Liste von `./restore.sh` (siehe „Wiederherstellen“). Gibt es keine neue Version, legt `./upgrade.sh` eine weitere Sicherung an und lädt für alle Dienste die Images, die sich seit dem letzten Laden geändert haben; deine Daten bleiben unverändert.
 
 Hast du eine Datei von WordQuest selbst geändert, zum Beispiel den Port in einer Compose-Datei, bricht `git pull` ab, wenn das Update dieselbe Datei ändert, und ändert nichts. Mach deine Änderung dann mit `git checkout -- <Datei>` rückgängig, trag die Einstellung in `.env` ein, zum Beispiel `WQ_PORT=9000`, und starte `git pull` erneut. Einstellungen gehören nur in `.env`; `git pull` lässt `.env`, `secrets/` und `backups/` unverändert.
 
@@ -201,7 +201,7 @@ Für Fortgeschrittene: Mit einem Pfad nimmt das Skript direkt diese Datei, Prüf
 ./restore.sh backups/daily/wordquest-20261001.sql.gz
 ```
 
-Eigene Sicherungen mit der Endung `.sql.gz` kannst du direkt in `backups/` legen, sie stehen dann mit in der Liste. Der Sicherungsdienst räumt nur seine Ordner `last`, `daily`, `weekly` und `monthly` auf; Dateien direkt in `backups/`, auch die `vor-wiederherstellung-…`- und `vor-update-…`-Dateien, löschst du selbst, wenn du sie nicht mehr brauchst.
+Eigene Sicherungen mit der Endung `.sql.gz` kannst du direkt in `backups/` legen, sie stehen dann mit in der Liste; dorthin gehören nur Sicherungen von WordQuest. Der Sicherungsdienst räumt nur seine Ordner `last`, `daily`, `weekly` und `monthly` auf; Dateien direkt in `backups/`, auch die `vor-wiederherstellung-…`- und `vor-update-…`-Dateien, löschst du selbst, wenn du sie nicht mehr brauchst.
 
 Nach der Wiederherstellung müssen sich alle Geräte neu anmelden, Kinder wieder mit Profil und PIN. Wer gerade angemeldet ist, wird spätestens nach rund 15 Minuten abgemeldet. Passwörter und PINs gelten so, wie sie zur Zeit der Sicherung waren. Hast du dein Passwort nach der Sicherung geändert, weil du einen Verdacht hattest, setze es mit dem Befehl unter „Passwort vergessen“ (Hilfe bei Problemen) erneut zurück.
 
