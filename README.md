@@ -18,7 +18,9 @@ Memory) und der Offline-Betrieb stehen noch aus.
 
 Für den Betrieb im Heimnetz auf einem Raspberry Pi 5 oder einem NAS gibt es
 genau eine Anleitung: [`Documentation/Installation.md`](Documentation/Installation.md).
-Sie führt vom leeren Gerät bis zur ersten Anmeldung und hilft bei Problemen.
+Sie führt vom leeren Gerät bis zur ersten Anmeldung, erklärt Update
+(`git pull`, `./upgrade.sh`) und Wiederherstellen (`./restore.sh`) und hilft
+bei Problemen.
 
 **Für Entwickler und Forks:** Die CI baut bei jedem Push auf `master` und bei
 jedem Tag `v*` die Images `ghcr.io/<account>/wordquest-api` und `-web` für
@@ -43,7 +45,9 @@ In `.env` von Hand eintragen: `COMPOSE_FILE=docker-compose.yml`,
 `WQ_IMAGE_PREFIX`, `WQ_HOST`, `WQ_ACME_EMAIL` und den DNS-Anbieter (siehe
 unten). Danach `./setup.sh`: Es lässt die vorhandene `.env` unverändert,
 erzeugt die Secrets, startet den Stack und legt auch hier das Elternkonto an.
-WordQuest ist dann unter `https://<WQ_HOST>` erreichbar.
+WordQuest ist dann unter `https://<WQ_HOST>` erreichbar. Update und
+Wiederherstellen gehen wie auf der Installationsseite, weil `docker compose`
+die Variante aus `COMPOSE_FILE` in `.env` liest.
 
 #### Zu TLS — die häufigste Stolperstelle
 
@@ -80,32 +84,6 @@ Wert auf `false`. Steht in einer älteren `.env` noch `true` (auch `True` oder
 `"true"`), bricht `setup.sh` mit einem Hinweis ab, denn das Demo-Konto hat ein
 bekanntes Passwort. Außerhalb des Entwicklungsmodus startet auch die API mit
 eingeschalteten Demo-Daten nicht.
-
-Ältere Installationen haben das Demo-Konto oft noch in der Datenbank; den
-Schalter abzustellen entfernt es nicht. Hat es noch sein bekanntes Passwort,
-bricht die API beim Start mit einer Meldung ab (`docker compose logs api`).
-Weil die API dann nicht läuft, geht der Ausweg über `run` statt `exec`:
-
-```bash
-docker compose run --rm api reset-password demo@wordquest.local
-docker compose up -d
-```
-
-Das Demo-Kind hat ebenfalls eine bekannte PIN (`1234`). Gib ihm unter
-„Verwalten → Kinder“ eine neue PIN.
-
-#### Aktualisieren
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-Neue Migrationen wendet die API beim Start selbst an. Ein Backup vorher
-schadet trotzdem nicht.
-
-Für einen festen Stand statt des jeweils letzten Builds ein Git-Tag setzen
-(`git tag v0.1.0 && git push --tags`) und in `.env` `WQ_VERSION=0.1.0`
-eintragen.
 
 ### Variante C — Entwicklung
 

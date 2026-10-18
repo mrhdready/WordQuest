@@ -96,6 +96,57 @@ Als Nächstes legst du unter „Verwalten → Kinder“ das erste Kind mit einer
 
 Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig.
 
+## Update
+
+Eine neue Version holst du mit zwei Befehlen. Wechsle in den Ordner `wordquest`, lade den neuen Stand von WordQuest herunter und starte das Update:
+
+```bash
+cd wordquest
+git pull
+./upgrade.sh
+```
+
+`upgrade.sh` nimmt die Version, die `git pull` mitgebracht hat. Bevor es etwas ändert, sichert es die Datenbank nach `backups/vor-update-<Datum>-<Uhrzeit>.sql.gz` und prüft die Sicherung. Erst danach lädt es die neue Version, trägt sie in `.env` ein, startet WordQuest damit und wartet, bis es bereit ist. Deine Kinder, Vokabeln und der Lernstand bleiben dabei erhalten. Am Ende siehst du unter anderem diese Zeilen:
+
+```text
+Aktualisiere WordQuest von <alte Version> auf <neue Version>.
+✓ Sicherung geprüft: backups/vor-update-<Datum>-<Uhrzeit>.sql.gz
+Lade Version <neue Version> …
+Starte Version <neue Version> …
+Warte auf die API …
+✓ API ist bereit.
+Fertig. WordQuest läuft jetzt mit Version <neue Version>. Die Sicherung von vorher liegt in <Datei>.
+```
+
+Die Sicherung steht danach in der Liste von `./restore.sh` (siehe „Wiederherstellen“). Gibt es keine neue Version, legt `./upgrade.sh` eine weitere Sicherung an und lädt höchstens neuere Images für die Datenbank und den Sicherungsdienst; deine Daten bleiben unverändert.
+
+Hast du eine Datei von WordQuest selbst geändert, zum Beispiel den Port in einer Compose-Datei, bricht `git pull` ab, wenn das Update dieselbe Datei ändert, und ändert nichts. Mach deine Änderung dann mit `git checkout -- <Datei>` rückgängig, trag die Einstellung in `.env` ein, zum Beispiel `WQ_PORT=9000`, und starte `git pull` erneut. Einstellungen gehören nur in `.env`; `git pull` lässt `.env`, `secrets/` und `backups/` unverändert.
+
+Wenn etwas schiefgeht:
+
+- **Die neue Version ist noch nicht verfügbar.** Kurz nach dem Erscheinen einer Version dauert es einige Minuten, bis sie geladen werden kann. Dann endet `upgrade.sh` mit dieser Meldung und ändert nichts, WordQuest läuft mit der alten Version weiter:
+
+  ```text
+  Die Version <neue Version> ließ sich nicht laden. Wenn sie gerade erst erschienen ist, versuche es in einer Viertelstunde erneut; sonst prüfe die Internetverbindung und WQ_IMAGE_PREFIX in .env. Es wurde nichts geändert. Die Sicherung liegt in <Datei>.
+  ```
+
+- **Die Sicherung gelingt nicht.** Dann lädt `upgrade.sh` die neue Version gar nicht erst und meldet „Die Sicherung vor dem Update ist fehlgeschlagen. Es wurde nichts geändert.“
+- **Die neue Version startet nicht.** Dann endet `upgrade.sh` mit einer Meldung wie dieser:
+
+  ```text
+  Die API ist nach zwei Minuten nicht bereit. Deine Daten von vorher liegen in <Datei>. Sieh mit `docker compose logs api` nach; die Meldung dort nennt meist den Ausweg. Zurück zur Version <alte Version>: Trage in .env WQ_VERSION=<alte Version> ein und spiele danach die Sicherung mit ./restore.sh <Datei> ein.
+  ```
+
+  Statt des ersten Satzes kann auch „Der Start der Version <neue Version> ist fehlgeschlagen.“ dastehen. Sieh zuerst mit `docker compose logs api` nach (siehe „Die API startet nicht“ unter Hilfe bei Problemen). Willst du zurück zur alten Version, trag in der Datei `.env` bei `WQ_VERSION=` die alte Version aus der Meldung ein und spiele die genannte Sicherung ein, zum Beispiel:
+
+  ```bash
+  ./restore.sh backups/vor-update-20261001-193000.sql.gz
+  ```
+
+  Das Skript fragt wie unter „Wiederherstellen“ nach `ja` und startet WordQuest danach mit der Version aus `.env` und dem Stand von vor dem Update. Rufe `./upgrade.sh` vorher nicht noch einmal auf: Ein neuer Aufruf sichert den Stand nach dem Update und nennt dann diese neue Datei. Die Sicherung von vor dem Update ist die aus der ersten Meldung; in der Liste von `./restore.sh` steht sie unter der neueren.
+
+`upgrade.sh` gilt für Installationen, die mit `setup.sh` eingerichtet sind. Einen früheren Schnelltest setzt du neu auf (siehe „Früherer Schnelltest“ unter Hilfe bei Problemen).
+
 ## Sicherung und Wiederherstellung
 
 Der Dienst `backup` sichert die Datenbank jeden Tag in den Ordner `backups/` und hebt 14 tägliche, 8 wöchentliche und 6 monatliche Stände auf. Die Sicherungen enthalten alle Familiendaten, deshalb ist der Ordner nur für dich lesbar.
@@ -150,7 +201,7 @@ Für Fortgeschrittene: Mit einem Pfad nimmt das Skript direkt diese Datei, Prüf
 ./restore.sh backups/daily/wordquest-20261001.sql.gz
 ```
 
-Eigene Sicherungen mit der Endung `.sql.gz` kannst du direkt in `backups/` legen, sie stehen dann mit in der Liste. Der Sicherungsdienst räumt nur seine Ordner `last`, `daily`, `weekly` und `monthly` auf; Dateien direkt in `backups/`, auch die `vor-wiederherstellung-…`-Dateien, löschst du selbst, wenn du sie nicht mehr brauchst.
+Eigene Sicherungen mit der Endung `.sql.gz` kannst du direkt in `backups/` legen, sie stehen dann mit in der Liste. Der Sicherungsdienst räumt nur seine Ordner `last`, `daily`, `weekly` und `monthly` auf; Dateien direkt in `backups/`, auch die `vor-wiederherstellung-…`- und `vor-update-…`-Dateien, löschst du selbst, wenn du sie nicht mehr brauchst.
 
 Nach der Wiederherstellung müssen sich alle Geräte neu anmelden, Kinder wieder mit Profil und PIN. Wer gerade angemeldet ist, wird spätestens nach rund 15 Minuten abgemeldet. Passwörter und PINs gelten so, wie sie zur Zeit der Sicherung waren. Hast du dein Passwort nach der Sicherung geändert, weil du einen Verdacht hattest, setze es mit dem Befehl unter „Passwort vergessen“ (Hilfe bei Problemen) erneut zurück.
 

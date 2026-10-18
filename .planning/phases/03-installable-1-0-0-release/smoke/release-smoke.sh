@@ -132,13 +132,15 @@ page_cmd() {
 HANDGRIFFE='sudo apt install git — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat git
 sudo usermod -aG docker $USER — Gruppe docker, wirkt erst nach neuer Anmeldung
 git clone https://github.com/mrhdready/WordQuest.git wordquest — der Smoke arbeitet in einer Arbeitskopie des Arbeitsbaums
-cd wordquest — Ordnerwechsel nach dem Klonen; der Smoke steht schon in der Arbeitskopie
+cd wordquest — Ordnerwechsel nach dem Klonen und vor dem Update; der Smoke steht schon in der Arbeitskopie
+git pull — die Arbeitskopie hat kein .git; der Smoke stellt die neue Version ueber die Tags 0.0.0-smoke und 1.0.0 nach (Abschnitt Update)
 docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D-06)
 sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
 docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.de — belegt in setup-smoke.sh (RESET OK)
 docker compose logs api — nur Ansehen im Fehlerfall; die Startabbrueche belegt setup-smoke.sh (STARTABBRUCH OK)
 hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht
-./restore.sh backups/daily/wordquest-20261001.sql.gz — Beispielname; die Form mit Pfad laeuft im Smoke mit dem Tagesdump und den Testdateien'
+./restore.sh backups/daily/wordquest-20261001.sql.gz — Beispielname; die Form mit Pfad laeuft im Smoke mit dem Tagesdump und den Testdateien
+./restore.sh backups/vor-update-20261001-193000.sql.gz — Beispielname; der Smoke geht den Weg mit der Datei aus der Meldung von upgrade.sh (UPDATE-ABBRUCH OK)'
 
 echo "== Installation"
 # Grossbuchstaben im Praefix werden abgelehnt, danach uebernimmt Enter den Standard.
@@ -464,9 +466,9 @@ upd_file() { grep -o 'backups/vor-update-[0-9-]*\.sql\.gz' "$1" | tail -n 1 || t
 check_upd_backup() {
   [[ -n "$1" && -f "$1" ]] || fail "Die Sicherung '$1' aus der Ausgabe von upgrade.sh gibt es nicht."
   gzip -t "$1" || fail "$1 ist kein gueltiges gzip."
+  [[ "$(ls -l "$1" | cut -c1-10)" == -rw------- ]] || fail "$1 ist nicht nur fuer den Besitzer lesbar: $(ls -l "$1" | cut -c1-10)"
   gunzip -c "$1" | tail -n 5 | grep -q 'PostgreSQL database dump complete' || fail "$1 hat die Endzeile nicht."
   [[ "$(gunzip -c "$1" | grep -c 'Erstes Kind' || true)" -gt 0 ]] || fail "$1 enthaelt 'Erstes Kind' nicht."
-  [[ "$(ls -l "$1" | cut -c1-10)" == -rw------- ]] || fail "$1 ist nicht nur fuer den Besitzer lesbar: $(ls -l "$1" | cut -c1-10)"
 }
 
 set_env WQ_VERSION "$OLD_VERSION"
@@ -511,6 +513,7 @@ upgrade_run() {
 
 [[ -x upgrade.sh ]] || fail "upgrade.sh fehlt oder ist nicht ausfuehrbar."
 [[ "$(backup_count)" == 0 ]] || fail "Vor dem Update gibt es schon eine Sicherung vor-update-*."
+page_cmd './upgrade.sh'
 upgrade_run .smoke/upgrade.log spy
 [[ "$status" == 0 ]] || fail "upgrade.sh endete mit Exit $status."
 expect_msg .smoke/upgrade.log '✓ Sicherung geprüft:'
