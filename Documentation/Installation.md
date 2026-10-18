@@ -68,7 +68,7 @@ Als Nächstes: Lege unter „Verwalten → Kinder“ das erste Kind an, dann ein
 Tägliche Sicherungen liegen in: <Ordner>/backups
 ```
 
-Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `http://192.168.178.20:8080`, und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. Die Adresse ermittelt `setup.sh` mit `hostname -I`. Brauchst du sie später wieder, zeigt dir derselbe Befehl auf dem Pi die Adresse als ersten Eintrag der Zeile:
+Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `http://192.168.178.20:8080`, und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. `setup.sh` nimmt dafür den ersten Eintrag, den `hostname -I` ausgibt. Brauchst du die Adresse später wieder, zeigt dir derselbe Befehl sie als ersten Eintrag:
 
 ```bash
 hostname -I
@@ -92,13 +92,13 @@ Im Ordner `wordquest` sind dabei entstanden:
 
 Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter Lauf von `./setup.sh` lässt Secrets, `.env` und Konto unverändert.
 
-Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“; „Verwalten“ aus der Zeile oben meint diese Bereiche. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt.
+Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“; „Verwalten“ aus der Zeile oben meint diese Bereiche. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
 
 Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig.
 
 ## Update
 
-Eine neue Version holst du mit zwei Befehlen. Wechsle in den Ordner `wordquest`, lade den neuen Stand von WordQuest herunter und starte das Update:
+Wechsle in den Ordner `wordquest`, lade den neuen Stand von WordQuest herunter und starte das Update:
 
 ```bash
 cd wordquest
@@ -213,7 +213,7 @@ Nach der Wiederherstellung müssen sich alle Geräte neu anmelden, Kinder wieder
 
 Prüfe die Internetverbindung des Geräts. Hast du beim Präfix etwas anderes als Enter eingegeben, korrigiere den Wert bei `WQ_IMAGE_PREFIX` in der Datei `.env` (Standard `ghcr.io/mrhdready/wordquest`). Starte danach `./setup.sh` noch einmal.
 
-**Der Port ist belegt.** Bricht `setup.sh` beim Start mit einer Meldung ab, in der `port is already allocated` steht, nutzt ein anderes Programm den Port 8080. Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst trag in `.env` eine Zeile wie `WQ_PORT=9000` ein und starte `./setup.sh` noch einmal. WordQuest läuft dann unter dem neuen Port.
+**Der Port ist belegt.** Bricht `setup.sh` beim Start mit einer Meldung ab, die den Port 8080 nennt, zum Beispiel mit `port is already allocated`, nutzt schon etwas anderes diesen Port. Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst trag in `.env` eine Zeile wie `WQ_PORT=9000` ein und starte `./setup.sh` noch einmal. WordQuest läuft dann unter dem neuen Port.
 
 **Der Ordner `backups` gehört nicht dir.** `setup.sh` bricht dann ab mit:
 
@@ -249,7 +249,7 @@ Eine Zeile, die mit „Start abgebrochen:“ beginnt, nennt den Grund und den Au
 
 > Start abgebrochen: WQ_JWT_SIGNING_KEY fehlt oder ist ein bekannter Standardwert. Führe `setup.sh` aus oder trage einen eigenen Wert ein.
 
-Fehlt eine Datei in `secrets/`, erzeugt `./setup.sh` sie neu; eine vorhandene Datei lässt es unverändert.
+Fehlt `secrets/jwt_key.txt`, erzeugt `./setup.sh` die Datei neu; eine vorhandene Datei lässt es unverändert. Für `secrets/db_password.txt` hilft das nicht: Die Datenbank behält das Passwort aus der Installation, ein neu erzeugtes passt nicht dazu.
 
 **Früherer Schnelltest.** Hast du WordQuest früher mit der alten Schnelltest-Datei ausprobiert, setzt du es mit dieser Seite neu auf; den alten Test beendest du mit `docker compose -p wordquest-quick down`, seine Daten bleiben in ihrem Docker-Volume, bis du es selbst löschst.
 
