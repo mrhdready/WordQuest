@@ -92,7 +92,7 @@ Im Ordner `wordquest` sind dabei entstanden:
 
 Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter Lauf von `./setup.sh` lässt Secrets, `.env` und Konto unverändert.
 
-Als Nächstes legst du unter „Verwalten → Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt.
+Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“; „Verwalten“ aus der Zeile oben meint diese Bereiche. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt.
 
 Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig.
 
@@ -233,7 +233,7 @@ docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.d
 
 Ersetze `eltern@example.de` durch die E-Mail-Adresse deines Elternkontos.
 
-Der Befehl erzeugt ein neues Passwort und zeigt es **genau einmal** an; es wird nirgends im Klartext gespeichert. Melde dich damit an und ändere das Passwort danach unter „Konto“. Gibt es kein Elternkonto mit dieser Adresse, meldet er das und ändert nichts. Angemeldete Geräte können ihre Sitzung danach nicht mehr verlängern; wer schon angemeldet ist, bleibt höchstens bis zum Ablauf des aktuellen Zugangs angemeldet (Standard 15 Minuten).
+Der Befehl erzeugt ein neues Passwort und zeigt es **genau einmal** an; es wird nirgends im Klartext gespeichert. Melde dich damit an und ändere das Passwort danach unter „Konto“. Gibt es kein Elternkonto mit dieser Adresse, meldet er das und ändert nichts. Geräte, die mit diesem Elternkonto angemeldet sind, können ihre Sitzung danach nicht mehr verlängern; wer schon angemeldet ist, bleibt höchstens bis zum Ablauf des aktuellen Zugangs angemeldet (Standard 15 Minuten).
 
 **Die API startet nicht.** `setup.sh` meldet dann:
 
