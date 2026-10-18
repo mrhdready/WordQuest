@@ -38,13 +38,15 @@ if [[ $# -gt 0 ]]; then
   [[ -f "$file" ]] || die "Die Datei $file gibt es nicht. Es wurde nichts geändert."
 else
   # Neueste zuerst. Der Sicherungsdienst legt dieselbe Datei per Hardlink in
-  # last/, daily/, weekly/ und monthly/ ab: jede Inode nur einmal; die
-  # latest-Verweise zeigen auf eine dieser Dateien.
+  # last/, daily/, weekly/ und monthly/ ab: jede Inode nur einmal. Die
+  # latest-Verweise fliegen vorher raus, damit sie keine Datei verdecken.
+  # awk schneidet nur die Inode ab, Leerzeichen im Namen bleiben.
   files=()
   while IFS= read -r f; do
     files+=("$f")
   done < <(ls -1ti backups/*.sql.gz backups/*/*.sql.gz 2>/dev/null \
-    | awk '!seen[$1]++ { print $2 }' | grep -v -- '-latest\.sql\.gz$' || true)
+    | grep -v -- '-latest\.sql\.gz$' \
+    | awk '{ ino = $1; sub(/^ *[0-9]+ /, "") } !seen[ino]++' || true)
   (( ${#files[@]} > 0 )) || die "Es gibt noch keine Sicherung in backups/."
 
   say "Vorhandene Sicherungen, die neueste zuerst:"
@@ -78,6 +80,15 @@ mkdir -p backups
 chmod 700 backups
 
 docker compose up -d --wait db </dev/null || die "Die Datenbank startet nicht. Es wurde nichts geändert. Sieh mit \`docker compose logs db\` nach."
+
+# Fehlt die Datenbank ganz (der Rueckfall eines frueheren Laufs scheiterte nach
+# dem Loeschen), leer anlegen: Es gibt nichts zu verlieren, und pg_dump braucht sie.
+exists="$(docker compose exec -T db psql -U wordquest -d postgres -Atc "select 1 from pg_database where datname = 'wordquest'" </dev/null)" \
+  || die "Die Datenbank ist nicht erreichbar. Es wurde nichts geändert. Sieh mit \`docker compose logs db\` nach."
+if [[ -z "$exists" ]]; then
+  docker compose exec -T db psql -U wordquest -d postgres -q -c 'CREATE DATABASE wordquest OWNER wordquest' </dev/null \
+    || die "Die Datenbank fehlt und ließ sich nicht anlegen. Sieh mit \`docker compose logs db\` nach."
+fi
 
 before="backups/vor-wiederherstellung-$(date +%Y%m%d-%H%M%S).sql.gz"
 backup_now() {
@@ -132,16 +143,21 @@ start_app() {
   return 1
 }
 
+# Strg+C mitten im Einspielen: psql committet den bis dahin gelesenen Teil.
+# Dann darf die API nicht starten, und die Meldung nennt den Weg zurueck.
+trap 'die "Abgebrochen. Die Datenbank ist womöglich unvollständig, die API bleibt gestoppt. Spiele den Stand von vorher wieder ein mit: ./restore.sh $before"' INT TERM
 if ! load_dump "$file"; then
   warn "Das Einspielen von $file ist fehlgeschlagen. Der Stand von vorher wird aus $before zurückgespielt …"
   # Die API darf nicht auf einer leeren Datenbank starten: Sie legte ein neues
   # Schema an, und das saehe wie eine Neuinstallation aus.
   load_dump "$before" \
     || die "Das Einspielen ist fehlgeschlagen, und der vorherige Stand ließ sich nicht zurückspielen. Die API bleibt gestoppt. Deine Daten liegen in $before. Sieh mit \`docker compose logs db\` nach."
+  trap - INT TERM
   start_app \
-    || die "Der vorherige Stand aus $before ist wieder eingespielt, aber die API ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs api\` nach."
+    || die "Das Einspielen von $file ist fehlgeschlagen. Der vorherige Stand aus $before ist wieder eingespielt, aber die API ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs api\` nach."
   die "Das Einspielen von $file ist fehlgeschlagen. Der vorherige Stand aus $before ist wieder eingespielt, WordQuest läuft weiter."
 fi
+trap - INT TERM
 
 say "Starte WordQuest …"
 start_app || die "Die API ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs api\` nach. Der Stand von vorher liegt in $before."

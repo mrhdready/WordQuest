@@ -416,11 +416,14 @@ gzip -t "$newest" || fail "$newest ist kein gueltiges gzip."
 gunzip -c "$newest" | tail -n 5 | grep -q 'PostgreSQL database dump complete' \
   || fail "$newest hat die Endzeile nicht."
 db_admin 'ALTER DATABASE wordquest IS_TEMPLATE false'
-docker compose up -d </dev/null >/dev/null 2>&1
-wait_api
-docker compose restart web </dev/null >/dev/null 2>&1
+# Weg aus der Meldung, schlimmster Fall: Die Datenbank fehlt ganz (DROP gelang,
+# CREATE nicht). restore.sh legt sie leer an, sichert sie und spielt die
+# genannte Datei ein (Seite; Review 03-03 MEDIUM).
+db_admin 'DROP DATABASE wordquest WITH (FORCE)'
+restore_run .smoke/restore-zurueck.log "$newest" < <(printf 'ja\n')
+[[ "$status" == 0 ]] || fail "Weg zurueck mit $newest: restore.sh endete mit Exit $status."
 wait_web
-[[ "$(fingerprint)" == "$fp_before" ]] || fail "Drop-Fehler: Fingerabdruck ungleich vorher."
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "Drop-Fehler: Fingerabdruck nach dem Weg zurueck ungleich vorher."
 
 rm -f backups/kaputt.sql.gz backups/fehlerhaft.sql.gz .smoke/restore-in
 echo "RESTORE-FEHLER OK"
