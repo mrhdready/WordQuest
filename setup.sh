@@ -175,6 +175,6 @@ if [[ -n "$email" ]]; then
 else
   say "Fertig. WordQuest läuft unter: ${url} — Melde dich dort mit deinem Elternkonto an."
 fi
-say "Als Nächstes: Lege unter „Verwalten → Kinder“ das erste Kind an, dann ein Vokabelset."
+say "Als Nächstes: Lege unter „Kinder“ das erste Kind an, dann unter „Vokabeln“ ein Vokabelset."
 say "Tägliche Sicherungen liegen in: $(pwd)/backups"
 

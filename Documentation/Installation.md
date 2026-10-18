@@ -64,7 +64,7 @@ Dann legt es dein Elternkonto an. Am Ende siehst du unter anderem diese Zeilen:
 ✓ API ist bereit.
 ✓ Elternkonto angelegt.
 Fertig. WordQuest läuft unter: <Adresse> — Melde dich dort mit <deine E-Mail-Adresse> und deinem Passwort an.
-Als Nächstes: Lege unter „Verwalten → Kinder“ das erste Kind an, dann ein Vokabelset.
+Als Nächstes: Lege unter „Kinder“ das erste Kind an, dann unter „Vokabeln“ ein Vokabelset.
 Tägliche Sicherungen liegen in: <Ordner>/backups
 ```
 
@@ -92,7 +92,7 @@ Im Ordner `wordquest` sind dabei entstanden:
 
 Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter Lauf von `./setup.sh` lässt Secrets, `.env` und Konto unverändert.
 
-Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“; „Verwalten“ aus der Zeile oben meint diese Bereiche. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
+Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
 
 Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig.
 
