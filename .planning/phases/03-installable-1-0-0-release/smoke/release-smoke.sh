@@ -541,6 +541,109 @@ grep -q '^ *[0-9][0-9]*) backups/vor-update-' .smoke/restore-nach-update.log \
 expect_msg .smoke/restore-nach-update.log 'Eingabe beendet. Es wurde nichts geändert.'
 echo "UPDATE OK"
 
+echo "== Update: Abbruch- und Startfehlerpfade (D-05, Review 03-03 HIGH)"
+cp .env.example .smoke/env-example-orig
+set_target() { sed -e "s|^WQ_VERSION=.*|WQ_VERSION=$1|" .smoke/env-example-orig >.env.example; }
+upd_snapshot() {
+  env_sum="$(shasum .env)"; n_upd="$(backup_count)"; n_spy="$(spy_lines)"
+  api_image="$(image_of api)"; started_before="$(api_started)"; fp_before="$(fingerprint)"
+}
+# Abbruch vor dem Umstellen: .env, laufende api und Daten wie vorher.
+assert_not_switched() {
+  [[ "$status" != 0 ]] || fail "$1: upgrade.sh endete mit Exit 0."
+  [[ "$(shasum .env)" == "$env_sum" ]] || fail "$1: .env geaendert."
+  [[ "$(image_of api)" == "$api_image" ]] || fail "$1: api laeuft mit '$(image_of api)' statt '$api_image'."
+  [[ "$(api_started)" == "$started_before" ]] || fail "$1: api wurde neu gestartet."
+  [[ "$(fingerprint)" == "$fp_before" ]] || fail "$1: Fingerabdruck geaendert."
+}
+# Startfehler: Meldung mit Sicherungsdatei und Weg zurueck. Gibt die Datei aus.
+assert_way_back_named() {
+  local f
+  [[ "$status" != 0 ]] || fail "$2: upgrade.sh endete mit Exit 0."
+  f="$(upd_file "$1")"
+  check_upd_backup "$f"
+  [[ "$(backup_count)" == $((n_upd + 1)) ]] || fail "$2: nicht genau eine neue Sicherung."
+  expect_msg "$1" "Deine Daten von vorher liegen in $f."
+  expect_msg "$1" "./restore.sh $f"
+  upd_way_back="$f"
+}
+
+# Keine Sicherung moeglich: Dann wird nichts geladen und nichts umgestellt.
+upd_snapshot
+chmod 500 backups
+upgrade_run .smoke/upgrade-ohne-sicherung.log spy
+chmod 700 backups
+assert_not_switched "Keine Sicherung"
+expect_msg .smoke/upgrade-ohne-sicherung.log 'Die Sicherung vor dem Update ist fehlgeschlagen. Es wurde nichts geändert.'
+[[ "$(backup_count)" == "$n_upd" ]] || fail "Keine Sicherung: neue Datei vor-update-*."
+[[ "$(spy_lines)" == "$n_spy" ]] || fail "Keine Sicherung: trotzdem geladen ($(tail -n 1 "$SPY_LOG"))."
+echo "Fall keine Sicherung: Exit $status"
+
+# Zielversion fehlt in der Registry: echter Pull ohne Spy. Ohne Netz scheitert
+# das Laden ebenso, der Fall bleibt aussagekraeftig.
+set_target 9.9.9-fehlt
+upd_snapshot
+upgrade_run .smoke/upgrade-fehlt.log
+assert_not_switched "Zielversion fehlt"
+expect_msg .smoke/upgrade-fehlt.log 'Die Version 9.9.9-fehlt ließ sich nicht laden.'
+expect_msg .smoke/upgrade-fehlt.log 'Es wurde nichts geändert.'
+[[ "$(backup_count)" == $((n_upd + 1)) ]] || fail "Zielversion fehlt: nicht genau eine neue Sicherung."
+check_upd_backup "$(upd_file .smoke/upgrade-fehlt.log)"
+docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null \
+  || fail "Zielversion fehlt: API nicht bereit."
+echo "Fall Zielversion fehlt: Exit $status"
+
+# Start scheitert: Der Spy meldet das Laden als gelungen, das Image gibt es
+# aber nicht, also scheitert docker compose up -d.
+set_target 7.7.7-ohne-image
+upd_snapshot
+upgrade_run .smoke/upgrade-start.log spy
+assert_way_back_named .smoke/upgrade-start.log "Start scheitert"
+[[ "$(spy_lines)" == $((n_spy + 1)) && "$(tail -n 1 "$SPY_LOG")" == "ziel=7.7.7-ohne-image env=$EXPECTED_VERSION" ]] \
+  || fail "Start scheitert: Spy-Protokoll ohne Zielversion 7.7.7-ohne-image bei .env $EXPECTED_VERSION: $(tail -n 1 "$SPY_LOG")"
+expect_msg .smoke/upgrade-start.log 'Der Start der Version 7.7.7-ohne-image ist fehlgeschlagen.'
+expect_msg .smoke/upgrade-start.log "Trage in .env WQ_VERSION=$EXPECTED_VERSION ein"
+echo "Fall Start scheitert: Exit $status"
+# Weg zurueck genau wie in der Meldung.
+cp .smoke/env-example-orig .env.example
+set_env WQ_VERSION "$EXPECTED_VERSION"
+restore_run .smoke/upgrade-start-zurueck.log "$upd_way_back" < <(printf 'ja\n')
+[[ "$status" == 0 ]] || fail "Start scheitert, Weg zurueck: restore.sh endete mit Exit $status."
+wait_web
+wait_api
+[[ "$(image_of api)" == "$API_TAG" ]] || fail "Start scheitert, Weg zurueck: api laeuft mit '$(image_of api)'."
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "Start scheitert, Weg zurueck: Fingerabdruck ungleich vorher."
+
+# API wird nicht bereit: Mit WQ_SEED_DEMO_DATA=true in .env bricht die API in
+# Production ab (Program.cs:34-41).
+upd_snapshot
+set_env WQ_SEED_DEMO_DATA true
+t0="$(date +%s)"
+upgrade_run .smoke/upgrade-bereit.log spy
+echo "Fall API nicht bereit: Exit $status nach $(( $(date +%s) - t0 )) s"
+assert_way_back_named .smoke/upgrade-bereit.log "API nicht bereit"
+expect_msg .smoke/upgrade-bereit.log 'Die API ist nach zwei Minuten nicht bereit.'
+docker compose logs api </dev/null >.smoke/api-nicht-bereit.txt 2>&1 || true
+grep -qF 'Start abgebrochen: WQ_SEED_DEMO_DATA' .smoke/api-nicht-bereit.txt \
+  || fail "API nicht bereit: docker compose logs api nennt den Startabbruch nicht."
+# Weg zurueck: Ursache aus dem Log beheben, dann die genannte Sicherung.
+set_env WQ_SEED_DEMO_DATA false
+restore_run .smoke/upgrade-bereit-zurueck.log "$upd_way_back" < <(printf 'ja\n')
+[[ "$status" == 0 ]] || fail "API nicht bereit, Weg zurueck: restore.sh endete mit Exit $status."
+wait_web
+wait_api
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "API nicht bereit, Weg zurueck: Fingerabdruck ungleich vorher."
+code="$(login eltern@example.de geheim-123)"
+[[ "$code" == 200 ]] || fail "API nicht bereit, Weg zurueck: Login HTTP $code statt 200."
+
+# Zweiter Aufruf ohne neue Version: harmlos.
+upd_snapshot
+upgrade_run .smoke/upgrade-nochmal.log spy
+[[ "$status" == 0 ]] || fail "Zweiter Aufruf: upgrade.sh endete mit Exit $status."
+grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail "Zweiter Aufruf: .env ohne WQ_VERSION=$EXPECTED_VERSION."
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "Zweiter Aufruf: Fingerabdruck geaendert."
+echo "UPDATE-ABBRUCH OK"
+
 echo "== Seite gegen den Lauf"
 # Nur bash- und text-Bloecke werden geprueft; ein anderer Block liefe still vorbei.
 other="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { if (open) open = 0; else { open = 1; lang = substr($0, 4); if (lang != "bash" && lang != "text") print NR ": " $0 } }' "$PAGE")"
