@@ -16,113 +16,17 @@ Memory) und der Offline-Betrieb stehen noch aus.
 
 ## Installation
 
-Die CI baut bei jedem Push auf `master` zwei Container-Images und legt sie auf
-der GitHub Container Registry ab:
+Für den Betrieb im Heimnetz auf einem Raspberry Pi 5 oder einem NAS gibt es
+genau eine Anleitung: [`Documentation/Installation.md`](Documentation/Installation.md).
+Sie führt vom leeren Gerät bis zur ersten Anmeldung und hilft bei Problemen.
 
-| Image | Inhalt |
-|---|---|
-| `ghcr.io/<account>/wordquest-api` | ASP.NET-Core-Backend, wendet Migrationen beim Start selbst an |
-| `ghcr.io/<account>/wordquest-web` | nginx mit der gebauten PWA, leitet `/api` ans Backend weiter |
-
-Beide sind für `linux/amd64` und `linux/arm64` gebaut — es läuft also auch auf
-einem Raspberry Pi 5 oder einem ARM-NAS.
-
-> **Einmalig nötig:** Die Pakete stehen nach dem ersten CI-Lauf auf *privat*.
-> Unter **GitHub → dein Profil → Packages → wordquest-api → Package settings →
-> Change visibility → Public** umstellen, für `-web` genauso. Ohne diesen
-> Schritt braucht jeder Zielhost eine Anmeldung mit Token.
-
-### Variante A — Heimnetz (Standard)
-
-Für den Rechner im Heimnetz, auf dem WordQuest laufen soll. Kein Zertifikat,
-keine Domain.
-
-```bash
-git clone https://github.com/<account>/WordQuest.git wordquest
-cd wordquest
-./setup.sh
-```
-
-`setup.sh` fragt genau drei Dinge:
-
-1. das Image-Präfix (`ghcr.io/<account>/wordquest`),
-2. die E-Mail-Adresse für dein Elternkonto,
-3. das Passwort dafür, zweimal, mindestens 8 Zeichen; die Eingabe bleibt unsichtbar.
-
-Dann erzeugt es DB-Passwort und JWT-Schlüssel als Dateien in `secrets/`, legt
-`.env` an (`COMPOSE_FILE=docker-compose.quick.yml`), lädt die Images, startet
-WordQuest und legt das Elternkonto an. Danach läuft die App auf
-**http://<host>:8080**; anmelden kannst du dich nur mit diesem Konto, einen
-Demo-Zugang gibt es nicht. Als Nächstes legst du unter „Verwalten → Kinder“
-das erste Kind mit PIN an und unter „Vokabeln“ ein Set; danach wählt das Kind
-auf der Startseite sein Profil und lernt.
-
-Ein zweiter Lauf von `setup.sh` ändert nichts: Secrets, `.env` und Konto
-bleiben, wie sie sind. Ein anderer Port geht mit `WQ_PORT=9000` in `.env`.
-
-**Was hier fehlt:** Ohne HTTPS lässt sich die App nicht als PWA aufs Tablet
-legen — Service Worker verlangen eine sichere Herkunft (außer auf
-`localhost`). Im Browser funktioniert alles, aber ohne Installation und ohne
-Offlinebetrieb. Wer das braucht, nimmt Variante B.
-
-**Früherer Schnelltest:** Wer WordQuest schon mit der alten Schnelltest-Datei
-gestartet hat, findet dessen Daten im Volume des Compose-Projekts
-`wordquest-quick`. Sie werden nicht übernommen. Werden sie nicht mehr gebraucht:
-`docker compose -p wordquest-quick down -v`.
-
-Der Installer schützt das Verzeichnis `secrets/` mit `0700`. Die einzelnen
-Secret-Dateien erhalten `0644`, damit die Container sie als Non-Root-Benutzer
-über ihre read-only Dateimounts lesen können. Vorhandene Inhalte bleiben erhalten.
-
-Was dabei entsteht und **nicht** ins Repository gehört (steht in `.gitignore`):
-
-```
-secrets/db_password.txt    48 Zeichen Zufall
-secrets/jwt_key.txt        48 Zeichen Zufall, signiert die Tokens
-.env                       Compose-Datei, Image-Präfix, weitere Einstellungen
-backups/                   tägliche pg_dumps, Ordner mit 0700
-```
-
-#### Sicherung
-
-Der Dienst `backup` sichert die Datenbank jeden Tag nach `backups/`
-(`backups/daily/wordquest-<Datum>.sql.gz`) und hebt 14 tägliche, 8 wöchentliche
-und 6 monatliche Stände auf. `setup.sh` legt den Ordner mit `0700` an, denn die
-Dumps enthalten alle Familiendaten samt Passwort-Hashes, und nennt am Ende den
-Pfad. Der Ordner muss auf einem Linux-Dateisystem liegen (z. B. ext4), nicht auf
-einer SMB-Freigabe oder einem exFAT-Stick. Eine Sicherung sofort anstoßen:
-`docker compose exec backup /backup.sh`. Der Sicherungsdienst läuft als root;
-unter Linux gehören die Dumps deshalb root, und alte Stände löschst du mit
-`sudo`. Zurückspielen kommt mit `restore.sh` (Phase 3).
-
-#### Passwort vergessen
-
-Im Installationsverzeichnis:
-
-```bash
-docker compose exec api dotnet WordQuest.Api.dll reset-password <E-Mail>
-```
-
-Der Befehl erzeugt ein neues Passwort und zeigt es **genau einmal** an; es wird
-nirgends im Klartext gespeichert. Damit anmelden und das Passwort danach unter
-„Konto“ ändern. Gibt
-es kein Elternkonto mit dieser Adresse, meldet er das und ändert nichts.
-Angemeldete Geräte können ihre Sitzung danach nicht mehr verlängern. Wer schon
-angemeldet ist, bleibt höchstens bis zum Ablauf des aktuellen Zugangs angemeldet
-(Standard 15 Minuten, `Auth:AccessTokenMinutes`).
-
-#### Wenn die API nicht startet
-
-Fehlt das DB-Passwort oder der JWT-Schlüssel oder ist einer davon ein bekannter
-Standardwert aus diesem Repository, bricht die API den Start ab, zum Beispiel:
-
-```
-Start abgebrochen: WQ_JWT_SIGNING_KEY fehlt oder ist ein bekannter Standardwert. Führe `setup.sh` aus oder trage einen eigenen Wert ein.
-```
-
-`./setup.sh` erzeugt fehlende Secret-Dateien. Das gilt auch für einen selbst
-gesetzten `ConnectionStrings__Default`: Dessen Passwort wird genauso geprüft.
-Nur mit `ASPNETCORE_ENVIRONMENT=Development` (Variante C) entfällt die Prüfung.
+**Für Entwickler und Forks:** Die CI baut bei jedem Push auf `master` und bei
+jedem Tag `v*` die Images `ghcr.io/<account>/wordquest-api` und `-web` für
+`linux/amd64` und `linux/arm64` und legt sie auf der GitHub Container Registry
+ab. Die Installation zieht eine feste Version (`WQ_VERSION` in `.env.example`)
+vom Präfix `ghcr.io/mrhdready/wordquest`. Wer eigene Images baut, stellt seine
+Pakete unter **GitHub → Profil → Packages → Package settings → Change
+visibility** auf *Public* und gibt bei `setup.sh` das eigene Präfix an.
 
 ### Variante B — Mit Domain und TLS (für Fortgeschrittene)
 

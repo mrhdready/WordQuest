@@ -32,6 +32,8 @@ fail() { echo "RELEASE-SMOKE FEHLER: $*" >&2; exit 1; }
 CLEANUP_TAGS=""
 
 cleanup() {
+  # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
+  (cd "$WORK" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) || true
   (cd "$WORK" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) || true
   for tag in $CLEANUP_TAGS; do
     if docker image inspect "$tag" >/dev/null 2>&1; then
@@ -87,7 +89,9 @@ docker compose build api web </dev/null
 AUTH_FILE="$WORK/.smoke/auth-budget"
 auth_budget() {
   local started saved="" count=0
-  started="$(docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q api </dev/null)")"
+  started="$(docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q api </dev/null)")" || true
+  # In $(login ...) greift set -e nicht; ein leerer Wert setzte den Zaehler still zurueck.
+  [[ -n "$started" ]] || fail "Startzeit des api-Containers nicht lesbar; das Anmelde-Limit laesst sich nicht zaehlen."
   if [[ -f "$AUTH_FILE" ]]; then read -r saved count <"$AUTH_FILE"; fi
   [[ "$started" == "$saved" ]] || count=0
   count=$((count + $1))
@@ -104,8 +108,36 @@ login() {
     "http://localhost:${WQ_PORT}/api/v1/auth/login"
 }
 
+# Seitenabgleich (REL-03, D-10): Jeder Befehl der Installationsseite laeuft hier
+# oder steht mit Grund in HANDGRIFFE; jede zitierte Ausgabe kommt in einem Log vor.
+PAGE=Documentation/Installation.md
+# Zeilen aus den Codebloecken einer Sprache (bash oder text), ohne Einrueckung.
+page_lines() {
+  awk -v lang="$1" '{ sub(/^[ \t]+/, "") }
+    /^```/ { if (open) open = 0; else { open = 1; cur = substr($0, 4) } next }
+    open && cur == lang' "$PAGE"
+}
+# Vor jedem Seitenschritt, den der Smoke ausfuehrt: Die Zeile muss woertlich in
+# einem bash-Block der Seite stehen.
+page_cmd() {
+  [[ -f "$PAGE" ]] || fail "Die Installationsseite $PAGE fehlt."
+  grep -Fxq -- "$1" <(page_lines bash) || fail "Seitenbefehl steht nicht auf $PAGE: $1"
+  printf '%s\n' "$1" >>.smoke/page-cmds
+}
+# Befehle der Seite, die der Smoke nicht ausfuehrt: "Befehl — Grund", je eine Zeile.
+HANDGRIFFE='sudo apt install git — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat git
+sudo usermod -aG docker $USER — Gruppe docker, wirkt erst nach neuer Anmeldung
+git clone https://github.com/mrhdready/WordQuest.git wordquest — der Smoke arbeitet in einer Arbeitskopie des Arbeitsbaums
+cd wordquest — Ordnerwechsel nach dem Klonen; der Smoke steht schon in der Arbeitskopie
+docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D-06)
+sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
+docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.de — belegt in setup-smoke.sh (RESET OK)
+docker compose logs api — nur Ansehen im Fehlerfall; die Startabbrueche belegt setup-smoke.sh (STARTABBRUCH OK)
+hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht'
+
 echo "== Installation"
 # Grossbuchstaben im Praefix werden abgelehnt, danach uebernimmt Enter den Standard.
+page_cmd './setup.sh'
 printf '%s\n' 'GHCR.io/X' '' eltern@example.de geheim-123 geheim-123 \
   | ./setup.sh 2>&1 | tee .smoke/install.log
 grep -qF 'Das Image-Präfix besteht aus' .smoke/install.log || fail "Kein Hinweis auf ein ungueltiges Image-Praefix."
@@ -123,5 +155,44 @@ running="$(docker inspect -f '{{.Config.Image}}' "$(docker compose ps -q web </d
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "Login mit dem neuen Elternkonto: HTTP $code statt 200."
 echo "INSTALL OK"
+
+echo "== Weitere Seitenschritte"
+page_cmd 'docker compose version'
+docker compose version </dev/null >.smoke/compose-version.log
+page_cmd 'docker compose ps'
+docker compose ps </dev/null >.smoke/compose-ps.log
+for service in api backup db web; do
+  grep -E "[[:space:]]${service}[[:space:]]" .smoke/compose-ps.log | grep -q 'Up' \
+    || fail "docker compose ps zeigt den Dienst $service nicht mit Up."
+done
+page_cmd 'docker compose exec backup /backup.sh'
+# -T: Der Smoke hat kein Terminal.
+docker compose exec -T backup /backup.sh </dev/null >.smoke/backup.log 2>&1 \
+  || fail "Sofortige Sicherung fehlgeschlagen."
+dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1 || true)"
+[[ -n "$dump" ]] || fail "Keine Datei backups/daily/wordquest-*.sql.gz nach der Sicherung."
+gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
+
+echo "== Seite gegen den Lauf"
+# Nur bash- und text-Bloecke werden geprueft; ein anderer Block liefe still vorbei.
+other="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { if (open) open = 0; else { open = 1; lang = substr($0, 4); if (lang != "bash" && lang != "text") print NR ": " $0 } }' "$PAGE")"
+[[ -z "$other" ]] || fail "Codeblock ohne Sprache bash oder text auf $PAGE, Zeile $other"
+checked=0
+printf '%s\n' "$HANDGRIFFE" | sed 's/ — .*//' >.smoke/handgriffe
+while IFS= read -r line; do
+  [[ -z "$line" || "$line" == \#* ]] && continue
+  grep -Fxq -- "$line" .smoke/page-cmds .smoke/handgriffe || fail "Seitenbefehl ohne Beleg: $line"
+  checked=$((checked + 1))
+done < <(page_lines bash)
+[[ "$checked" -gt 0 ]] || fail "Keine Befehlszeile auf $PAGE gefunden; der Abgleich liefe leer."
+checked=0
+# Zitierte Ausgaben: Veraenderliche Teile stehen in spitzen Klammern; jedes feste
+# Stueck ab 6 Zeichen muss in einem Log dieses Laufs vorkommen.
+while IFS= read -r piece; do
+  grep -Fq -- "$piece" .smoke/*.log || fail "Seitenausgabe nicht beobachtet: $piece"
+  checked=$((checked + 1))
+done < <(page_lines text | awk '{ gsub(/<[^>]*>/, "\n"); print }' | awk 'length($0) >= 6')
+[[ "$checked" -gt 0 ]] || fail "Keine zitierte Ausgabe auf $PAGE gefunden; der Abgleich liefe leer."
+echo "SEITE OK"
 
 echo "RELEASE-SMOKE OK"
