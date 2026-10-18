@@ -430,6 +430,117 @@ wait_web
 rm -f backups/kaputt.sql.gz backups/fehlerhaft.sql.gz .smoke/restore-in
 echo "RESTORE-FEHLER OK"
 
+echo "== Update (REL-01)"
+# Ab hier ohne Build-Overlay: Sonst gelten api und web als baubar, und
+# pull --ignore-buildable uebersprange sie (Review 03-03 MEDIUM).
+export COMPOSE_FILE=docker-compose.quick.yml
+# Aeltere Version: dieselben Images unter einem zweiten Namen. Veroeffentlichte
+# Images gibt es noch nicht; die Zielversion 1.0.0 stammt aus dem Build oben.
+OLD_VERSION=0.0.0-smoke
+OLD_API_TAG="${EXPECTED_PREFIX}-api:${OLD_VERSION}"
+OLD_WEB_TAG="${EXPECTED_PREFIX}-web:${OLD_VERSION}"
+for tag in "$OLD_API_TAG" "$OLD_WEB_TAG"; do
+  if docker image inspect "$tag" >/dev/null 2>&1; then
+    fail "Das Image $tag gibt es lokal schon; der Smoke wuerde es ueberdecken und am Ende loeschen. Entferne es vorher selbst mit: docker image rm $tag"
+  fi
+done
+CLEANUP_TAGS="$CLEANUP_TAGS $OLD_API_TAG $OLD_WEB_TAG"
+docker tag "$API_TAG" "$OLD_API_TAG"
+docker tag "$WEB_TAG" "$OLD_WEB_TAG"
+
+# .env aendern wie setup.sh: temporaere Datei statt sed -i (BSD/GNU).
+set_env() {
+  if grep -q "^$1=" .env; then
+    sed -e "s|^$1=.*|$1=$2|" .env >.env.tmp && mv .env.tmp .env
+  else
+    printf '%s=%s\n' "$1" "$2" >>.env
+  fi
+}
+image_of() { docker inspect -f '{{.Config.Image}}' "$(docker compose ps -q "$1" </dev/null)"; }
+backup_count() { ls backups/vor-update-*.sql.gz 2>/dev/null | grep -c . || true; }
+# Die Sicherung aus der Ausgabe von upgrade.sh, nicht aus ls.
+upd_file() { grep -o 'backups/vor-update-[0-9-]*\.sql\.gz' "$1" | tail -n 1 || true; }
+# Sicherung vor dem Update: vorhanden, vollstaendig, mit dem Lernstand.
+check_upd_backup() {
+  [[ -n "$1" && -f "$1" ]] || fail "Die Sicherung '$1' aus der Ausgabe von upgrade.sh gibt es nicht."
+  gzip -t "$1" || fail "$1 ist kein gueltiges gzip."
+  gunzip -c "$1" | tail -n 5 | grep -q 'PostgreSQL database dump complete' || fail "$1 hat die Endzeile nicht."
+  [[ "$(gunzip -c "$1" | grep -c 'Erstes Kind' || true)" -gt 0 ]] || fail "$1 enthaelt 'Erstes Kind' nicht."
+}
+
+set_env WQ_VERSION "$OLD_VERSION"
+docker compose up -d </dev/null
+wait_api
+wait_web
+[[ "$(image_of api)" == "$OLD_API_TAG" ]] || fail "api laeuft vor dem Update mit '$(image_of api)' statt '$OLD_API_TAG'."
+for table in learner_profile vocabulary_entry review_log; do
+  [[ "$(count_rows "$table")" -ge 1 ]] || fail "Vor dem Update ist $table leer."
+done
+fp_f0="$(fingerprint)"
+
+# Pull-Spy (Review 03-03 MEDIUM): Ein docker vorn im PATH protokolliert bei
+# "docker compose pull" die Zielversion aus der Umgebung und den Stand der .env
+# und meldet Erfolg; alles andere geht an das echte docker. Nur aktiv mit
+# WQ_SPY_PULL=ok, also nur fuer die Aufrufe von upgrade.sh mit Spy.
+SPY_DIR="$WORK/.smoke/spy"
+SPY_LOG="$WORK/.smoke/spy-pull"
+REAL_DOCKER="$(command -v docker)"
+mkdir "$SPY_DIR"
+: >"$SPY_LOG"
+cat >"$SPY_DIR/docker" <<EOF
+#!/usr/bin/env bash
+if [[ "\${WQ_SPY_PULL:-}" == ok && "\${1:-}" == compose && "\${2:-}" == pull ]]; then
+  printf 'ziel=%s env=%s\n' "\${WQ_VERSION:-}" "\$(sed -n 's/^WQ_VERSION=//p' .env | tail -n 1)" >>"$SPY_LOG"
+  exit 0
+fi
+exec "$REAL_DOCKER" "\$@"
+EOF
+chmod +x "$SPY_DIR/docker"
+spy_lines() { grep -c . "$SPY_LOG" || true; }
+# upgrade.sh ohne Eingabe, mit Spy, wenn $2 = spy. Exit-Code in $status, wie restore_run.
+upgrade_run() {
+  status=0
+  if [[ "${2:-}" == spy ]]; then
+    PATH="$SPY_DIR:$PATH" WQ_SPY_PULL=ok ./upgrade.sh </dev/null >"$1" 2>&1 || status=$?
+  else
+    ./upgrade.sh </dev/null >"$1" 2>&1 || status=$?
+  fi
+  cat "$1"
+}
+
+[[ -x upgrade.sh ]] || fail "upgrade.sh fehlt oder ist nicht ausfuehrbar."
+[[ "$(backup_count)" == 0 ]] || fail "Vor dem Update gibt es schon eine Sicherung vor-update-*."
+upgrade_run .smoke/upgrade.log spy
+[[ "$status" == 0 ]] || fail "upgrade.sh endete mit Exit $status."
+expect_msg .smoke/upgrade.log '✓ Sicherung geprüft:'
+upd="$(upd_file .smoke/upgrade.log)"
+last="$(tail -n 1 .smoke/upgrade.log | tr -d '\033' | sed 's/\[[0-9;]*m//g')"
+[[ "$last" == "Fertig. WordQuest läuft jetzt mit Version $EXPECTED_VERSION. Die Sicherung von vorher liegt in $upd." ]] \
+  || fail "Letzte Zeile von upgrade.sh: $last"
+echo "Spy-Protokoll: $(cat "$SPY_LOG")"
+[[ "$(cat "$SPY_LOG")" == "ziel=$EXPECTED_VERSION env=$OLD_VERSION" ]] \
+  || fail "Spy-Protokoll nicht genau eine Zeile mit Zielversion $EXPECTED_VERSION bei .env $OLD_VERSION: $(cat "$SPY_LOG")"
+[[ "$(backup_count)" == 1 ]] || fail "Nicht genau eine Sicherung vor-update-*."
+check_upd_backup "$upd"
+grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail ".env enthaelt nach dem Update nicht WQ_VERSION=$EXPECTED_VERSION."
+[[ "$(image_of api)" == "$API_TAG" ]] || fail "api laeuft nach dem Update mit '$(image_of api)' statt '$API_TAG'."
+[[ "$(image_of web)" == "$WEB_TAG" ]] || fail "web laeuft nach dem Update mit '$(image_of web)' statt '$WEB_TAG'."
+docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null \
+  || fail "API nach upgrade.sh nicht bereit."
+# Vor jeder Anmeldung: Kinder, Sets und Lernstand unveraendert.
+[[ "$(fingerprint)" == "$fp_f0" ]] || fail "Fingerabdruck nach dem Update ungleich vorher."
+wait_web
+token
+code="$(learners)"
+[[ "$code" == 200 ]] && grep -qF '"displayName":"Erstes Kind"' .smoke/learners.json \
+  || fail "Erstes Kind nach dem Update nicht da (HTTP $code)."
+# Die Sicherung steht in der Liste von restore.sh (D-07).
+restore_run .smoke/restore-nach-update.log </dev/null
+grep -q '^ *[0-9][0-9]*) backups/vor-update-' .smoke/restore-nach-update.log \
+  || fail "Die Sicherung vor dem Update fehlt in der Liste von restore.sh."
+expect_msg .smoke/restore-nach-update.log 'Eingabe beendet. Es wurde nichts geändert.'
+echo "UPDATE OK"
+
 echo "== Seite gegen den Lauf"
 # Nur bash- und text-Bloecke werden geprueft; ein anderer Block liefe still vorbei.
 other="$(awk '{ sub(/^[ \t]+/, "") } /^```/ { if (open) open = 0; else { open = 1; lang = substr($0, 4); if (lang != "bash" && lang != "text") print NR ": " $0 } }' "$PAGE")"
