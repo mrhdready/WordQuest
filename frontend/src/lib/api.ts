@@ -4,6 +4,10 @@ const BASE = '/api/v1'
 const ACCESS_KEY = 'wq.access'
 const REFRESH_KEY = 'wq.refresh'
 const USER_KEY = 'wq.user'
+// Kennung einer Anmeldung: bleibt bei der Rotation, neu bei jeder Anmeldung.
+const SESSION_KEY = 'wq.session'
+// Laufzeit-Cache des Service Workers, gleicher Name wie cacheName in vite.config.ts.
+const API_CACHE = 'wq-api'
 // Eigenes Fenster-Ereignis nach jedem Schreiben; das storage-Ereignis meldet nur andere Tabs.
 const SESSION_EVENT = 'wq-session'
 
@@ -46,14 +50,26 @@ export const tokenStore = {
   get rawUser() {
     return safeRead(USER_KEY)
   },
+  get session() {
+    return safeRead(SESSION_KEY)
+  },
   save(auth: AuthResponse) {
     safeWrite(ACCESS_KEY, auth.accessToken)
     safeWrite(REFRESH_KEY, auth.refreshToken)
     safeWrite(USER_KEY, JSON.stringify(auth.user))
     window.dispatchEvent(new Event(SESSION_EVENT))
   },
+  // Neue Anmeldung: Workbox schreibt Netzantworten im Hintergrund in den Cache;
+  // ein GET, der beim Abmelden noch lief, kann ihn neu anlegen. Deshalb loescht
+  // auch die naechste Anmeldung, bevor sie speichert (Review 02 MEDIUM).
+  async saveLogin(auth: AuthResponse) {
+    await dropApiCache()
+    // Kein Geheimnis, nur ein Vergleichswert; crypto.randomUUID fehlt ohne HTTPS.
+    safeWrite(SESSION_KEY, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`)
+    tokenStore.save(auth)
+  },
   clear() {
-    for (const key of [ACCESS_KEY, REFRESH_KEY, USER_KEY]) {
+    for (const key of [ACCESS_KEY, REFRESH_KEY, USER_KEY, SESSION_KEY]) {
       try {
         localStorage.removeItem(key)
       } catch {
@@ -61,6 +77,7 @@ export const tokenStore = {
       }
     }
     window.dispatchEvent(new Event(SESSION_EVENT))
+    void dropApiCache()
   },
   // Die Oberflaeche folgt dem Speicher, auch wenn ein anderer Tab oder ein
   // gescheiterter Refresh ihn aendert (D-07).
@@ -72,6 +89,12 @@ export const tokenStore = {
       window.removeEventListener('storage', listener)
     }
   },
+}
+
+// Ohne HTTPS gibt es weder Service Worker noch caches; dann passiert nichts (D-15).
+async function dropApiCache() {
+  if (typeof caches === 'undefined') return
+  await caches.delete(API_CACHE).catch(() => false)
 }
 
 function safeRead(key: string): string | null {
@@ -117,13 +140,18 @@ async function refreshAccessToken(): Promise<boolean> {
       // Serverausfall ist kein Grund, ein Kind abzumelden, und das detail der
       // urspruenglichen 401-Antwort beschreibt den eigentlichen Fehler nicht;
       // der Fehler geht ueber refreshInFlight an alle wartenden Aufrufer (FIX-01).
+      // Die Generation ist der gespeicherte Token selbst: Eine Antwort, die nach
+      // Abmelden, neuer Anmeldung oder einer Rotation in einem anderen Tab
+      // eintrifft, aendert nichts (D-05, D-06).
       if (response.status === 400 || response.status === 401) {
-        tokenStore.clear()
+        if (tokenStore.refresh === refreshToken) tokenStore.clear()
         return false
       }
       if (!response.ok) throw new ApiError(GENERIC, response.status)
 
-      tokenStore.save((await response.json()) as AuthResponse)
+      const auth = (await response.json()) as AuthResponse
+      if (tokenStore.refresh !== refreshToken) return false
+      tokenStore.save(auth)
       return true
     } finally {
       refreshInFlight = null

@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: 'POST',
       body: { email, password },
     })
-    tokenStore.save(auth)
+    await tokenStore.saveLogin(auth)
   }, [])
 
   const loginAsLearner = useCallback(async (learnerId: string, pin: string) => {
@@ -31,17 +31,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: 'POST',
       body: { learnerId, pin },
     })
-    tokenStore.save(auth)
+    await tokenStore.saveLogin(auth)
   }, [])
 
   const logout = useCallback(async () => {
     const refreshToken = tokenStore.refresh
+    // Lokal zuerst: Eine noch laufende Refresh-Antwort findet dann einen
+    // geaenderten Speicher vor und wird verworfen; den Nachfolger auf dem
+    // Server widerruft das Abmelden (03.1-01).
+    tokenStore.clear()
     if (refreshToken) {
       // Abmelden darf nie daran scheitern, dass der Server gerade nicht
-      // erreichbar ist - lokal wird der Zugang in jedem Fall geloescht.
+      // erreichbar ist - lokal ist der Zugang schon geloescht.
       await api('/auth/logout', { method: 'POST', body: { refreshToken } }).catch(() => undefined)
     }
-    tokenStore.clear()
   }, [])
 
   const value = useMemo<AuthContextValue>(
