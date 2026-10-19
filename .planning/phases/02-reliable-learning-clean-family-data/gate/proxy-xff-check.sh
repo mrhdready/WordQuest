@@ -5,7 +5,9 @@
 #     Absenders, ein gefaelschter Kopf kommt nicht an.
 #   Traefik-Stack: zusaetzlich frontend/nginx-traefik-realip.conf; die API sieht
 #     genau den letzten Wert (den von Traefik), ein vorangestellter kommt nicht an.
-# Dazu die Einbindung in docker-compose.yml und ein unveraendertes docker-compose.quick.yml.
+# Dazu die Sicherheits-Header beider Varianten an jedem Pfad, auch an Fehlerantworten
+# (D-12, D-21), die Einbindung in docker-compose.yml und ein unveraendertes
+# docker-compose.quick.yml.
 #
 # Aufruf (aus dem Repo-Root):
 #   bash .planning/phases/02-reliable-learning-clean-family-data/gate/proxy-xff-check.sh
@@ -36,10 +38,23 @@ server {
         default_type text/plain;
         return 200 "$http_x_forwarded_for";
     }
+    # Fehlerantwort des Upstreams fuer die Header-Pruefung.
+    location = /api/fehlt {
+        return 404;
+    }
 }
 EOF
 chmod 755 "$TMP"
 chmod 644 "$TMP/echo.conf"
+
+# Eigene Web-Wurzel: BusyBox-wget zeigt bei 404 keine Koepfe, deshalb muessen
+# die Erfolgsfaelle der Header-Pruefung 200 liefern.
+mkdir -p "$TMP/html/assets"
+echo '<!doctype html><title>WordQuest</title>' >"$TMP/html/index.html"
+echo '// sw' >"$TMP/html/sw.js"
+echo '// app' >"$TMP/html/assets/app.js"
+chmod 755 "$TMP/html" "$TMP/html/assets"
+chmod 644 "$TMP/html/index.html" "$TMP/html/sw.js" "$TMP/html/assets/app.js"
 
 docker network create "$NET" >/dev/null
 docker run -d --name "$NET-api" --network "$NET" --network-alias api \
@@ -71,6 +86,7 @@ wait_ready "$NET-api"
 echo "== Heimnetz-Variante (frontend/nginx.conf)"
 docker run -d --name "$NET-home" --network "$NET" \
   --mount "type=bind,src=$ROOT/frontend/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly" \
+  --mount "type=bind,src=$TMP/html,dst=/usr/share/nginx/html,readonly" \
   "$IMAGE" >/dev/null
 wait_ready "$NET-home"
 out="$(send "$NET-home" '203.0.113.9')"
@@ -92,6 +108,7 @@ echo "== Traefik-Variante (zusaetzlich frontend/nginx-traefik-realip.conf)"
 docker run -d --name "$NET-traefik" --network "$NET" \
   --mount "type=bind,src=$ROOT/frontend/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly" \
   --mount "type=bind,src=$ROOT/frontend/nginx-traefik-realip.conf,dst=/etc/nginx/conf.d/realip.conf,readonly" \
+  --mount "type=bind,src=$TMP/html,dst=/usr/share/nginx/html,readonly" \
   "$IMAGE" >/dev/null
 wait_ready "$NET-traefik"
 # Der Absender steht an Stelle von Traefik; 203.0.113.9 hat das Geraet vorangestellt.
@@ -107,6 +124,31 @@ seen="$(sed -n 2p <<<"$out")"
 [[ "$seen" == "192.168.178.20" ]] \
   || fail "Traefik: bei privater Geraeteadresse sieht die API '$seen' statt genau 192.168.178.20."
 echo "Traefik (private Geraeteadresse): die API sieht $seen"
+
+echo "== Sicherheits-Header (D-12, D-21)"
+# Prueft je Pfad die Koepfe der Antwort von Container $1 (Variante $2).
+check_headers() {
+  local path resp
+  for path in / /verwalten /index.html /assets/app.js /sw.js; do
+    resp="$(docker exec "$1" wget -S -O /dev/null "http://127.0.0.1:8080$path" 2>&1)" \
+      || fail "$2 $path: keine erfolgreiche Antwort."
+    grep -q 'Content-Security-Policy: ' <<<"$resp" || fail "$2 $path: Content-Security-Policy fehlt."
+    grep -q 'X-Frame-Options: DENY' <<<"$resp" || fail "$2 $path: X-Frame-Options: DENY fehlt."
+  done
+  # Fehlerantworten roh per BusyBox-nc, weil wget bei 404 keine Koepfe zeigt:
+  # fehlendes Asset (nginx selbst) und 404 des Upstreams.
+  for path in /assets/gibt-es-nicht.js /api/fehlt; do
+    resp="$(docker exec "$1" sh -c "printf 'GET $path HTTP/1.0\r\nHost: localhost\r\n\r\n' | nc 127.0.0.1 8080")" \
+      || fail "$2 $path: keine Antwort."
+    resp="$(tr -d '\r' <<<"$resp")"
+    sed -n 1p <<<"$resp" | grep -q ' 404 ' || fail "$2 $path: Status ist nicht 404."
+    grep -q 'Content-Security-Policy: ' <<<"$resp" || fail "$2 $path (404): Content-Security-Policy fehlt."
+    grep -q 'X-Frame-Options: DENY' <<<"$resp" || fail "$2 $path (404): X-Frame-Options: DENY fehlt."
+  done
+  echo "$2: Sicherheits-Header an allen Pfaden, auch an 404"
+}
+check_headers "$NET-home" Heimnetz
+check_headers "$NET-traefik" Traefik
 
 echo "== Einbindung in den Compose-Dateien"
 config="$(docker compose -f docker-compose.yml config 2>/dev/null)" \
