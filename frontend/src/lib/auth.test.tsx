@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from '@/App'
@@ -78,10 +79,20 @@ describe('Sitzungsende zeigt die Anmeldung', () => {
 // Pruefkomponente am echten AuthProvider: zeigt den Nutzer und loest Anfragen aus.
 function Probe() {
   const { user, logout, loginAsGuardian } = useAuth()
+  const [loaded, setLoaded] = useState(false)
   return (
     <>
       <p>{user?.displayName ?? 'abgemeldet'}</p>
-      <button onClick={() => void api('/probe').catch(() => undefined)}>Laden</button>
+      {loaded ? <p>geladen</p> : null}
+      <button
+        onClick={() =>
+          void api('/probe')
+            .catch(() => undefined)
+            .finally(() => setLoaded(true))
+        }
+      >
+        Laden
+      </button>
       <button onClick={() => void logout()}>Abmelden</button>
       <button
         onClick={() => void loginAsGuardian('mama@example.org', 'geheim12345').catch(() => undefined)}
@@ -127,9 +138,8 @@ describe('Abmelden ist endgueltig', () => {
     )
     answerRefresh(new Response(JSON.stringify(rotated), { status: 200 }))
 
-    expect(await screen.findByText('abgemeldet')).toBeTruthy()
-    // Antwort sicher verarbeitet: danach erst den Speicher pruefen.
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Erst wenn die Anfrage samt Refresh-Antwort fertig ist, den Speicher pruefen.
+    expect(await screen.findByText('geladen')).toBeTruthy()
     expect(tokenStore.refresh).toBeNull()
     expect(tokenStore.access).toBeNull()
     expect(tokenStore.rawUser).toBeNull()

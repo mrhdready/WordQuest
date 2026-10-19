@@ -297,6 +297,29 @@ describe('Zwei Tabs', () => {
     expect(tokenStore.access).toBeNull()
   })
 
+  // Hintergrund-Tabs drosseln Timer: Die Frist misst Zeit, nicht Durchlaeufe (Review LOW 1).
+  it('409 ohne Nachfolger: Frist nach Uhrzeit, auch bei gedrosselten Timern', async () => {
+    vi.useFakeTimers()
+    await tokenStore.saveLogin(first)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/auth/refresh') ? new Response('', { status: 409 }) : unauthorized(),
+      ),
+    )
+    const pending = api('/probe').catch((error: unknown) => error)
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      vi.setSystemTime(Date.now() + 3_000)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(tokenStore.refresh).toBeNull()
+    } finally {
+      // Wartende Schleife auch im Fehlerfall beenden, sonst haengt refreshInFlight.
+      await vi.advanceTimersByTimeAsync(3_000)
+    }
+    expect(await pending).toBeInstanceOf(ApiError)
+  })
+
   it('mehrere verspätete 401er nach einer Rotation: genau ein Refresh', async () => {
     await tokenStore.saveLogin(first)
     const late: ((response: Response) => void)[] = []
