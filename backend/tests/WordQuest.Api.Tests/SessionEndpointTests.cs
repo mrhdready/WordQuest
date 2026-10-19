@@ -680,4 +680,86 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
 
         Assert.DoesNotContain(session.Items, i => InSet(b, i));
     }
+
+    private async Task MoveStartAsync(Guid sessionId, TimeSpan back)
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        await db.LearningSessions
+            .Where(s => s.Id == sessionId)
+            .ExecuteUpdateAsync(u => u.SetProperty(s => s.StartedAt, s => s.StartedAt - back));
+    }
+
+    // Codex-Befund 7, D-09, D-18: Neue Woerter einer offenen, unbeantworteten
+    // Runde, die vor hoechstens 30 Minuten gestartet wurde, zaehlen beim
+    // naechsten Start gegen das Tageslimit.
+    [Theory]
+    [InlineData(false, 0, 0)]
+    [InlineData(true, 0, 5)]
+    [InlineData(false, 31, 5)]
+    [InlineData(false, 29, 0)]
+    public async Task Offene_Runde_reserviert_neue_Woerter_fuer_30_Minuten(
+        bool completeFirst, int minutesAgo, int expectedFromB)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet a = await SeedSetAsync(_factory, family);
+        SeededSet b = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView first = await StartAsync(child, family.Child.Id, a.Set.Id);
+        Assert.Equal(5, first.Items.Count);
+        if (completeFirst)
+        {
+            Assert.Equal(HttpStatusCode.OK, (await child.PostAsync($"{Sessions}/{first.SessionId}/complete", null)).StatusCode);
+        }
+
+        if (minutesAgo > 0)
+        {
+            await MoveStartAsync(first.SessionId, TimeSpan.FromMinutes(minutesAgo));
+        }
+
+        SessionView second = await StartAsync(child, family.Child.Id, b.Set.Id);
+
+        Assert.Equal(expectedFromB, second.Items.Count(i => InSet(b, i)));
+    }
+
+    // Review 03 LOW: Beantwortete Karten zaehlen ueber ihre Antwort, nur die
+    // unbeantworteten bleiben reserviert. 2 verbraucht + 2 reserviert = 2 frei.
+    [Fact]
+    public async Task Teilantworten_geben_ihre_Reservierung_frei()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory, dailyNewLimit: 6);
+        SeededSet a = await SeedSetAsync(_factory, family, entries: 2);
+        SeededSet b = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView first = await StartAsync(child, family.Child.Id, a.Set.Id);
+        Assert.Equal(4, first.Items.Count);
+        foreach (SessionItemView item in first.Items.Take(2))
+        {
+            await ReadAnswerAsync(await AnswerAsync(child, first.SessionId, item.ItemId, a.AnswerFor(item.Prompt)));
+        }
+
+        SessionView second = await StartAsync(child, family.Child.Id, b.Set.Id);
+
+        Assert.Equal(2, second.Items.Count(i => InSet(b, i)));
+    }
+
+    // Review 03 LOW: Dieselbe Karte in zwei offenen Runden ist einmal reserviert.
+    [Fact]
+    public async Task Karte_in_zwei_offenen_Runden_zaehlt_einmal()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet a = await SeedSetAsync(_factory, family, entries: 1);
+        SeededSet b = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView first = await StartAsync(child, family.Child.Id, a.Set.Id);
+        SessionView again = await StartAsync(child, family.Child.Id, a.Set.Id);
+        Assert.Equal(2, first.Items.Count);
+        Assert.Equal(first.Items.Select(i => i.CardId).Order(), again.Items.Select(i => i.CardId).Order());
+
+        SessionView second = await StartAsync(child, family.Child.Id, b.Set.Id);
+
+        Assert.Equal(3, second.Items.Count(i => InSet(b, i)));
+    }
 }
