@@ -615,4 +615,69 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
 
         Assert.Equal(deleteChild ? SessionGone : CardGone, await DetailAsync(await answer, HttpStatusCode.NotFound));
     }
+
+    // ------------------------------------------------------------ HARD-02
+
+    private static bool InSet(SeededSet set, SessionItemView item) =>
+        set.Cards.Any(c => c.Id == item.CardId);
+
+    // Codex-Befund 6, D-08: Set A hat eine faellige Wiederholung und eine Karte im
+    // Neulernen, Set B nur neue Woerter.
+    private async Task<(SeededFamily Family, SeededSet A, SeededSet B)> SeedDueInSetAAsync()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet a = await SeedSetAsync(_factory, family, entries: 1);
+        SeededSet b = await SeedSetAsync(_factory, family);
+        DateTimeOffset past = DateTimeOffset.UtcNow.AddDays(-2);
+        await SeedStateAsync(family.Child, a.Cards[0].Id, ReviewCardState.Review, past, past);
+        await SeedStateAsync(family.Child, a.Cards[1].Id, ReviewCardState.Relearning, past, past);
+        return (family, a, b);
+    }
+
+    [Fact]
+    public async Task Set_Wahl_laesst_faellige_Karten_anderer_Sets_weg()
+    {
+        (SeededFamily family, SeededSet a, SeededSet b) = await SeedDueInSetAAsync();
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView session = await StartAsync(child, family.Child.Id, b.Set.Id);
+
+        Assert.DoesNotContain(session.Items, i => InSet(a, i));
+        Assert.Equal(5, session.Items.Count(i => InSet(b, i)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Faellige_Karten_kommen_mit_ihrem_Set_und_ohne_Set(bool withSet)
+    {
+        (SeededFamily family, SeededSet a, _) = await SeedDueInSetAAsync();
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView session = await StartAsync(child, family.Child.Id, withSet ? a.Set.Id : null);
+
+        Assert.Contains(session.Items, i => i.CardId == a.Cards[0].Id);
+        Assert.Contains(session.Items, i => i.CardId == a.Cards[1].Id);
+    }
+
+    // Absicherung (D-19): Die Rueckstandsbremse zaehlt alle faelligen Karten des
+    // Kindes. Wer in Set A 16 Karten offen hat, bekommt auch in Set B keine neuen.
+    [Fact]
+    public async Task Rueckstand_in_einem_Set_bremst_neue_Woerter_in_jedem_Set()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet a = await SeedSetAsync(_factory, family, entries: 8);
+        SeededSet b = await SeedSetAsync(_factory, family);
+        DateTimeOffset past = DateTimeOffset.UtcNow.AddDays(-2);
+        foreach (Card card in a.Cards)
+        {
+            await SeedStateAsync(family.Child, card.Id, ReviewCardState.Review, past, past);
+        }
+
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView session = await StartAsync(child, family.Child.Id, b.Set.Id);
+
+        Assert.DoesNotContain(session.Items, i => InSet(b, i));
+    }
 }
