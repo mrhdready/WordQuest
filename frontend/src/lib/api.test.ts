@@ -223,3 +223,218 @@ describe('Refresh-Fehler und anderer Tab', () => {
     expect(tokenStore.access).toBe('a2')
   })
 })
+
+// Codex-Befund 4 (Clientteil) und Review 02: Zwei Tabs sind zwei Modulinstanzen
+// mit gemeinsamem localStorage. 409 heisst "anderer Tab hat eben erneuert" (03.1-01).
+describe('Zwei Tabs', () => {
+  type Api = typeof import('@/lib/api')
+  const kid = { id: 'u1', displayName: 'Kind', role: 'Learner' as const, tenantId: 't1' }
+  const first = { accessToken: 'a1', refreshToken: 'r1', expiresInSeconds: 900, user: kid }
+  const second = { ...first, accessToken: 'a2', refreshToken: 'r2' }
+  const unauthorized = () =>
+    new Response(JSON.stringify({ detail: 'Sitzung abgelaufen. Bitte neu anmelden.' }), {
+      status: 401,
+    })
+  const ok = () => new Response(JSON.stringify({ ok: true }), { status: 200 })
+
+  async function tab(): Promise<Api> {
+    vi.resetModules()
+    return import('@/lib/api')
+  }
+
+  function bearer(init?: RequestInit) {
+    return (init?.headers as Record<string, string> | undefined)?.Authorization
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('gleichzeitiger Refresh: der zweite bekommt 409 und uebernimmt den Token des ersten', async () => {
+    await tokenStore.saveLogin(first)
+    const tabA = await tab()
+    const tabB = await tab()
+    let answerFirst: (response: Response) => void = () => {}
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshCalls++
+          if (refreshCalls === 1) return new Promise<Response>((resolve) => (answerFirst = resolve))
+          // Erst nach der 409 an den zweiten Tab antwortet der Server dem ersten.
+          setTimeout(() => answerFirst(new Response(JSON.stringify(second), { status: 200 })), 0)
+          return Promise.resolve(new Response('', { status: 409 }))
+        }
+        return Promise.resolve(bearer(init) === 'Bearer a2' ? ok() : unauthorized())
+      }),
+    )
+
+    const results = await Promise.all([tabA.api('/probe'), tabB.api('/probe')])
+    expect(results).toEqual([{ ok: true }, { ok: true }])
+    expect(refreshCalls).toBe(2)
+    expect(tokenStore.refresh).toBe('r2')
+    expect(tokenStore.access).toBe('a2')
+  })
+
+  it('409 ohne Nachfolger: nach 3 Sekunden nur dieser Tab abgemeldet', async () => {
+    vi.useFakeTimers()
+    await tokenStore.saveLogin(first)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/auth/refresh') ? new Response('', { status: 409 }) : unauthorized(),
+      ),
+    )
+    const pending = api('/probe').catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(2_900)
+    expect(tokenStore.refresh).toBe('r1')
+    await vi.advanceTimersByTimeAsync(200)
+    const error = await pending
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(401)
+    expect(tokenStore.refresh).toBeNull()
+    expect(tokenStore.access).toBeNull()
+  })
+
+  it('mehrere verspätete 401er nach einer Rotation: genau ein Refresh', async () => {
+    await tokenStore.saveLogin(first)
+    const late: ((response: Response) => void)[] = []
+    let a1Calls = 0
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshCalls++
+          const next = refreshCalls === 1 ? second : { ...first, accessToken: 'a3', refreshToken: 'r3' }
+          return Promise.resolve(new Response(JSON.stringify(next), { status: 200 }))
+        }
+        if (bearer(init) !== 'Bearer a1') return Promise.resolve(ok())
+        if (a1Calls++ === 0) return Promise.resolve(unauthorized())
+        return new Promise<Response>((resolve) => late.push(resolve))
+      }),
+    )
+
+    const calls = [api('/probe'), api('/probe'), api('/probe')]
+    expect(await calls[0]).toEqual({ ok: true })
+    for (const answer of late) answer(unauthorized())
+    expect(await Promise.all(calls)).toEqual([{ ok: true }, { ok: true }, { ok: true }])
+    expect(refreshCalls).toBe(1)
+    expect(tokenStore.refresh).toBe('r2')
+  })
+
+  it('verspätete 401 im anderen Tab: wiederholt mit dem neuen Token, ohne Refresh', async () => {
+    await tokenStore.saveLogin(first)
+    const tabA = await tab()
+    const tabB = await tab()
+    let answerB: (response: Response) => void = () => {}
+    let a1Calls = 0
+    let refreshCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshCalls++
+          return Promise.resolve(new Response(JSON.stringify(second), { status: 200 }))
+        }
+        if (bearer(init) !== 'Bearer a1') return Promise.resolve(ok())
+        if (a1Calls++ === 0) return new Promise<Response>((resolve) => (answerB = resolve))
+        return Promise.resolve(unauthorized())
+      }),
+    )
+
+    const fromB = tabB.api('/probe')
+    expect(await tabA.api('/probe')).toEqual({ ok: true })
+    answerB(unauthorized())
+    expect(await fromB).toEqual({ ok: true })
+    expect(refreshCalls).toBe(1)
+    expect(tokenStore.refresh).toBe('r2')
+  })
+
+  const sibling = {
+    accessToken: 'b1',
+    refreshToken: 'rb1',
+    expiresInSeconds: 900,
+    user: { ...kid, id: 'u2', displayName: 'Geschwister' },
+  }
+
+  it('neue Anmeldung waehrend der 409-Wartezeit: keine Wiederholung', async () => {
+    await tokenStore.saveLogin(first)
+    const tabA = await tab()
+    let probeCalls = 0
+    let siblingSaved = Promise.resolve()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          // Waehrend dieser Tab wartet, meldet sich im anderen Tab ein Geschwister an.
+          siblingSaved = new Promise((resolve) =>
+            setTimeout(() => void tokenStore.saveLogin(sibling).then(resolve), 0),
+          )
+          return new Response('', { status: 409 })
+        }
+        probeCalls++
+        return bearer(init) === 'Bearer b1' ? ok() : unauthorized()
+      }),
+    )
+
+    const error = await tabA.api('/probe').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(tabA.ApiError)
+    await siblingSaved
+    expect(probeCalls).toBe(1)
+    expect(tokenStore.refresh).toBe('rb1')
+    expect(tokenStore.access).toBe('b1')
+  })
+
+  it('neue Anmeldung waehrend eine 401 unterwegs ist: kein Refresh, keine Wiederholung', async () => {
+    await tokenStore.saveLogin(first)
+    let answer: (response: Response) => void = () => {}
+    let refreshCalls = 0
+    let probeCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshCalls++
+          return Promise.resolve(new Response(JSON.stringify(sibling), { status: 200 }))
+        }
+        // Eine Wiederholung bekaeme sofort 200 unter dem Geschwister-Profil.
+        if (probeCalls++ > 0) return Promise.resolve(ok())
+        return new Promise<Response>((resolve) => (answer = resolve))
+      }),
+    )
+
+    const pending = api('/probe').catch((caught: unknown) => caught)
+    await vi.waitFor(() => expect(probeCalls).toBe(1))
+    await tokenStore.saveLogin(sibling)
+    answer(unauthorized())
+    expect(await pending).toBeInstanceOf(ApiError)
+    expect(refreshCalls).toBe(0)
+    expect(probeCalls).toBe(1)
+    expect(tokenStore.refresh).toBe('rb1')
+  })
+
+  it('Abmelden waehrend eine 401 unterwegs ist: kein Refresh, keine Wiederholung', async () => {
+    await tokenStore.saveLogin(first)
+    let answer: (response: Response) => void = () => {}
+    let refreshCalls = 0
+    let probeCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.endsWith('/auth/refresh')) refreshCalls++
+        else probeCalls++
+        return new Promise<Response>((resolve) => (answer = resolve))
+      }),
+    )
+
+    const pending = api('/probe').catch((caught: unknown) => caught)
+    await vi.waitFor(() => expect(probeCalls).toBe(1))
+    tokenStore.clear()
+    answer(unauthorized())
+    expect(await pending).toBeInstanceOf(ApiError)
+    expect(refreshCalls).toBe(0)
+    expect(probeCalls).toBe(1)
+  })
+})
