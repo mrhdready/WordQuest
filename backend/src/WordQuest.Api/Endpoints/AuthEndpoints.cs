@@ -113,6 +113,13 @@ public static class AuthEndpoints
         {
             return Unauthorized(ex);
         }
+        catch (RefreshConflictException ex)
+        {
+            return Results.Problem(
+                title: "Anmeldung erneuert",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     private static async Task<IResult> LogoutAsync(

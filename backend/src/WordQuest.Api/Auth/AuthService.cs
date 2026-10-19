@@ -10,6 +10,8 @@ public sealed record AuthTokens(string AccessToken, string RefreshToken, int Exp
 
 public sealed class AuthFailedException(string message) : Exception(message);
 
+public sealed class RefreshConflictException(string message) : Exception(message);
+
 /// <summary>
 /// Anmeldung und Token-Rotation.
 ///
@@ -26,6 +28,13 @@ public sealed class AuthService(
     TimeProvider clock,
     ILogger<AuthService> logger)
 {
+    // Zwei Fenster teilen den Speicher und erneuern gleichzeitig mit demselben
+    // Token. Der unmittelbare Vorgaenger ergibt bis 10 Sekunden nach seiner
+    // Rotation 409 ohne neue Tokens, solange sein Nachfolger aktiv ist, statt
+    // als Diebstahl alle Sitzungen zu widerrufen (D-06, akzeptiert per D-17).
+    // Restrisiko im Konzept (Sicherheitstabelle, Token).
+    private static readonly TimeSpan RotationGrace = TimeSpan.FromSeconds(10);
+
     private readonly AuthOptions _options = options.Value;
 
     public async Task<AuthTokens> LoginAsync(string email, string password, CancellationToken ct)
@@ -150,6 +159,17 @@ public sealed class AuthService(
                 return;
             }
 
+            if (stored.ReplacedByTokenHash is { } replacedBy
+                && stored.RevokedAt > now - RotationGrace
+                && await db.RefreshTokens
+                    .IgnoreQueryFilters()
+                    .AnyAsync(t => t.TokenHash == replacedBy && t.RevokedAt == null && t.ExpiresAt > now, ct))
+            {
+                logger.LogInformation("Refresh mit eben rotiertem Token fuer Nutzer {UserId}: 409.", stored.UserId);
+                outcome = RefreshOutcome.Conflict;
+                return;
+            }
+
             // Ein bereits rotiertes Token taucht erneut auf: entweder ein
             // verschlepptes Offline-Geraet oder ein gestohlenes Token. Beides
             // beantworten wir gleich — die ganze Kette dieses Nutzers verwerfen.
@@ -204,22 +224,43 @@ public sealed class AuthService(
                 tokens.AccessTokenLifetimeSeconds,
                 user!),
             RefreshOutcome.Inactive => throw new AuthFailedException("Dieses Konto ist deaktiviert."),
+            RefreshOutcome.Conflict => throw new RefreshConflictException("Die Anmeldung wurde gerade in einem anderen Fenster erneuert."),
             _ => throw new AuthFailedException("Sitzung abgelaufen. Bitte neu anmelden."),
         };
     }
 
     public async Task LogoutAsync(string refreshToken, CancellationToken ct)
     {
+        DateTimeOffset now = clock.GetUtcNow();
         string hash = TokenHasher.Hash(refreshToken);
-        RefreshToken? stored = await db.RefreshTokens
+        Guid? userId = await db.RefreshTokens
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
+            .Where(t => t.TokenHash == hash)
+            .Select(t => (Guid?)t.UserId)
+            .FirstOrDefaultAsync(ct);
 
-        if (stored is not null)
+        if (userId is null)
         {
-            stored.RevokedAt = clock.GetUtcNow();
-            await db.SaveChangesAsync(ct);
+            return;
         }
+
+        // Abmelden waehrend eines laufenden Refreshes beendet auch den Nachfolger,
+        // den der Server schon ausgestellt hat (D-05). Erst unter der Sperre ist
+        // der Stand des Tokens verlaesslich; deshalb hier neu lesen.
+        await db.InTransactionAsync(async () =>
+        {
+            await db.LockUserAsync(userId.Value, ct);
+            string? successor = await db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(t => t.TokenHash == hash)
+                .Select(t => t.ReplacedByTokenHash)
+                .FirstOrDefaultAsync(ct);
+            string[] hashes = successor is null ? [hash] : [hash, successor];
+            await db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(t => hashes.Contains(t.TokenHash) && t.RevokedAt == null)
+                .ExecuteUpdateAsync(u => u.SetProperty(t => t.RevokedAt, now), ct);
+        }, ct);
     }
 
     private async Task<AuthTokens> IssueAsync(User user, CancellationToken ct)
@@ -266,5 +307,8 @@ public sealed class AuthService(
 
         /// <summary>Nachfolger ausgestellt.</summary>
         Issued = 2,
+
+        /// <summary>Eben rotierter Vorgaenger mit aktivem Nachfolger: 409 ohne Tokens.</summary>
+        Conflict = 3,
     }
 }
