@@ -191,7 +191,7 @@ CREATE TABLE review_state (
   lapses           int NOT NULL,
   due_at           timestamptz NOT NULL,
   first_seen_at    timestamptz NOT NULL,       -- Basis des Tagesbudgets
-  last_reviewed_at timestamptz,
+  last_reviewed_at timestamptz,                -- Concurrency-Token (D-10)
   last_grade       varchar(10),
   state            varchar(20) NOT NULL,       -- New|Learning|Review|Relearning|Suspended
   PRIMARY KEY (learner_id, card_id)
@@ -217,6 +217,8 @@ CREATE TABLE review_log (          -- append-only, Basis aller Statistiken
 `review_log` ist bewusst append-only und wird nie aktualisiert. Alle Auswertungen (Ampel, Wochenreport, Problemwörter) sollen sich daraus ableiten lassen. Das erlaubt, den Lernalgorithmus später zu wechseln und den Fortschritt aus dem Log **neu zu berechnen**, statt ihn zu verlieren. (Die heutige Ampel in §9 liest `review_state`, nicht `review_log`.)
 
 Lerndaten hängen über Fremdschlüssel mit `ON DELETE CASCADE` an Karte und Kind: `review_state`, `review_log`, `learning_session`, `session_item` und `gamification_profile` gehen mit der Karte bzw. dem Kind, `refresh_token` mit dem Konto. Der Sitzungsbezug des Protokolls (`review_log.session_id`) und der Set-Bezug einer Runde (`learning_session.set_id`) werden `SET NULL` (`FIX-02`, `PAR-03`). Verwaiste Zeilen aus Altinstallationen räumt die API beim Start vor der Migration auf (`OrphanCleanup`); danach ist der Schritt wirkungslos.
+
+`review_state.last_reviewed_at` ist das Concurrency-Token des Lernstands (`HARD-02`): Jede Antwort schreibt den Wert, das UPDATE prüft den gelesenen. Antworten zwei Geräte gleichzeitig auf dieselbe Karte in zwei Runden, schreibt nur die erste den Lernstand fort; die zweite trifft keine Zeile mehr, und Aufgabe, Protokoll und XP werden zurückgerollt. Damit das auch bei einer Uhr greift, die denselben Wert liefert, liegt der neue Wert mindestens 1 µs über dem gelesenen (PostgreSQL speichert Mikrosekunden, `LearningService`).
 
 ---
 
@@ -608,7 +610,7 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 
 `/sessions/sync` existiert serverseitig, wird vom Frontend aber nicht aufgerufen (Offline-Lernen ist v2, `LRN2-02`).
 
-Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; eine unbekannte oder fremde `setId` beim Start ergibt 404 („Dieses Set gibt es nicht (mehr).“); `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409; eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP); wird Karte oder Kind gelöscht, während eine Antwort gerade gespeichert wird, ergibt das 404 statt 500 oder 409 (Fremdschlüssel-Verletzung bzw. per Kaskade gelöschte Aufgabe); eine neue Antwort auf eine schon abgeschlossene Runde ergibt 409 („Diese Runde ist schon beendet. Starte eine neue Runde.“), auch per `/sessions/sync`.
+Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; eine unbekannte oder fremde `setId` beim Start ergibt 404 („Dieses Set gibt es nicht (mehr).“); `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409, ebenso gleichzeitige Antworten auf dieselbe Karte in zwei Runden (ohne XP für die zweite); eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP); wird Karte oder Kind gelöscht, während eine Antwort gerade gespeichert wird, ergibt das 404 statt 500 oder 409 (Fremdschlüssel-Verletzung bzw. per Kaskade gelöschte Aufgabe); eine neue Antwort auf eine schon abgeschlossene Runde ergibt 409 („Diese Runde ist schon beendet. Starte eine neue Runde.“), auch per `/sessions/sync`.
 
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 

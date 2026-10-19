@@ -209,9 +209,11 @@ public static class SessionEndpoints
 
     /// <summary>
     /// Doppel-Antwort: Eine gleichzeitige Antwort hat die Aufgabe schon gewertet
-    /// (Concurrency-Token AnsweredAt), den Lernstand der neuen Karte schon
-    /// angelegt (Primaerschluessel review_state) oder die Antwort-Id schon
-    /// verbraucht (Unique-Index client_answer_id).
+    /// (Concurrency-Token AnsweredAt), den Lernstand derselben Karte in einer
+    /// anderen Runde schon fortgeschrieben (Concurrency-Token LastReviewedAt,
+    /// D-10), den Lernstand der neuen Karte schon angelegt (Primaerschluessel
+    /// review_state) oder die Antwort-Id schon verbraucht (Unique-Index
+    /// client_answer_id).
     /// </summary>
     private static bool IsDuplicateAnswer(DbUpdateException exception) =>
         exception is DbUpdateConcurrencyException

@@ -163,7 +163,9 @@ public sealed class LearningService(
     /// (mehr) existieren; <see cref="SessionCompletedException"/>, wenn die Runde
     /// schon abgeschlossen ist. Eine gleichzeitige zweite Antwort auf dieselbe
     /// Aufgabe endet in einer <see cref="DbUpdateException"/> (Concurrency-Token
-    /// AnsweredAt bzw. Unique-Index), ohne dass etwas gespeichert wird.
+    /// AnsweredAt bzw. Unique-Index), ohne dass etwas gespeichert wird. Dasselbe
+    /// gilt fuer eine gleichzeitige Antwort auf dieselbe Karte in einer anderen
+    /// Runde (Concurrency-Token LastReviewedAt, D-10).
     /// </summary>
     public async Task<AnswerResult?> SubmitAnswerAsync(
         Guid learnerId,
@@ -249,6 +251,7 @@ public sealed class LearningService(
             state.FirstSeenAt = now;
         }
 
+        DateTimeOffset? readReviewedAt = state.LastReviewedAt;
         double resultingInterval = state.IntervalDays;
         if (game.AffectsScheduling)
         {
@@ -258,6 +261,15 @@ public sealed class LearningService(
         else
         {
             state.LastReviewedAt = now;
+        }
+
+        // last_reviewed_at ist das Concurrency-Token (D-10) und wirkt nur, wenn
+        // sich der Wert aendert. PostgreSQL speichert Mikrosekunden, und eine
+        // Uhr kann denselben Wert liefern; deshalb mindestens 1 µs ueber dem
+        // gelesenen Wert. Der Scheduler bleibt ohne Wissen ueber die Speicherung.
+        if (readReviewedAt is { } read && state.LastReviewedAt < read.AddTicks(10))
+        {
+            state.LastReviewedAt = read.AddTicks(10);
         }
 
         db.ReviewLogs.Add(new ReviewLog

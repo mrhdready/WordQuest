@@ -17,6 +17,12 @@ public sealed class ReviewStateConfiguration : IEntityTypeConfiguration<ReviewSt
         builder.Property(s => s.LastGrade).HasConversion<string>().HasMaxLength(10);
         builder.Property(s => s.EaseFactor).HasDefaultValue(2.5d);
 
+        // Jede Antwort setzt last_reviewed_at. Das UPDATE prueft den gelesenen
+        // Wert: Eine gleichzeitige Antwort auf dieselbe Karte in einer anderen
+        // Runde trifft keine Zeile mehr, SaveChanges wirft und rollt Aufgabe,
+        // Protokoll und XP zurueck (D-10). Kein xmin, keine Migration.
+        builder.Property(s => s.LastReviewedAt).IsConcurrencyToken();
+
         // Der Index, auf dem jede Session-Zusammenstellung laeuft.
         builder.HasIndex(s => new { s.LearnerId, s.DueAt });
         builder.HasIndex(s => new { s.LearnerId, s.State });
