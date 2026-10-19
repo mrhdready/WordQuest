@@ -192,3 +192,34 @@ describe('Token-Refresh', () => {
     expect(tokenStore.refresh).toBe('neu-refresh')
   })
 })
+
+// D-06: Ein Refresh-Fehler leert nur den eigenen Token, nicht den eines anderen Tabs.
+describe('Refresh-Fehler und anderer Tab', () => {
+  it('Refresh 401, waehrend ein anderer Tab R2 gespeichert hat: R2 bleibt', async () => {
+    const auth = {
+      accessToken: 'a1',
+      refreshToken: 'r1',
+      expiresInSeconds: 900,
+      user: { id: 'u1', displayName: 'Kind', role: 'Learner' as const, tenantId: 't1' },
+    }
+    tokenStore.save(auth)
+    let answerRefresh: (response: Response) => void = () => {}
+    const fetchMock = vi.fn((url: string) =>
+      url.endsWith('/auth/refresh')
+        ? new Promise<Response>((resolve) => (answerRefresh = resolve))
+        : Promise.resolve(new Response('', { status: 401 })),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = api('/probe').catch((error: unknown) => error)
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/auth/refresh'))).toBe(true),
+    )
+    tokenStore.save({ ...auth, accessToken: 'a2', refreshToken: 'r2' })
+    answerRefresh(new Response('', { status: 401 }))
+
+    expect(await pending).toBeInstanceOf(ApiError)
+    expect(tokenStore.refresh).toBe('r2')
+    expect(tokenStore.access).toBe('a2')
+  })
+})
