@@ -171,14 +171,16 @@ async function refreshAccessToken(): Promise<boolean> {
   rotiert, dieser uebernimmt den Nachfolger aus dem Speicher (D-06), aber nur
   innerhalb derselben Anmeldung (Review 02 MEDIUM). Das Warten laeuft in
   refreshInFlight, weitere Anfragen dieses Tabs warten mit. Abfrage statt
-  storage-Ereignis, weil das Ereignis im eigenen Dokument nicht feuert.
+  storage-Ereignis, weil das Ereignis im eigenen Dokument nicht feuert. Die Frist
+  misst Uhrzeit, weil Browser Timer in Hintergrund-Tabs stark drosseln.
 */
 async function awaitOtherTab(sent: string, session: string | null): Promise<boolean> {
-  for (let waited = 0; ; waited += 100) {
+  const deadline = Date.now() + OTHER_TAB_WAIT_MS
+  for (;;) {
     const current = tokenStore.refresh
     if (!current || tokenStore.session !== session) return false
     if (current !== sent) return true
-    if (waited >= OTHER_TAB_WAIT_MS) {
+    if (Date.now() >= deadline) {
       // Kein Nachfolger aufgetaucht: nur diesen Tab abmelden, nichts widerrufen.
       tokenStore.clear()
       return false
