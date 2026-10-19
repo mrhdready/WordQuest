@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 03.1
+current_phase: "03.1"
 current_phase_name: Release Hardening
 status: executing
-stopped_at: Completed 03.1-01-PLAN.md
-last_updated: "2026-10-19T20:10:03.802Z"
+stopped_at: Completed 03.1-02-PLAN.md
+last_updated: "2026-10-19T20:33:14.368Z"
 last_activity: 2026-10-19
-last_activity_desc: 03.1-01 ausgefuehrt (Anmeldung serverseitig, HARD-03, HARD-01 Serverteil), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
-state_head: f238b773cbf06ddd9954505a0baf7c8f5fb4d398
+last_activity_desc: 03.1-02 ausgefuehrt (Anmeldung im Frontend, HARD-01 komplett, D-15), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
+state_head: 2fefb5144d3183ee89040f024d8d088d46ac0ad4
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 27
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03.1 (Release Hardening) — EXECUTING
-Plan: 1 of 7 ausgefuehrt (naechster: 03.1-02)
-Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
-Last activity: 2026-10-19 — 03.1-01 ausgefuehrt (8 Commits, Backend 137 + 259 passed, Frontend 230 passed, e2e 48 passed mit axe)
+Plan: 2 of 7 ausgefuehrt (naechster: 03.1-03)
+Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
+Last activity: 2026-10-19 — 03.1-02 ausgefuehrt (10 Commits, Backend 137 + 259 passed, Frontend 247 passed, e2e 50 passed mit axe)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -77,6 +77,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P04 | 31min | 3 tasks | 5 files |
 | Phase 03 P05 | 25min | 2 tasks | 3 files |
 | Phase 03.1 P01 | 20min | 3 tasks | 10 files |
+| Phase 03.1 P02 | 20min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -142,12 +143,15 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-01: Gnadenfrist 10 s mit 409 nur fuer den unmittelbaren Vorgaenger mit aktivem Nachfolger (D-06, D-17); Restrisiko im Konzept
 - [Phase 03.1]: 03.1-01: Npgsql wiederholt 40P01 unter EnableRetryOnFailure (Test mit Interceptor); Login-Pfade bleiben ohne eigene Sperre, Luecke Anmeldung mit alten Zugangsdaten waehrend Widerruf im Konzept
 - [Phase 03.1]: 03.1-01: HARD-03 erledigt; HARD-01 nur serverseitig, Clientteil in 03.1-02
+- [Phase 03.1]: 03.1-02: Oberflaeche folgt dem Token-Speicher per useSyncExternalStore; Refresh-Antwort nur bei unveraendertem Speicher; 409 uebernimmt nur in derselben Anmeldung (wq.session), Frist 3 s nach Uhrzeit
+- [Phase 03.1]: 03.1-02: wq.session auf Gleichheit verglichen, Altsitzungen ohne Kennung erneuern weiter; neue Anmeldung ueber tokenStore.saveLogin loescht wq-api vor dem Speichern
 
 ### Pending Todos
 
 - Quick 261006-r7l: axe auf `/lernen` nachholen — erledigt sich mit Plan 01-04 (axe-Werkzeug seit 01-01 vorhanden, `checkPage` auf den Lernseiten).
 - [Phase-1-Abschluss]: manuelle Abnahme Tab-Leiste bei 200 % Zoom, leere Zustände, Glas-Wirkung auf dem Tablet; `hostname -I` und Backup-Dienst auf einem Raspberry Pi prüfen.
 - [Phase-3-Nach-Release]: Nach-Release-Abnahme aus 03-VALIDATION.md (veroeffentlichte Images arm64/amd64, Pi-Installation nur nach der Seite, Person ohne Vorwissen, root-eigene Tagesdumps mit restore.sh, upgrade.sh aus GHCR, Traefik-Variante). Vor dem Push master auf den Stand von v1-fertig bringen (die Seite klont den Standardbranch).
+- [Phase-3.1-02 offen]: TanStack-Query-Cache beim Sitzungsende nicht geleert (`App.tsx`, ein anderes Profil im selben Tab sieht kurz die alte Liste); Login-Anfragen mit `retryOn401` zaehlen bei bestehender Sitzung doppelt fuers Rate-Limit (`auth.tsx`). Review INFO 7/8, Einzelheiten in 03.1-02-SUMMARY.
 
 ### Quick Tasks
 
@@ -169,6 +173,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-19T20:10:00Z
-Stopped at: Completed 03.1-01-PLAN.md
+Last session: 2026-10-19T20:33:14.249Z
+Stopped at: Completed 03.1-02-PLAN.md
 Resume file: None
