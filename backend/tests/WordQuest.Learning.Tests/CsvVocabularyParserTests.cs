@@ -31,6 +31,35 @@ public sealed class CsvVocabularyParserTests
         Assert.Equal("Hund", result.Rows[0].Source);
     }
 
+    // Ein einzelnes Kopfwort macht noch keine Kopfzeile (Codex-Befund 10, D-13, D-20).
+    [Theory]
+    [InlineData("Quelle;source")]
+    [InlineData("Ziel;target")]
+    [InlineData("Bild;picture")]
+    [InlineData("Deutsch;German")]
+    public void KeepsAFirstVocabularyRowMadeOfHeaderWords(string firstLine)
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse($"{firstLine}\nHund;dog");
+        string[] fields = firstLine.Split(';');
+
+        Assert.False(result.HadHeader);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal(fields[0], result.Rows[0].Source);
+        Assert.Equal(fields[1], result.Rows[0].Target);
+    }
+
+    [Theory]
+    [InlineData("source;target\nHund;dog")]
+    [InlineData("Quelle;Ziel;Emoji\nHund;dog;🐶")]
+    public void SkipsAnUnambiguousHeaderRow(string content)
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse(content);
+
+        Assert.True(result.HadHeader);
+        Assert.Single(result.Rows);
+        Assert.Equal("Hund", result.Rows[0].Source);
+    }
+
     [Fact]
     public void KeepsQuotedFieldsTogether()
     {
