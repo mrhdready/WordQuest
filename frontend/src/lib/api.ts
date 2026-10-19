@@ -114,6 +114,8 @@ function safeWrite(key: string, value: string) {
 }
 
 let refreshInFlight: Promise<boolean> | null = null
+// So lange wartet ein Tab nach 409 auf den Token, den der andere Tab speichert.
+const OTHER_TAB_WAIT_MS = 3_000
 
 async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = tokenStore.refresh
@@ -123,6 +125,7 @@ async function refreshAccessToken(): Promise<boolean> {
   // die zweite wuerde als Token-Wiederverwendung gewertet und die Sitzung
   // komplett verwerfen.
   refreshInFlight ??= (async () => {
+    const session = tokenStore.session
     try {
       let response: Response
       try {
@@ -147,6 +150,7 @@ async function refreshAccessToken(): Promise<boolean> {
         if (tokenStore.refresh === refreshToken) tokenStore.clear()
         return false
       }
+      if (response.status === 409) return await awaitOtherTab(refreshToken, session)
       if (!response.ok) throw new ApiError(GENERIC, response.status)
 
       const auth = (await response.json()) as AuthResponse
@@ -159,6 +163,42 @@ async function refreshAccessToken(): Promise<boolean> {
   })()
 
   return refreshInFlight
+}
+
+/*
+  409: Ein anderer Tab hat eben mit demselben Token erneuert (03.1-01). Ohne
+  HTTPS gibt es kein navigator.locks; der Server entscheidet, welcher Tab
+  rotiert, dieser uebernimmt den Nachfolger aus dem Speicher (D-06), aber nur
+  innerhalb derselben Anmeldung (Review 02 MEDIUM). Das Warten laeuft in
+  refreshInFlight, weitere Anfragen dieses Tabs warten mit. Abfrage statt
+  storage-Ereignis, weil das Ereignis im eigenen Dokument nicht feuert.
+*/
+async function awaitOtherTab(sent: string, session: string | null): Promise<boolean> {
+  for (let waited = 0; ; waited += 100) {
+    const current = tokenStore.refresh
+    if (!current || tokenStore.session !== session) return false
+    if (current !== sent) return true
+    if (waited >= OTHER_TAB_WAIT_MS) {
+      // Kein Nachfolger aufgetaucht: nur diesen Tab abmelden, nichts widerrufen.
+      tokenStore.clear()
+      return false
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+/*
+  Darf eine Anfrage nach 401 wiederholt werden? Eine verspaetete 401 nach einer
+  Rotation darf die Kette nicht weiterdrehen: Der Nachfolger des anderen Tabs
+  bliebe sonst nicht aktiv, und dessen verspaeteter Refresh widerriefe alles
+  (03.1-01, Gnadenfrist; Review 02 HIGH).
+*/
+async function mayRetry(sentAccess: string | null, session: string | null): Promise<boolean> {
+  // Abmelden oder neue Anmeldung seit dem Senden: Der Fehler der Anfrage gilt.
+  if (!tokenStore.refresh || tokenStore.session !== session) return false
+  // Schon erneuert, hier oder in einem anderen Tab: einmal mit dem neuen Token.
+  if (tokenStore.access !== sentAccess) return true
+  return (await refreshAccessToken()) && tokenStore.session === session
 }
 
 interface RequestOptions {
@@ -174,6 +214,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const access = tokenStore.access
+  const session = tokenStore.session
   if (access) headers.Authorization = `Bearer ${access}`
 
   let response: Response
@@ -188,7 +229,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     throw new ApiError(UNREACHABLE, 0)
   }
 
-  if (response.status === 401 && retryOn401 && (await refreshAccessToken())) {
+  if (response.status === 401 && retryOn401 && (await mayRetry(access, session))) {
     return api<T>(path, { ...options, retryOn401: false })
   }
 
