@@ -189,6 +189,49 @@ public sealed class AuthEndpointTests : IAsyncLifetime
             await DetailAsync(locked, HttpStatusCode.Unauthorized));
     }
 
+    // Codex-Befund 9 (D-11): Drei falsche PINs kommen gleichzeitig an, der Zaehler
+    // steht auf 7. Alle drei zaehlen, danach ist das Profil gesperrt. Vier Aufrufe
+    // der Policy "auth" (Limit 10 pro Minute).
+    [Fact]
+    public async Task Parallele_falsche_PINs_zaehlen_alle_und_sperren_das_Profil()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            LearnerProfile profile = await db.LearnerProfiles.FindAsync(family.Child.Id)
+                ?? throw new InvalidOperationException("Profil fehlt.");
+            profile.FailedPinAttempts = 7;
+            await db.SaveChangesAsync();
+        }
+
+        using HttpClient client = _factory.CreateClient();
+        var held = await _factory.LockRowsAsync(("learner_profile", family.Child.Id));
+        Task<HttpResponseMessage>[] wrong =
+        [
+            LearnerLoginAsync(client, family.Child.Id, "0000"),
+            LearnerLoginAsync(client, family.Child.Id, "0001"),
+            LearnerLoginAsync(client, family.Child.Id, "0002"),
+        ];
+        await _factory.WaitForBlockedAsync(3);
+        await ApiFactory.ReleaseAsync(held);
+
+        foreach (HttpResponseMessage response in await Task.WhenAll(wrong))
+        {
+            Assert.Equal("Die PIN stimmt nicht.", await DetailAsync(response, HttpStatusCode.Unauthorized));
+        }
+
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            LearnerProfile profile = await db.LearnerProfiles.AsNoTracking().SingleAsync(p => p.Id == family.Child.Id);
+            Assert.True(profile.PinLockedUntil > DateTimeOffset.UtcNow);
+        }
+
+        HttpResponseMessage locked = await LearnerLoginAsync(client, family.Child.Id, ChildPin);
+        Assert.Equal(
+            "Zu viele Versuche. Bitte in 15 Minuten nochmal probieren.",
+            await DetailAsync(locked, HttpStatusCode.Unauthorized));
+    }
+
     [Fact]
     public async Task Kinder_Login_mit_unbekannter_Kind_Id_ergibt_401()
     {
