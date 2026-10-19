@@ -92,9 +92,13 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         return await db.ReviewStates.AsNoTracking().Where(r => r.LearnerId == learnerId).ToListAsync();
     }
 
-    private async Task SeedStateAsync(User child, Guid cardId, ReviewCardState state, DateTimeOffset firstSeen, DateTimeOffset due)
+    private Task SeedStateAsync(User child, Guid cardId, ReviewCardState state, DateTimeOffset firstSeen, DateTimeOffset due) =>
+        SeedStateAsync(_factory, child, cardId, state, firstSeen, due);
+
+    private static async Task SeedStateAsync(
+        ApiFactory factory, User child, Guid cardId, ReviewCardState state, DateTimeOffset firstSeen, DateTimeOffset due)
     {
-        await using var db = _factory.CreateSystemDbContext();
+        await using var db = factory.CreateSystemDbContext();
         db.ReviewStates.Add(new ReviewState
         {
             TenantId = child.TenantId,
@@ -761,5 +765,85 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         SessionView second = await StartAsync(child, family.Child.Id, b.Set.Id);
 
         Assert.Equal(3, second.Items.Count(i => InSet(b, i)));
+    }
+
+    // Codex-Befund 8, D-10: Karte 1 hat einen faelligen Lernstand und liegt in
+    // zwei offenen Runden. Beide Antworten lesen den Lernstand, dann haelt die
+    // Zeilensperre sie vor dem Schreiben an. Danach darf nur eine gewertet werden.
+    private static async Task<ReviewState> AnswerSameCardInTwoSessionsAsync(
+        ApiFactory factory, DateTimeOffset now, DateTimeOffset? lastReviewedAt = null)
+    {
+        SeededFamily family = await SeedFamilyAsync(factory, dailyNewLimit: 3);
+        SeededSet set = await SeedSetAsync(factory, family, entries: 1);
+        Guid cardId = set.Cards[0].Id;
+        DateTimeOffset past = now.AddDays(-2);
+        await SeedStateAsync(factory, family.Child, cardId, ReviewCardState.Review, past, past);
+        if (lastReviewedAt is { } value)
+        {
+            await using var db = factory.CreateSystemDbContext();
+            await db.ReviewStates
+                .Where(r => r.LearnerId == family.Child.Id && r.CardId == cardId)
+                .ExecuteUpdateAsync(u => u.SetProperty(r => r.LastReviewedAt, value));
+        }
+
+        using HttpClient child = factory.CreateClientFor(family.Child);
+        SessionView[] sessions = [await StartAsync(child, family.Child.Id), await StartAsync(child, family.Child.Id)];
+        SessionItemView[] items = [.. sessions.Select(s => Assert.Single(s.Items, i => i.CardId == cardId))];
+        string answer = set.AnswerFor(items[0].Prompt);
+
+        var held = await factory.LockReviewStateAsync(family.Child.Id, cardId);
+        Task<HttpResponseMessage> one = AnswerAsync(child, sessions[0].SessionId, items[0].ItemId, answer);
+        Task<HttpResponseMessage> two = AnswerAsync(child, sessions[1].SessionId, items[1].ItemId, answer);
+        await factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+        int okIndex = Array.FindIndex(responses, r => r.StatusCode == HttpStatusCode.OK);
+        Assert.Equal(AlreadyAnswered, await DetailAsync(responses[1 - okIndex], HttpStatusCode.Conflict));
+        AnswerResult result = await ReadAnswerAsync(responses[okIndex]);
+        Assert.True(result.XpAwarded > 0);
+
+        await using var check = factory.CreateSystemDbContext();
+        Assert.Equal(1, await check.ReviewLogs.CountAsync(l => l.LearnerId == family.Child.Id && l.CardId == cardId));
+        ReviewState stored = await check.ReviewStates.AsNoTracking()
+            .SingleAsync(r => r.LearnerId == family.Child.Id && r.CardId == cardId);
+        Assert.Equal(2, stored.Repetitions);
+        GamificationProfile profile = await check.GamificationProfiles.AsNoTracking().SingleAsync(p => p.Id == family.Child.Id);
+        Assert.Equal(result.XpAwarded, profile.Xp);
+        LearningSession lost = await check.LearningSessions.AsNoTracking()
+            .SingleAsync(s => s.Id == sessions[1 - okIndex].SessionId);
+        Assert.Equal(0, lost.XpAwarded);
+        return stored;
+    }
+
+    [Fact]
+    public async Task Gleichzeitige_Antworten_auf_dieselbe_Karte_in_zwei_Runden_ergeben_200_und_409()
+    {
+        await AnswerSameCardInTwoSessionsAsync(_factory, DateTimeOffset.UtcNow);
+    }
+
+    // Review 03 MEDIUM: Liefert die Uhr denselben Wert, der schon gespeichert ist,
+    // bliebe das Pruefen von last_reviewed_at wirkungslos. Jede Antwort muss den
+    // Wert trotzdem aendern.
+    [Fact]
+    public async Task Gleichzeitige_Antworten_mit_fester_Uhr_ergeben_200_und_409()
+    {
+        // Die gemeinsame Factory zuerst starten: Eine neue Factory setzt die
+        // Verbindung per Umgebungsvariable, ein spaeter Start der gemeinsamen
+        // faende sonst die Datenbank der festen Uhr.
+        _ = _factory.Services;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        // Auf ganze Mikrosekunden gekuerzt, wie PostgreSQL speichert.
+        DateTimeOffset fixedNow = new(now.Ticks - (now.Ticks % 10), TimeSpan.Zero);
+        await using var clocked = new ApiFactory
+        {
+            TestServices = services => services.AddSingleton<TimeProvider>(new FixedClock(fixedNow)),
+        };
+        await clocked.InitializeAsync();
+
+        ReviewState stored = await AnswerSameCardInTwoSessionsAsync(clocked, fixedNow, lastReviewedAt: fixedNow);
+
+        Assert.True(stored.LastReviewedAt > fixedNow, $"last_reviewed_at {stored.LastReviewedAt:O} liegt nicht nach {fixedNow:O}.");
     }
 }

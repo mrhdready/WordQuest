@@ -102,6 +102,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         return (db, transaction);
     }
 
+    /// <summary>
+    /// Wie <see cref="LockRowsAsync"/> fuer review_state: Die Tabelle hat keine
+    /// Spalte id, der Schluessel ist (learner_id, card_id).
+    /// </summary>
+    public async Task<(WordQuestDbContext Db, IDbContextTransaction Lock)> LockReviewStateAsync(Guid learnerId, Guid cardId)
+    {
+        WordQuestDbContext db = CreateSystemDbContext();
+        IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync(
+            "SELECT 1 FROM review_state WHERE learner_id = {0} AND card_id = {1} FOR UPDATE", learnerId, cardId);
+        return (db, transaction);
+    }
+
     public static async Task ReleaseAsync((WordQuestDbContext Db, IDbContextTransaction Lock) held)
     {
         await held.Lock.RollbackAsync();
