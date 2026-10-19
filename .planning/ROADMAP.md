@@ -102,3 +102,18 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. Safe Home-Network Install | 8/8 | In Progress | - |
 | 2. Reliable Learning & Clean Family Data | 7/7 | In Progress | - |
 | 3. Installable 1.0.0 Release | 5/5 | In Progress | - |
+
+### Phase 03.1: Release Hardening (INSERTED)
+
+**Goal:** Der Release-Kandidat 1.0.0 ist frei von den belegten Fehlern des Codex-Gesamtreviews (`.planning/v1.0-CODEX-REVIEW.md`) und läuft lokal als Prod-Stack
+**Requirements**: HARD-01, HARD-02, HARD-03, HARD-04
+**Depends on:** Phase 3
+**Success Criteria** (what must be TRUE):
+  1. Each of the 11 Codex findings has a test that was red before the fix and is green after it, or a documented, justified rejection
+  2. Sessions end reliably: after logout, revocation or session expiry no stored token survives and the UI shows the login
+  3. The full gate (backend, frontend, e2e with axe, install, release and proxy smokes) is green on the final commit
+  4. A locally built production stack (setup.sh, Production, images built from the final commit) serves login and a learning round, observed in the browser
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
