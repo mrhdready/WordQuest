@@ -56,6 +56,7 @@
 - [ ] **HARD-02**: Learning is consistent: a chosen set limits due cards too, concurrent answers to the same card keep the review state, parallel rounds count open rounds against the daily new-word limit
 - [ ] **HARD-03**: The per-profile PIN lockout counts every failed attempt, even in parallel
 - [ ] **HARD-04**: Security headers and CSP are on every HTML response, the CSV import never drops a valid first word, the set list shows load errors, and logout clears cached API data
+- [ ] **HARD-05**: Parents install and update from the published release package and images without git; upgrade.sh fetches the newest release itself
 
 ## v2 Requirements
 
@@ -126,12 +127,13 @@
 | HARD-02 | Phase 3.1 | Pending |
 | HARD-03 | Phase 3.1 | Pending |
 | HARD-04 | Phase 3.1 | Pending |
+| HARD-05 | Phase 3.1 | Pending |
 
 **Coverage:**
-- v1 requirements: 31 total
-- Mapped to phases: 31
+- v1 requirements: 32 total
+- Mapped to phases: 32
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-15 — PAR-05 (UI-SPEC Q3), DESIGN-01 (Liquid Glass), FIX-08 und FIX-09 auf Freigabe von Dennis ergänzt.*
+*Last updated: 2026-10-19 — HARD-01 bis HARD-04 (Codex-Gesamtreview) und HARD-05 (D-16, Installation und Update ohne Git) für Phase 3.1 ergänzt.*

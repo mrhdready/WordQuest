@@ -106,14 +106,20 @@ Phases execute in numeric order: 1 → 2 → 3
 ### Phase 03.1: Release Hardening (INSERTED)
 
 **Goal:** Der Release-Kandidat 1.0.0 ist frei von den belegten Fehlern des Codex-Gesamtreviews (`.planning/v1.0-CODEX-REVIEW.md`) und läuft lokal als Prod-Stack
-**Requirements**: HARD-01, HARD-02, HARD-03, HARD-04
+**Requirements**: HARD-01, HARD-02, HARD-03, HARD-04, HARD-05
 **Depends on:** Phase 3
 **Success Criteria** (what must be TRUE):
   1. Each of the 11 Codex findings has a test that was red before the fix and is green after it, or a documented, justified rejection
   2. Sessions end reliably: after logout, revocation or session expiry no stored token survives and the UI shows the login
   3. The full gate (backend, frontend, e2e with axe, install, release and proxy smokes) is green on the final commit
   4. A locally built production stack (setup.sh, Production, images built from the final commit) serves login and a learning round, observed in the browser
-**Plans:** 0 plans
+  5. Install and update from a locally built release package without git are green in the release smoke (download, checksum, self-update, image pull of the target version)
+**Plans:** 6 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+- [ ] 03.1-01-PLAN.md — Refresh und Widerruf unter Kontosperre mit bedingter Beanspruchung, 409-Gnadenfrist für den eben rotierten Vorgänger (D-17), Abmelden widerruft den Nachfolger, atomare PIN-Sperre (Befunde 1, 2 Server, 4 Server, 9)
+- [ ] 03.1-02-PLAN.md — Oberfläche folgt dem Token-Speicher auch über Tabs, verspätete Refresh-Antwort verworfen, 409 übernimmt den Token des anderen Tabs, Abmelden leert `wq-api` (Befunde 2, 4, 5 Client; D-15)
+- [ ] 03.1-03-PLAN.md — Set-Wahl begrenzt die ganze Runde bei kontoweiter Rückstandsbremse (D-19), offene Runden der letzten 30 Minuten reservieren neue Karten (D-18), Lernstand mit Concurrency-Token ohne Migration (Befunde 6, 7, 8)
+- [ ] 03.1-04-PLAN.md — Sicherheits-Header aus einer Include-Datei an jeder nginx-Antwort beider Varianten (D-21), eindeutige CSV-Kopfzeile (D-20), Ladefehler der Set-Liste mit axe (Befunde 3, 10, 11)
+- [ ] 03.1-05-PLAN.md — Release-Paket mit Prüfsumme aus der CI, Installation per curl und Update per upgrade.sh ohne Git, im Release-Smoke gegen ein lokal gebautes Paket belegt (D-16, HARD-05)
+- [ ] 03.1-06-PLAN.md — Prod-Stack aus dem End-Commit im Wegwerf-Klon, installiert aus dem Release-Paket, volles Phasen-Gate, Befund-Nachweis für alle 11 Befunde (D-03)
