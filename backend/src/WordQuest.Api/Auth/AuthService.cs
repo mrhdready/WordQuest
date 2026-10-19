@@ -87,14 +87,19 @@ public sealed class AuthService(
 
         if (!PasswordHasher.Verify(pin, profile.PinHash))
         {
-            profile.FailedPinAttempts++;
-            if (profile.FailedPinAttempts >= _options.MaxPinAttempts)
-            {
-                profile.PinLockedUntil = now.AddMinutes(_options.PinLockoutMinutes);
-                profile.FailedPinAttempts = 0;
-            }
-
-            await db.SaveChangesAsync(ct);
+            // Ein Statement statt Lesen-Erhoehen-Schreiben: Das verlor parallele
+            // Fehlversuche (Codex-Befund 9, D-11). Beide Ausdruecke sehen dieselbe
+            // Ausgangszeile, die Datenbank serialisiert die Erhoehungen (Muster
+            // CreditAsync). Ohne IgnoreQueryFilters traefe der Mandantenfilter
+            // bei der Anmeldung keine Zeile.
+            int max = _options.MaxPinAttempts;
+            DateTimeOffset? lockUntil = now.AddMinutes(_options.PinLockoutMinutes);
+            await db.LearnerProfiles
+                .IgnoreQueryFilters()
+                .Where(p => p.Id == learnerId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(p => p.FailedPinAttempts, p => p.FailedPinAttempts + 1 >= max ? 0 : p.FailedPinAttempts + 1)
+                    .SetProperty(p => p.PinLockedUntil, p => p.FailedPinAttempts + 1 >= max ? lockUntil : p.PinLockedUntil), ct);
             throw new AuthFailedException("Die PIN stimmt nicht.");
         }
 
