@@ -46,10 +46,11 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
 
     // ------------------------------------------------------------ Hilfen
 
-    private static async Task<SessionView> StartAsync(HttpClient client, Guid learnerId, Guid? setId = null)
+    private static async Task<SessionView> StartAsync(
+        HttpClient client, Guid learnerId, Guid? setId = null, string gameKey = GameCatalog.Classic)
     {
         HttpResponseMessage response = await client.PostAsJsonAsync(
-            Sessions, new { learnerId, setId, gameKey = "classic", size = (int?)null });
+            Sessions, new { learnerId, setId, gameKey, size = (int?)null });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         SessionView? view = await response.Content.ReadFromJsonAsync<SessionView>(Json);
         Assert.NotNull(view);
@@ -764,6 +765,30 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
 
         SessionView second = await StartAsync(child, family.Child.Id, b.Set.Id);
 
+        Assert.Equal(3, second.Items.Count(i => InSet(b, i)));
+    }
+
+    // Review-Befund LOW 1: Eine im Klassenarbeit-Modus beantwortete Karte bleibt
+    // im Zustand New, zaehlt aber schon ueber ihre Antwort gegen das Tageslimit.
+    // Liegt sie noch unbeantwortet in einer offenen Runde, darf sie nicht ein
+    // zweites Mal als reserviert zaehlen.
+    [Fact]
+    public async Task Im_Klassenarbeit_Modus_beantwortete_Karte_zaehlt_einmal()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet a = await SeedSetAsync(_factory, family, entries: 1);
+        SeededSet b = await SeedSetAsync(_factory, family);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        SessionView classic = await StartAsync(child, family.Child.Id, a.Set.Id);
+        SessionView cram = await StartAsync(child, family.Child.Id, a.Set.Id, GameCatalog.Cram);
+        Assert.Equal(2, classic.Items.Count);
+        SessionItemView item = cram.Items[0];
+        await ReadAnswerAsync(await AnswerAsync(child, cram.SessionId, item.ItemId, a.AnswerFor(item.Prompt)));
+
+        SessionView second = await StartAsync(child, family.Child.Id, b.Set.Id);
+
+        // Limit 5: 1 ueber die Antwort verbraucht, 1 reserviert, 3 frei.
         Assert.Equal(3, second.Items.Count(i => InSet(b, i)));
     }
 
