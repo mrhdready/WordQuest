@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using WordQuest.Api.Contracts;
 using WordQuest.Modules.Identity.Entities;
 using static WordQuest.Api.Tests.TestData;
@@ -54,6 +55,12 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 
     private static Task<HttpResponseMessage> RefreshAsync(HttpClient client, string refreshToken) =>
         client.PostAsJsonAsync($"{Auth}/refresh", new { refreshToken });
+
+    private async Task<int> ActiveRefreshTokensAsync(Guid userId)
+    {
+        await using var db = _factory.CreateSystemDbContext();
+        return await db.RefreshTokens.CountAsync(t => t.UserId == userId && t.RevokedAt == null);
+    }
 
     // ------------------------------------------------------------ Anfrage ohne lesbaren Body
 
@@ -214,6 +221,39 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 
         HttpResponseMessage revoked = await RefreshAsync(client, second.RefreshToken);
         Assert.Equal(Expired, await DetailAsync(revoked, HttpStatusCode.Unauthorized));
+    }
+
+    // Codex-Befund 1 (D-04): Ein Refresh laeuft, waehrend ein Elternteil die PIN
+    // aendert. Danach darf kein Token der Kette gueltig sein. Pruefreihenfolge
+    // ist Absicht: R1 zuerst vorzulegen widerriefe als Wiederverwendung alles und
+    // verdeckte einen ueberlebenden Nachfolger (Review 01 HIGH).
+    [Fact]
+    public async Task Refresh_waehrend_neuer_PIN_hinterlaesst_keinen_gueltigen_Token()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        AuthResponse first = await TokensAsync(await LearnerLoginAsync(client, family.Child.Id, ChildPin));
+
+        var held = await _factory.LockRowsAsync(("app_user", family.Child.Id));
+        Task<HttpResponseMessage> refresh = RefreshAsync(client, first.RefreshToken);
+        await _factory.WaitForBlockedAsync(1);
+        Task<HttpResponseMessage> patch = owner.PatchAsJsonAsync(
+            $"/api/v1/learners/{family.Child.Id}/settings", new { pin = "2580" });
+        await Task.WhenAny(patch, _factory.WaitForBlockedAsync(2));
+        await ApiFactory.ReleaseAsync(held);
+        HttpResponseMessage refreshed = await refresh;
+        Assert.Equal(HttpStatusCode.OK, (await patch).StatusCode);
+
+        Assert.Equal(0, await ActiveRefreshTokensAsync(family.Child.Id));
+        if (refreshed.StatusCode == HttpStatusCode.OK)
+        {
+            AuthResponse successor = await TokensAsync(refreshed);
+            Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, successor.RefreshToken), HttpStatusCode.Unauthorized));
+        }
+
+        Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, first.RefreshToken), HttpStatusCode.Unauthorized));
+        await TokensAsync(await LearnerLoginAsync(client, family.Child.Id, "2580"));
     }
 
     [Fact]

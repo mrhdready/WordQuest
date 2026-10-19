@@ -280,56 +280,6 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         return (session, profile);
     }
 
-    /// <summary>
-    /// Haelt in einer offenen Transaktion eine Zeilensperre (SELECT ... FOR UPDATE).
-    /// Lesen bleibt frei (MVCC), Schreiben auf diese Zeilen wartet, bis der
-    /// Aufrufer die Transaktion zuruecksetzt.
-    /// </summary>
-    private async Task<(WordQuestDbContext Db, IDbContextTransaction Lock)> LockRowsAsync(
-        params (string Table, Guid Id)[] rows)
-    {
-        WordQuestDbContext db = _factory.CreateSystemDbContext();
-        IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
-        foreach ((string table, Guid id) in rows)
-        {
-            // Tabellennamen sind Konstanten dieser Testklasse, die Id geht als Parameter.
-            string sql = "SELECT 1 FROM " + table + " WHERE id = {0} FOR UPDATE";
-            await db.Database.ExecuteSqlRawAsync(sql, id);
-        }
-
-        return (db, transaction);
-    }
-
-    private static async Task ReleaseAsync((WordQuestDbContext Db, IDbContextTransaction Lock) held)
-    {
-        await held.Lock.RollbackAsync();
-        await held.Lock.DisposeAsync();
-        await held.Db.DisposeAsync();
-    }
-
-    /// <summary>
-    /// Wartet, bis <paramref name="expected"/> Backends dieser Datenbank auf eine
-    /// Sperre warten: Dann haben die Anfragen gelesen und stehen vor dem Schreiben.
-    /// </summary>
-    private async Task WaitForBlockedAsync(int expected)
-    {
-        await using var db = _factory.CreateSystemDbContext();
-        for (int attempt = 0; attempt < 200; attempt++)
-        {
-            int waiting = await db.Database
-                .SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'")
-                .SingleAsync();
-            if (waiting >= expected)
-            {
-                return;
-            }
-
-            await Task.Delay(50);
-        }
-
-        Assert.Fail($"Nach 10 Sekunden warteten keine {expected} Anfragen auf die Sperre.");
-    }
-
     [Fact]
     public async Task Unbekannte_Runde_ergibt_404_mit_Text()
     {
@@ -455,11 +405,11 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         SessionItemView item = session.Items[0];
         string answer = set.AnswerFor(item.Prompt);
 
-        var held = await LockRowsAsync(("session_item", item.ItemId));
+        var held = await _factory.LockRowsAsync(("session_item", item.ItemId));
         Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, item.ItemId, answer);
         Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, item.ItemId, answer);
-        await WaitForBlockedAsync(2);
-        await ReleaseAsync(held);
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
         HttpResponseMessage ok = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
@@ -490,11 +440,11 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         SessionItemView item = Assert.Single(session.Items, i => i.CardId == cardId);
         string answer = set.AnswerFor(item.Prompt);
 
-        var held = await LockRowsAsync(("session_item", item.ItemId));
+        var held = await _factory.LockRowsAsync(("session_item", item.ItemId));
         Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, item.ItemId, answer);
         Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, item.ItemId, answer);
-        await WaitForBlockedAsync(2);
-        await ReleaseAsync(held);
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
@@ -513,11 +463,11 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         SessionItemView first = session.Items[0];
         SessionItemView second = session.Items[1];
 
-        var held = await LockRowsAsync(("learning_session", session.SessionId), ("gamification_profile", family.Child.Id));
+        var held = await _factory.LockRowsAsync(("learning_session", session.SessionId), ("gamification_profile", family.Child.Id));
         Task<HttpResponseMessage> one = AnswerAsync(child, session.SessionId, first.ItemId, set.AnswerFor(first.Prompt));
         Task<HttpResponseMessage> two = AnswerAsync(child, session.SessionId, second.ItemId, set.AnswerFor(second.Prompt));
-        await WaitForBlockedAsync(2);
-        await ReleaseAsync(held);
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
         AnswerResult a = await ReadAnswerAsync(responses[0]);
@@ -541,11 +491,11 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
             await AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt)));
         (int bonusXp, int bonusCoins) = XpRules.ForSessionCompletion(1, 1);
 
-        var held = await LockRowsAsync(("learning_session", session.SessionId));
+        var held = await _factory.LockRowsAsync(("learning_session", session.SessionId));
         Task<HttpResponseMessage> one = child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
         Task<HttpResponseMessage> two = child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
-        await WaitForBlockedAsync(2);
-        await ReleaseAsync(held);
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
         HttpResponseMessage[] responses = await Task.WhenAll(one, two);
 
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
@@ -660,7 +610,7 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         await db.Database.ExecuteSqlRawAsync(sql, deleteChild ? family.Child.Id : card.EntryId);
 
         Task<HttpResponseMessage> answer = AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt));
-        await WaitForBlockedAsync(1);
+        await _factory.WaitForBlockedAsync(1);
         await delete.CommitAsync();
 
         Assert.Equal(deleteChild ? SessionGone : CardGone, await DetailAsync(await answer, HttpStatusCode.NotFound));

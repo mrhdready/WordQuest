@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using WordQuest.Api.Auth;
 using WordQuest.Infrastructure;
@@ -68,6 +69,56 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         HttpClient client = CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+
+    /// <summary>
+    /// Haelt in einer offenen Transaktion eine Zeilensperre (SELECT ... FOR UPDATE).
+    /// Lesen bleibt frei (MVCC), Schreiben auf diese Zeilen wartet, bis der
+    /// Aufrufer die Transaktion zuruecksetzt.
+    /// </summary>
+    public async Task<(WordQuestDbContext Db, IDbContextTransaction Lock)> LockRowsAsync(
+        params (string Table, Guid Id)[] rows)
+    {
+        WordQuestDbContext db = CreateSystemDbContext();
+        IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
+        foreach ((string table, Guid id) in rows)
+        {
+            // Tabellennamen sind Konstanten der Tests, die Id geht als Parameter.
+            string sql = "SELECT 1 FROM " + table + " WHERE id = {0} FOR UPDATE";
+            await db.Database.ExecuteSqlRawAsync(sql, id);
+        }
+
+        return (db, transaction);
+    }
+
+    public static async Task ReleaseAsync((WordQuestDbContext Db, IDbContextTransaction Lock) held)
+    {
+        await held.Lock.RollbackAsync();
+        await held.Lock.DisposeAsync();
+        await held.Db.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Wartet, bis <paramref name="expected"/> Backends dieser Datenbank auf eine
+    /// Sperre warten: Dann haben die Anfragen gelesen und stehen vor dem Schreiben.
+    /// </summary>
+    public async Task WaitForBlockedAsync(int expected)
+    {
+        await using var db = CreateSystemDbContext();
+        for (int attempt = 0; attempt < 200; attempt++)
+        {
+            int waiting = await db.Database
+                .SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'")
+                .SingleAsync();
+            if (waiting >= expected)
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.Fail($"Nach 10 Sekunden warteten keine {expected} Anfragen auf die Sperre.");
     }
 
     /// <summary>
