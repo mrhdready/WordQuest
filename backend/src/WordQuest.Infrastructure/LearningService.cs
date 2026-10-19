@@ -104,13 +104,19 @@ public sealed class LearningService(
             // ihrer offenen Runde ohnehin beantwortbar (FIX-03). Grenze: Zwei
             // Starts in derselben Sekunde sehen die Reservierung des anderen
             // nicht (D-09, akzeptiert).
+            // Karten mit einer Antwort (auch im Klassenarbeit-Modus, Zustand
+            // bleibt New) haben das Budget schon belastet oder belasten es nie
+            // mehr (FIX-09); sie sind nicht reserviert.
+            IQueryable<Guid> answered = db.ReviewStates
+                .Where(r => r.LearnerId == learnerId && r.LastReviewedAt != null)
+                .Select(r => r.CardId);
             DateTimeOffset reservedSince = now - ReservationWindow;
             List<Guid> reserved = await db.SessionItems
                 .Where(i => i.AnsweredAt == null
                             && i.Session!.LearnerId == learnerId
                             && i.Session.CompletedAt == null
                             && i.Session.StartedAt >= reservedSince
-                            && !alreadySeen.Contains(i.CardId))
+                            && !answered.Contains(i.CardId))
                 .Select(i => i.CardId)
                 .Distinct()
                 .ToListAsync(ct);
