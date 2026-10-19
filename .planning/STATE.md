@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: "03.1"
 current_phase_name: Release Hardening
 status: executing
-stopped_at: Completed 03.1-02-PLAN.md
-last_updated: "2026-10-19T20:33:14.368Z"
-last_activity: 2026-10-19
-last_activity_desc: 03.1-02 ausgefuehrt (Anmeldung im Frontend, HARD-01 komplett, D-15), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
-state_head: 2fefb5144d3183ee89040f024d8d088d46ac0ad4
+stopped_at: Completed 03.1-03-PLAN.md
+last_updated: "2026-10-19T22:52:03.908Z"
+last_activity: 2026-10-20
+last_activity_desc: 03.1-03 ausgefuehrt (Lernen konsistent, HARD-02 komplett, Befunde 6-8), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
+state_head: ea50a722c725ca620453afbcbb344bc586e0d055
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 27
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03.1 (Release Hardening) — EXECUTING
-Plan: 2 of 7 ausgefuehrt (naechster: 03.1-03)
-Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
-Last activity: 2026-10-19 — 03.1-02 ausgefuehrt (10 Commits, Backend 137 + 259 passed, Frontend 247 passed, e2e 50 passed mit axe)
+Plan: 3 of 7 ausgefuehrt (naechster: 03.1-04)
+Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). 03.1-03 fertig (Set-Wahl begrenzt die ganze Runde bei kontoweiter Rueckstandsbremse, offene Runden der letzten 30 Minuten reservieren neue Karten, LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs ohne Migration; HARD-02 komplett; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, LOW 1 behoben). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
+Last activity: 2026-10-20 — 03.1-03 ausgefuehrt (8 Commits, Backend 137 + 272 passed, Frontend 247 passed, e2e 50 passed mit axe)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -78,6 +78,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P05 | 25min | 2 tasks | 3 files |
 | Phase 03.1 P01 | 20min | 3 tasks | 10 files |
 | Phase 03.1 P02 | 20min | 3 tasks | 6 files |
+| Phase 03.1 P03 | 134min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,8 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-01: HARD-03 erledigt; HARD-01 nur serverseitig, Clientteil in 03.1-02
 - [Phase 03.1]: 03.1-02: Oberflaeche folgt dem Token-Speicher per useSyncExternalStore; Refresh-Antwort nur bei unveraendertem Speicher; 409 uebernimmt nur in derselben Anmeldung (wq.session), Frist 3 s nach Uhrzeit
 - [Phase 03.1]: 03.1-02: wq.session auf Gleichheit verglichen, Altsitzungen ohne Kennung erneuern weiter; neue Anmeldung ueber tokenStore.saveLogin loescht wq-api vor dem Speichern
+- [Phase 03.1]: 03.1-03: Reservierung neuer Karten schliesst jede beantwortete Karte aus (LastReviewedAt gesetzt), auch aus dem Klassenarbeit-Modus
+- [Phase 03.1]: 03.1-03: D-10 ueber LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs, keine Migration
 
 ### Pending Todos
 
@@ -173,6 +176,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-19T20:33:14.249Z
-Stopped at: Completed 03.1-02-PLAN.md
+Last session: 2026-10-19T22:52:03.824Z
+Stopped at: Completed 03.1-03-PLAN.md
 Resume file: None

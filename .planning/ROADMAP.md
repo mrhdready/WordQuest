@@ -115,12 +115,12 @@ Phases execute in numeric order: 1 → 2 → 3
   4. A locally built production stack (setup.sh, Production, images built from the final commit) serves login and a learning round, observed in the browser
   5. Install and update from a locally built release package without git are green in the release smoke (download, checksum, self-update, image pull of the target version)
 
-**Plans:** 2/7 plans executed
+**Plans:** 3/7 plans executed
 
 Plans:
 - [x] 03.1-01-PLAN.md — Refresh und Widerruf unter Kontosperre mit bedingter Beanspruchung, 409-Gnadenfrist für den eben rotierten Vorgänger (D-17), Abmelden liest unter der Sperre neu und widerruft den Nachfolger, wiederholbarer Refresh nach 40P01, atomare PIN-Sperre (Befunde 1, 2 Server, 4 Server, 9)
 - [x] 03.1-02-PLAN.md — Oberfläche folgt dem Token-Speicher auch über Tabs, verspätete Refresh-Antwort verworfen, 409 übernimmt nur innerhalb derselben Anmeldung, verspätete 401er ohne neuen Refresh, Abmelden und neue Anmeldung leeren `wq-api` (Befunde 2, 4, 5 Client; D-15)
-- [ ] 03.1-03-PLAN.md — Set-Wahl begrenzt die ganze Runde bei kontoweiter Rückstandsbremse (D-19), offene Runden der letzten 30 Minuten reservieren neue Karten (D-18), Lernstand mit Concurrency-Token und Mindestabstand ohne Migration (Befunde 6, 7, 8)
+- [x] 03.1-03-PLAN.md — Set-Wahl begrenzt die ganze Runde bei kontoweiter Rückstandsbremse (D-19), offene Runden der letzten 30 Minuten reservieren neue Karten (D-18), Lernstand mit Concurrency-Token und Mindestabstand ohne Migration (Befunde 6, 7, 8)
 - [ ] 03.1-04-PLAN.md — Sicherheits-Header aus einer Include-Datei an jeder nginx-Antwort beider Varianten, auch an Fehlerantworten (D-21), eindeutige CSV-Kopfzeile (D-20), Ladefehler der Set-Liste mit axe (Befunde 3, 10, 11)
 - [ ] 03.1-05-PLAN.md — Release-Paket mit exakt geprüftem Inhalt und Prüfsumme aus der CI, Installation per curl ohne Git, README und Konzept, erste Runde bis zur Zusammenfassung im Smoke (D-16, HARD-05)
 - [ ] 03.1-06-PLAN.md — upgrade.sh holt das neueste Release: Paketprüfung vor jeder Änderung, Sicherung, Ersetzen, exec, echter Pull aus lokaler Registry im Release-Smoke, Klon-Weg und Grenzen (D-16, HARD-05)

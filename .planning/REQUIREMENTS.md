@@ -53,7 +53,7 @@
 ### Hardening (aus Codex-Gesamtreview 2026-10-19, `.planning/v1.0-CODEX-REVIEW.md`)
 
 - [x] **HARD-01**: Sessions stay consistent: refresh rotation and revocation cannot race, logout cannot be undone by a late refresh, two tabs do not revoke all sessions, and the UI returns to login when the session ends
-- [ ] **HARD-02**: Learning is consistent: a chosen set limits due cards too, concurrent answers to the same card keep the review state, parallel rounds count open rounds against the daily new-word limit
+- [x] **HARD-02**: Learning is consistent: a chosen set limits due cards too, concurrent answers to the same card keep the review state, parallel rounds count open rounds against the daily new-word limit
 - [x] **HARD-03**: The per-profile PIN lockout counts every failed attempt, even in parallel
 - [ ] **HARD-04**: Security headers and CSP are on every HTML response, the CSV import never drops a valid first word, the set list shows load errors, and logout clears cached API data
 - [ ] **HARD-05**: Parents install and update from the published release package and images without git; upgrade.sh fetches the newest release itself
@@ -124,7 +124,7 @@
 | REL-03 | Phase 3 | Complete |
 | REL-04 | Phase 3 | Pending |
 | HARD-01 | Phase 3.1 | Complete |
-| HARD-02 | Phase 3.1 | Pending |
+| HARD-02 | Phase 3.1 | Complete |
 | HARD-03 | Phase 3.1 | Complete |
 | HARD-04 | Phase 3.1 | Pending |
 | HARD-05 | Phase 3.1 | Pending |
