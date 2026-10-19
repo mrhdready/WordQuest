@@ -92,28 +92,29 @@ public sealed class AccountService(WordQuestDbContext db, TimeProvider clock)
 
         string password = RandomNumberGenerator.GetString(ResetAlphabet, ResetPasswordLength);
         user.PasswordHash = PasswordHasher.Hash(password);
-        await MarkRefreshTokensRevokedAsync(user.Id, ct);
-
-        // Ein SaveChanges: Passwort und Widerruf gelten zusammen oder gar nicht.
-        await db.SaveChangesAsync(ct);
+        await SaveAndRevokeRefreshTokensAsync(user.Id, ct);
         return password;
     }
 
     /// <summary>
-    /// Markiert alle aktiven Refresh-Tokens des Kontos als widerrufen, ohne zu
-    /// speichern: der Aufrufer speichert zusammen mit den neuen Zugangsdaten
-    /// (Passwort oder Kinder-PIN), damit beides zusammen gilt oder gar nicht.
+    /// Speichert die vom Aufrufer gesetzten Zugangsdaten (Passwort oder
+    /// Kinder-PIN) und widerruft alle aktiven Refresh-Tokens des Kontos in einer
+    /// Transaktion unter der Kontosperre: Beides gilt zusammen oder gar nicht.
+    /// Ein laufender Refresh schreibt seinen Nachfolger entweder vorher fest,
+    /// dann wird er hier widerrufen, oder er sieht danach den widerrufenen Token
+    /// (Codex-Befund 1, D-04).
     /// </summary>
-    public async Task MarkRefreshTokensRevokedAsync(Guid userId, CancellationToken ct = default)
+    public async Task SaveAndRevokeRefreshTokensAsync(Guid userId, CancellationToken ct = default)
     {
         DateTimeOffset now = clock.GetUtcNow();
-        List<RefreshToken> active = await db.RefreshTokens
-            .Where(t => t.UserId == userId && t.RevokedAt == null)
-            .ToListAsync(ct);
-        foreach (RefreshToken token in active)
+        await db.InTransactionAsync(async () =>
         {
-            token.RevokedAt = now;
-        }
+            await db.LockUserAsync(userId, ct);
+            await db.RefreshTokens
+                .Where(t => t.UserId == userId && t.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now), ct);
+            await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+        }, ct);
     }
 
     /// <summary>

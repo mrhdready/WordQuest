@@ -1,6 +1,5 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using WordQuest.Modules.Content.Entities;
 using WordQuest.Modules.Gamification.Entities;
 using WordQuest.Modules.Gamification.Services;
@@ -265,7 +264,7 @@ public sealed class LearningService(
 
         // Aufgabe, Lernstand, Protokoll und Gutschrift gehoeren zusammen: Ein
         // Konflikt beim Speichern bricht vor der Gutschrift ab und rollt alles zurueck.
-        await InTransactionAsync(async () =>
+        await db.InTransactionAsync(async () =>
         {
             await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
             await CreditAsync(sessionId, learnerId, xp, coins, ct);
@@ -308,7 +307,7 @@ public sealed class LearningService(
         // Den Abschluss atomar beanspruchen: Von zwei gleichzeitigen
         // Abschluessen findet nur einer die Runde noch offen; nur er vergibt
         // Bonus und Serie (Review Runde 1).
-        await InTransactionAsync(async () =>
+        await db.InTransactionAsync(async () =>
         {
             int claimed = await db.LearningSessions
                 .Where(s => s.Id == sessionId && s.CompletedAt == null)
@@ -430,24 +429,6 @@ public sealed class LearningService(
             FirstSeenAt = now,
             State = ReviewCardState.New,
         };
-
-    /// <summary>
-    /// Fuehrt <paramref name="work"/> in einer Transaktion aus. Wegen
-    /// EnableRetryOnFailure muss die Transaktion in der Ausfuehrungsstrategie
-    /// laufen; SaveChanges darin mit acceptAllChangesOnSuccess: false, damit ein
-    /// Wiederholungslauf dieselben Aenderungen noch einmal schreibt.
-    /// </summary>
-    private async Task InTransactionAsync(Func<Task> work, CancellationToken ct)
-    {
-        IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
-        {
-            await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
-            await work();
-            await transaction.CommitAsync(ct);
-        });
-        db.ChangeTracker.AcceptAllChanges();
-    }
 
     /// <summary>
     /// Schreibt XP und Muenzen als wert = wert + n gut, nie als gelesener Wert

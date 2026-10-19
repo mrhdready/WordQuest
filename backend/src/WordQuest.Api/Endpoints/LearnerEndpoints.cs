@@ -135,16 +135,19 @@ public static class LearnerEndpoints
         }
 
         // Leer heisst "PIN unveraendert"; eine neue PIN hebt eine Sperre sofort auf
-        // und meldet alle Geraete ab, die sich mit der alten angemeldet haben (WR-01).
+        // und meldet alle Geraete ab, die sich mit der alten angemeldet haben (WR-01);
+        // gespeichert wird sie zusammen mit dem Widerruf unter der Kontosperre (D-04).
         if (!string.IsNullOrEmpty(request.Pin))
         {
             profile.PinHash = PasswordHasher.Hash(request.Pin);
             profile.FailedPinAttempts = 0;
             profile.PinLockedUntil = null;
-            await accounts.MarkRefreshTokensRevokedAsync(profile.Id, ct);
+            await accounts.SaveAndRevokeRefreshTokensAsync(profile.Id, ct);
         }
-
-        await db.SaveChangesAsync(ct);
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
 
         return Results.Ok(new LearnerDto(
             profile.Id, profile.User!.DisplayName, profile.AvatarKey, profile.DailyNewLimit,
