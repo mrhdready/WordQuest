@@ -4,6 +4,8 @@ const BASE = '/api/v1'
 const ACCESS_KEY = 'wq.access'
 const REFRESH_KEY = 'wq.refresh'
 const USER_KEY = 'wq.user'
+// Eigenes Fenster-Ereignis nach jedem Schreiben; das storage-Ereignis meldet nur andere Tabs.
+const SESSION_EVENT = 'wq-session'
 
 // Deutsche Texte statt englischer Technik-Meldungen (UI-SPEC Copywriting "Error state").
 const UNREACHABLE =
@@ -40,14 +42,15 @@ export const tokenStore = {
   get refresh() {
     return safeRead(REFRESH_KEY)
   },
-  get user() {
-    const raw = safeRead(USER_KEY)
-    return raw ? (JSON.parse(raw) as AuthResponse['user']) : null
+  // Roher Eintrag als stabiler Snapshot fuer useSyncExternalStore.
+  get rawUser() {
+    return safeRead(USER_KEY)
   },
   save(auth: AuthResponse) {
     safeWrite(ACCESS_KEY, auth.accessToken)
     safeWrite(REFRESH_KEY, auth.refreshToken)
     safeWrite(USER_KEY, JSON.stringify(auth.user))
+    window.dispatchEvent(new Event(SESSION_EVENT))
   },
   clear() {
     for (const key of [ACCESS_KEY, REFRESH_KEY, USER_KEY]) {
@@ -56,6 +59,17 @@ export const tokenStore = {
       } catch {
         /* privater Modus oder gesperrter Speicher - kein Grund abzustuerzen */
       }
+    }
+    window.dispatchEvent(new Event(SESSION_EVENT))
+  },
+  // Die Oberflaeche folgt dem Speicher, auch wenn ein anderer Tab oder ein
+  // gescheiterter Refresh ihn aendert (D-07).
+  subscribe(listener: () => void) {
+    window.addEventListener(SESSION_EVENT, listener)
+    window.addEventListener('storage', listener)
+    return () => {
+      window.removeEventListener(SESSION_EVENT, listener)
+      window.removeEventListener('storage', listener)
     }
   },
 }

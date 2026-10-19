@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useMemo, useState, type ReactNode } from 'react'
+import { createContext, use, useCallback, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { api, tokenStore } from '@/lib/api'
 import type { AuthResponse, AuthUser } from '@/types'
 
@@ -13,7 +13,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => tokenStore.user)
+  // Quelle ist der Speicher: Sitzungsende durch Refresh 400/401 oder einen
+  // anderen Tab erreicht so auch die Routensperre (D-07).
+  const rawUser = useSyncExternalStore(tokenStore.subscribe, () => tokenStore.rawUser)
+  const user = useMemo(() => (rawUser ? (JSON.parse(rawUser) as AuthUser) : null), [rawUser])
 
   const loginAsGuardian = useCallback(async (email: string, password: string) => {
     const auth = await api<AuthResponse>('/auth/login', {
@@ -21,7 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: { email, password },
     })
     tokenStore.save(auth)
-    setUser(auth.user)
   }, [])
 
   const loginAsLearner = useCallback(async (learnerId: string, pin: string) => {
@@ -30,7 +32,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: { learnerId, pin },
     })
     tokenStore.save(auth)
-    setUser(auth.user)
   }, [])
 
   const logout = useCallback(async () => {
@@ -41,7 +42,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api('/auth/logout', { method: 'POST', body: { refreshToken } }).catch(() => undefined)
     }
     tokenStore.clear()
-    setUser(null)
   }, [])
 
   const value = useMemo<AuthContextValue>(
