@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 03
-current_phase_name: Installable 1.0.0 Release
-status: verifying
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-10-18T13:26:12.569Z"
-last_activity: 2026-10-18
-last_activity_desc: 03-05 ausgefuehrt, automatisches Phasen-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
-state_head: 106e54c0cda10ad293d35d301dd236f813c989c4
+current_phase: 03.1
+current_phase_name: Release Hardening
+status: executing
+stopped_at: Completed 03.1-01-PLAN.md
+last_updated: "2026-10-19T20:10:03.802Z"
+last_activity: 2026-10-19
+last_activity_desc: 03.1-01 ausgefuehrt (Anmeldung serverseitig, HARD-03, HARD-01 Serverteil), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
+state_head: f238b773cbf06ddd9954505a0baf7c8f5fb4d398
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 0
-  total_plans: 20
-  completed_plans: 20
+  total_plans: 27
+  completed_plans: 21
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** Parents without special know-how can set up WordQuest in their home network and their children can learn with it safely and reliably.
-**Current focus:** Phase 03 — Installable 1.0.0 Release
+**Current focus:** Phase 03.1 — Release Hardening
 
 ## Current Position
 
-Phase: 03 (Installable 1.0.0 Release) — VERIFYING (human_needed)
-Plan: 5 of 5
-Status: Alle Plaene ausgefuehrt, Audits (Verifikation, Review, Security) und Fixes erledigt, Release-Smoke gruen; lokales Tag v1.0.0 gesetzt (nicht gepusht); vor dem Push master auf v1-fertig bringen; Nach-Release-Abnahme in 03-UAT.md; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) weiter offen; Nach-Release-Abnahme Phase 3 offen (03-VALIDATION.md)
-Last activity: 2026-10-18 — 03-05 ausgefuehrt (Abschnittsfolge der Seite im Release-Smoke, Faktenpruefung der Seite mit fuenf Korrekturen, volles automatisches Phasen-Gate gruen: 16 Schritte mit Exit 0, e2e 48 passed mit axe)
+Phase: 03.1 (Release Hardening) — EXECUTING
+Plan: 1 of 7 ausgefuehrt (naechster: 03.1-02)
+Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
+Last activity: 2026-10-19 — 03.1-01 ausgefuehrt (8 Commits, Backend 137 + 259 passed, Frontend 230 passed, e2e 48 passed mit axe)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -76,6 +76,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P03 | 33min | 3 tasks | 5 files |
 | Phase 03 P04 | 31min | 3 tasks | 5 files |
 | Phase 03 P05 | 25min | 2 tasks | 3 files |
+| Phase 03.1 P01 | 20min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,10 @@ Recent decisions affecting current work:
 - [Phase 03]: 03-04: Sicherung vor dem Update mit umask 077 statt chmod an backups/; db vor der Sicherung mit --no-recreate
 - [Phase 03]: 03-05: REL-01, REL-02, REL-03 erledigt (Code und Smoke belegen sie); REL-04 bleibt offen bis zur Veroeffentlichung der Images (Nach-Release-Abnahme)
 - [Phase 03]: 03-05: automatisches Phasen-Gate gruen (16 Schritte, Exit 0); Voraussetzung fuer das lokale Tag v1.0.0 erfuellt, das Tag setzt der Orchestrator; vor dem Push master auf den Stand von v1-fertig bringen
+- [Phase 03.1]: 03.1-01: Kontosperre (SELECT ... FOR UPDATE auf app_user) als gemeinsamer Riegel fuer Refresh, Abmelden und Widerruf; bedingte Beanspruchung zusaetzlich (D-04)
+- [Phase 03.1]: 03.1-01: Gnadenfrist 10 s mit 409 nur fuer den unmittelbaren Vorgaenger mit aktivem Nachfolger (D-06, D-17); Restrisiko im Konzept
+- [Phase 03.1]: 03.1-01: Npgsql wiederholt 40P01 unter EnableRetryOnFailure (Test mit Interceptor); Login-Pfade bleiben ohne eigene Sperre, Luecke Anmeldung mit alten Zugangsdaten waehrend Widerruf im Konzept
+- [Phase 03.1]: 03.1-01: HARD-03 erledigt; HARD-01 nur serverseitig, Clientteil in 03.1-02
 
 ### Pending Todos
 
@@ -164,6 +169,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T13:26:12.513Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-10-19T20:10:00Z
+Stopped at: Completed 03.1-01-PLAN.md
 Resume file: None
