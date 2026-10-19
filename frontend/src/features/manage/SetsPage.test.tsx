@@ -140,6 +140,54 @@ describe('Set-Formular "Neues Set"', () => {
   })
 })
 
+// Ladefehler der Set-Liste sichtbar statt leerer Flaeche (Codex-Befund 11, D-14).
+describe('Ladefehler der Set-Liste', () => {
+  it('500 zeigt die allgemeine Meldung', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 500 })),
+    )
+    renderWithProviders(<SetsPage />, { route: '/verwalten', path: '/verwalten' })
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Das hat nicht geklappt. Versuche es noch einmal.',
+    )
+  })
+
+  it('Netzfehler zeigt die Meldung zur Verbindung', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch')
+      }),
+    )
+    renderWithProviders(<SetsPage />, { route: '/verwalten', path: '/verwalten' })
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.',
+    )
+  })
+
+  it('Formular "Neues Set" bleibt neben der Meldung nutzbar', async () => {
+    const posts: unknown[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posts.push(JSON.parse(String(init.body)))
+          return Response.json(createdSet, { status: 201 })
+        }
+        return new Response(null, { status: 500 })
+      }),
+    )
+    const input = await openForm()
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Das hat nicht geklappt. Versuche es noch einmal.',
+    )
+    await userEvent.type(input, 'Unit 9')
+    await userEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
+    await waitFor(() => expect(posts).toEqual([{ title: 'Unit 9' }]))
+  })
+})
+
 // UI-SPEC empty: nach dem Loeschen des letzten Sets steht die Meldung ueber dem Leerzustand.
 it('Erfolgsmeldung nach "Set löschen" steht über "Noch keine Vokabelsets"', async () => {
   stubApi(async () => Response.json(createdSet, { status: 201 }))
