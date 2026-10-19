@@ -1,11 +1,17 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
+using WordQuest.Infrastructure;
 using WordQuest.Api.Contracts;
 using WordQuest.Modules.Identity.Entities;
+using WordQuest.Modules.Identity.Services;
 using static WordQuest.Api.Tests.TestData;
 
 namespace WordQuest.Api.Tests;
@@ -21,6 +27,7 @@ public sealed class AuthEndpointTests : IAsyncLifetime
     private const string Auth = "/api/v1/auth";
     private const string Expired = "Sitzung abgelaufen. Bitte neu anmelden.";
     private const string BadBody = "Die Anfrage ist unvollständig oder nicht lesbar.";
+    private const string Renewed = "Die Anmeldung wurde gerade in einem anderen Fenster erneuert.";
 
     private readonly ApiFactory _factory = new ApiFactory();
 
@@ -55,6 +62,9 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 
     private static Task<HttpResponseMessage> RefreshAsync(HttpClient client, string refreshToken) =>
         client.PostAsJsonAsync($"{Auth}/refresh", new { refreshToken });
+
+    private static Task<HttpResponseMessage> LogoutAsync(HttpClient client, string refreshToken) =>
+        client.PostAsJsonAsync($"{Auth}/logout", new { refreshToken });
 
     private async Task<int> ActiveRefreshTokensAsync(Guid userId)
     {
@@ -207,7 +217,8 @@ public sealed class AuthEndpointTests : IAsyncLifetime
     }
 
     // T-02-27: Ein rotiertes Token taucht erneut auf (gestohlen oder verschleppt):
-    // 401, und alle Tokens des Kontos sind danach widerrufen.
+    // 401, und alle Tokens des Kontos sind danach widerrufen. Ausserhalb der
+    // Gnadenfrist von 10 Sekunden (D-06), deshalb liegt die Rotation 11 Sekunden zurueck.
     [Fact]
     public async Task Wiederverwendetes_Refresh_Token_ergibt_401_und_widerruft_alle_Tokens()
     {
@@ -215,6 +226,13 @@ public sealed class AuthEndpointTests : IAsyncLifetime
         using HttpClient client = _factory.CreateClient();
         AuthResponse first = await TokensAsync(await LearnerLoginAsync(client, family.Child.Id, ChildPin));
         AuthResponse second = await TokensAsync(await RefreshAsync(client, first.RefreshToken));
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            string firstHash = TokenHasher.Hash(first.RefreshToken);
+            await db.RefreshTokens
+                .Where(t => t.TokenHash == firstHash)
+                .ExecuteUpdateAsync(u => u.SetProperty(t => t.RevokedAt, t => t.RevokedAt - TimeSpan.FromSeconds(11)));
+        }
 
         HttpResponseMessage reused = await RefreshAsync(client, first.RefreshToken);
         Assert.Equal(Expired, await DetailAsync(reused, HttpStatusCode.Unauthorized));
@@ -268,5 +286,174 @@ public sealed class AuthEndpointTests : IAsyncLifetime
 
         HttpResponseMessage refresh = await RefreshAsync(client, auth.RefreshToken);
         Assert.Equal(Expired, await DetailAsync(refresh, HttpStatusCode.Unauthorized));
+    }
+
+    // ------------------------------------------------------------ Zwei Fenster, Abmelden (D-05, D-06)
+
+    // Codex-Befund 4: Zwei Fenster erneuern gleichzeitig mit demselben Token. Genau
+    // ein Nachfolger, das andere Fenster bekommt 409 ohne Tokens, nichts widerrufen.
+    [Fact]
+    public async Task Gleichzeitiger_Refresh_ergibt_200_und_409_und_der_Nachfolger_bleibt_gueltig()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse first = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+
+        var held = await _factory.LockRowsAsync(("app_user", family.Owner.Id));
+        Task<HttpResponseMessage> one = RefreshAsync(client, first.RefreshToken);
+        Task<HttpResponseMessage> two = RefreshAsync(client, first.RefreshToken);
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        AuthResponse second = await TokensAsync(Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK));
+        Assert.Equal(Renewed, await DetailAsync(
+            Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Conflict), HttpStatusCode.Conflict));
+        await TokensAsync(await RefreshAsync(client, second.RefreshToken));
+    }
+
+    [Fact]
+    public async Task Eben_rotiertes_Token_ergibt_409_und_der_Nachfolger_bleibt_gueltig()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse first = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+        AuthResponse second = await TokensAsync(await RefreshAsync(client, first.RefreshToken));
+
+        Assert.Equal(Renewed, await DetailAsync(await RefreshAsync(client, first.RefreshToken), HttpStatusCode.Conflict));
+
+        await TokensAsync(await RefreshAsync(client, second.RefreshToken));
+    }
+
+    // Die Gnadenfrist gilt nur, solange der Nachfolger aktiv ist.
+    [Fact]
+    public async Task Eben_rotiertes_Token_mit_abgemeldetem_Nachfolger_ergibt_401()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse first = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+        AuthResponse second = await TokensAsync(await RefreshAsync(client, first.RefreshToken));
+        Assert.Equal(HttpStatusCode.NoContent, (await LogoutAsync(client, second.RefreshToken)).StatusCode);
+
+        Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, first.RefreshToken), HttpStatusCode.Unauthorized));
+    }
+
+    // Codex-Befund 2 (Serverteil): Abmelden mit einem Token, dessen Refresh der
+    // Server schon ausgefuehrt hat, beendet auch den Nachfolger.
+    [Fact]
+    public async Task Abmelden_mit_eben_rotiertem_Token_widerruft_den_Nachfolger()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse first = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+        AuthResponse second = await TokensAsync(await RefreshAsync(client, first.RefreshToken));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await LogoutAsync(client, first.RefreshToken)).StatusCode);
+
+        Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, second.RefreshToken), HttpStatusCode.Unauthorized));
+    }
+
+    // Abmelden laeuft, waehrend der Refresh mit demselben Token schreibt
+    // (Review 01 HIGH). Die Testsperre liegt auf der Token-Zeile: Der Refresh
+    // haelt dann schon die Kontosperre und wartet beim Beanspruchen, das
+    // Abmelden hat den Token schon gelesen. Danach darf kein Token aktiv sein.
+    [Fact]
+    public async Task Abmelden_waehrend_Refresh_hinterlaesst_keinen_gueltigen_Token()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse first = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+        Guid firstId;
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            firstId = await db.RefreshTokens.Where(t => t.UserId == family.Owner.Id).Select(t => t.Id).SingleAsync();
+        }
+
+        var held = await _factory.LockRowsAsync(("refresh_token", firstId));
+        Task<HttpResponseMessage> refresh = RefreshAsync(client, first.RefreshToken);
+        await _factory.WaitForBlockedAsync(1);
+        Task<HttpResponseMessage> logout = LogoutAsync(client, first.RefreshToken);
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
+        HttpResponseMessage refreshed = await refresh;
+        Assert.Equal(HttpStatusCode.NoContent, (await logout).StatusCode);
+
+        Assert.Equal(0, await ActiveRefreshTokensAsync(family.Owner.Id));
+        if (refreshed.StatusCode == HttpStatusCode.OK)
+        {
+            AuthResponse successor = await TokensAsync(refreshed);
+            Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, successor.RefreshToken), HttpStatusCode.Unauthorized));
+        }
+    }
+
+    // Review 01 MEDIUM, Plan-Checker 40P01: Die Ausfuehrungsstrategie wiederholt den
+    // Refresh nach einem Deadlock hinter dem Anlegen des Nachfolgers. Es entsteht
+    // genau ein Nachfolger, und die Antwort traegt genau diesen.
+    [Fact]
+    public async Task Refresh_nach_Deadlock_wiederholt_und_legt_genau_einen_Nachfolger_an()
+    {
+        var deadlock = new DeadlockOnceInterceptor();
+        _factory.TestServices = services =>
+            services.ConfigureDbContext<WordQuestDbContext>(options => options.AddInterceptors(deadlock));
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse first = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+
+        deadlock.Arm();
+        AuthResponse second = await TokensAsync(await RefreshAsync(client, first.RefreshToken));
+
+        Assert.Equal(1, deadlock.Thrown);
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            List<RefreshToken> stored = await db.RefreshTokens.Where(t => t.UserId == family.Owner.Id).ToListAsync();
+            Assert.Equal(2, stored.Count);
+            RefreshToken old = Assert.Single(stored, t => t.TokenHash == TokenHasher.Hash(first.RefreshToken));
+            Assert.NotNull(old.RevokedAt);
+            Assert.Equal(TokenHasher.Hash(second.RefreshToken), old.ReplacedByTokenHash);
+            RefreshToken next = Assert.Single(stored, t => t.TokenHash == TokenHasher.Hash(second.RefreshToken));
+            Assert.Null(next.RevokedAt);
+        }
+
+        await TokensAsync(await RefreshAsync(client, second.RefreshToken));
+    }
+
+    /// <summary>
+    /// Wirft genau einmal nach Arm() beim Einfuegen eines Refresh-Tokens einen
+    /// Deadlock (40P01), wie ihn PostgreSQL bei einem echten Sperrzyklus meldet.
+    /// </summary>
+    private sealed class DeadlockOnceInterceptor : DbCommandInterceptor
+    {
+        private int _armed;
+        private int _thrown;
+
+        public int Thrown => Volatile.Read(ref _thrown);
+
+        public void Arm() => Volatile.Write(ref _armed, 1);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowOnce(command);
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowOnce(command);
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        private void ThrowOnce(DbCommand command)
+        {
+            if (command.CommandText.Contains("INSERT INTO refresh_token", StringComparison.Ordinal)
+                && Interlocked.CompareExchange(ref _armed, 0, 1) == 1)
+            {
+                Interlocked.Increment(ref _thrown);
+                throw new PostgresException("erzwungener Deadlock (Test)", "ERROR", "ERROR", PostgresErrorCodes.DeadlockDetected);
+            }
+        }
     }
 }

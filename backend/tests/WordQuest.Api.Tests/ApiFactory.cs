@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +51,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         Environment.SetEnvironmentVariable("WQ_JWT_SIGNING_KEY", TestSigningKey);
         Environment.SetEnvironmentVariable("WQ_SEED_DEMO_DATA", "false");
     }
+
+    /// <summary>
+    /// Zusaetzliche Testdienste (z. B. Interceptor, feste Uhr). Muss vor dem
+    /// ersten Zugriff auf den Host gesetzt sein; danach wirkt sie nicht mehr.
+    /// </summary>
+    public Action<IServiceCollection>? TestServices { get; set; }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureTestServices(services => TestServices?.Invoke(services));
 
     /// <summary>
     /// Kontext ohne Mandantenfilter fuer Testdaten und Pruefungen. Gebaut aus
