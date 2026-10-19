@@ -27,6 +27,10 @@ public sealed class LearningService(
 {
     private const int MaxChoices = 4;
 
+    // Eine per "Schliessen" verlassene Runde bleibt offen. Ihre neuen Karten
+    // sollen das Tagesbudget nicht den ganzen Tag blockieren (D-18).
+    private static readonly TimeSpan ReservationWindow = TimeSpan.FromMinutes(30);
+
     /// <summary>Startet eine Runde; <c>null</c>, wenn es das Lernprofil nicht (mehr) gibt.</summary>
     public async Task<SessionView?> StartSessionAsync(
         Guid learnerId,
@@ -94,25 +98,38 @@ public sealed class LearningService(
                 .Where(r => r.LearnerId == learnerId && r.State != ReviewCardState.New)
                 .Select(r => r.CardId);
 
-            fresh = await cardsInScope
-                .Where(c => !alreadySeen.Contains(c.Id))
-                // Rezeption zuerst: "dog → Hund" wird deutlich frueher
-                // beherrscht als "Hund → dog" und ist der sanftere Einstieg
-                // in ein neues Wort.
-                .OrderBy(c => c.Direction == CardDirection.TargetToSource ? 0 : 1)
-                .ThenBy(c => c.Entry!.Position)
-                // Eindeutiger Gleichstandsbrecher: Ohne Set teilen sich Karten
-                // verschiedener Sets dieselbe Position, und PostgreSQL garantiert
-                // dann keine feste Reihenfolge. Die naechste Runde soll dieselben
-                // neuen Karten anbieten (FIX-03).
-                .ThenBy(c => c.Id)
-                .Take(newBudget)
+            // Eine Antwort zaehlt immer (D-09). Der Start rechnet deshalb neue
+            // Karten mit, die gerade unbeantwortet in einer offenen Runde liegen.
+            // Reservierte Karten kommen ohne weiteres Budget wieder, sie sind in
+            // ihrer offenen Runde ohnehin beantwortbar (FIX-03). Grenze: Zwei
+            // Starts in derselben Sekunde sehen die Reservierung des anderen
+            // nicht (D-09, akzeptiert).
+            DateTimeOffset reservedSince = now - ReservationWindow;
+            List<Guid> reserved = await db.SessionItems
+                .Where(i => i.AnsweredAt == null
+                            && i.Session!.LearnerId == learnerId
+                            && i.Session.CompletedAt == null
+                            && i.Session.StartedAt >= reservedSince
+                            && !alreadySeen.Contains(i.CardId))
+                .Select(i => i.CardId)
+                .Distinct()
+                .ToListAsync(ct);
+            int free = Math.Max(0, newBudget - reserved.Count);
+
+            // Zwei Abfragen: Eine gemeinsame mit Take verfehlt reservierte Karten
+            // weiter hinten in der Reihenfolge.
+            IQueryable<Card> unseen = cardsInScope.Where(c => !alreadySeen.Contains(c.Id));
+            fresh = await InNewCardOrder(unseen.Where(c => reserved.Contains(c.Id)))
                 .Select(c => new SessionCandidate(c.Id, ReviewCardState.New, now))
                 .ToListAsync(ct);
+            fresh.AddRange(await InNewCardOrder(unseen.Where(c => !reserved.Contains(c.Id)))
+                .Take(free)
+                .Select(c => new SessionCandidate(c.Id, ReviewCardState.New, now))
+                .ToListAsync(ct));
         }
 
         IReadOnlyList<SessionCandidate> selected =
-            composer.Compose(relearning, due, fresh, newBudget, now, size);
+            composer.Compose(relearning, due, fresh, fresh.Count, now, size);
 
         var session = new LearningSession
         {
@@ -428,6 +445,19 @@ public sealed class LearningService(
         r => r.LearnerId == learnerId
              && (r.State == ReviewCardState.Review || r.State == ReviewCardState.Relearning)
              && r.DueAt <= now;
+
+    private static IQueryable<Card> InNewCardOrder(IQueryable<Card> cards) =>
+        cards
+            // Rezeption zuerst: "dog → Hund" wird deutlich frueher
+            // beherrscht als "Hund → dog" und ist der sanftere Einstieg
+            // in ein neues Wort.
+            .OrderBy(c => c.Direction == CardDirection.TargetToSource ? 0 : 1)
+            .ThenBy(c => c.Entry!.Position)
+            // Eindeutiger Gleichstandsbrecher: Ohne Set teilen sich Karten
+            // verschiedener Sets dieselbe Position, und PostgreSQL garantiert
+            // dann keine feste Reihenfolge. Die naechste Runde soll dieselben
+            // neuen Karten anbieten (FIX-03).
+            .ThenBy(c => c.Id);
 
     private IQueryable<Card> CardsInScope(Guid? setId)
     {

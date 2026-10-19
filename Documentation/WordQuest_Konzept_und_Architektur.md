@@ -279,7 +279,16 @@ Eine Quest enthält maximal 15 Items, zusammengestellt in dieser Reihenfolge:
 
 Zusätzlich wird eine falsch beantwortete Karte sofort als Wiederholungs-Item an die laufende Session angehängt.
 
-**Wann eine neue Karte zählt.** Neue Karten zählen für das Tageslimit erst mit der ersten Antwort. Der Start einer Runde legt keinen Lernstand an; die erste Antwort legt ihn an und setzt `first_seen_at` auf den Antwortzeitpunkt. Eine gezeigte, nicht beantwortete Karte kommt deshalb in der nächsten Runde wieder, und ein Abbruch kostet kein Tageslimit (`FIX-03`, `FIX-09`). Rundenstart und Übersicht (`newRemainingToday`) zählen dieselbe Menge: beantwortete Lernstände mit `first_seen_at` ab Beginn des lokalen Tages. Bewusste Restgrenze: Ansehen ohne Antwort ist unbegrenzt, ein Kind kann neue Karten beliebig oft aufdecken, ohne zu antworten.
+**Wann eine neue Karte zählt.** Neue Karten zählen für das Tageslimit erst mit der ersten Antwort. Der Start einer Runde legt keinen Lernstand an; die erste Antwort legt ihn an und setzt `first_seen_at` auf den Antwortzeitpunkt. Eine gezeigte, nicht beantwortete Karte kommt deshalb in der nächsten Runde wieder, und ein Abbruch kostet kein Tageslimit (`FIX-03`, `FIX-09`). Rundenstart und Übersicht (`newRemainingToday`) zählen dieselbe Menge: beantwortete Lernstände mit `first_seen_at` ab Beginn des lokalen Tages.
+
+Der Rundenstart rechnet zusätzlich neue Karten mit, die unbeantwortet in einer offenen Runde desselben Kindes liegen, die vor höchstens 30 Minuten gestartet wurde. Je Karte zählt das einmal, auch wenn sie in zwei Runden liegt. Für weitere neue Karten bleibt nur der Rest des Tageslimits. Mehrere offene Runden bieten so zusammen nicht mehr neue Wörter an, als das Limit erlaubt. Reservierte Karten kommen in der nächsten Runde ohne weiteres Budget wieder, sie sind in ihrer offenen Runde ohnehin beantwortbar. Eine abgeschlossene Runde reserviert nichts. Eine per „Schließen“ verlassene Runde bleibt offen und blockiert das Budget höchstens 30 Minuten. Die Übersicht zählt weiter nur Antworten.
+
+Bewusste Grenzen:
+
+- Ansehen ohne Antwort kostet weiter nichts. Ohne Antwort kommen dieselben neuen Karten immer wieder. Neue Karten aus einem anderen Set deckt ein Kind ohne Antwort erst auf, wenn seine Runden abgeschlossen oder vor mehr als 30 Minuten gestartet sind.
+- Zwei Starts in derselben Sekunde sehen die Reservierung des anderen nicht und bieten beide das volle Budget an.
+- Wird eine Runde erst nach mehr als 30 Minuten beantwortet und ist inzwischen eine zweite gestartet, kann das Kind über dem Limit landen.
+- Eine Antwort auf ein neues Wort über dem Limit wird nie abgelehnt; eine Antwort zählt immer.
 
 Die Deckelung bei 5 neuen Karten pro Tag ist der wichtigste Parameter des ganzen Systems. Wer 40 neue Vokabeln an einem Abend einspeist, erzeugt in den Folgetagen eine Wiederholungslawine, die das Kind sicher zum Abbruch bringt. Der Wert ist pro Lernendem konfigurierbar (`daily_new_limit`, Default 5, Bereich 3–15) und wird im Eltern-Dashboard erklärt, nicht nur als Zahl angeboten.
 
