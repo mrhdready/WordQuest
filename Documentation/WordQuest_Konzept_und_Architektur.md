@@ -273,8 +273,8 @@ Beim Vergessen fällt das Intervall auf **null** zurück, nicht nur die Zähler.
 
 Eine Quest enthält maximal 15 Items, zusammengestellt in dieser Reihenfolge:
 
-1. Alle Karten in `Relearning` mit `due_at <= now` (Fehler, auch aus früheren Sessions)
-2. Fällige `Review`-Karten, älteste `due_at` zuerst — **maximal 10**
+1. Alle Karten in `Relearning` mit `due_at <= now` (Fehler, auch aus früheren Sessions), bei gewähltem Set nur aus diesem Set
+2. Fällige `Review`-Karten, älteste `due_at` zuerst — **maximal 10**, bei gewähltem Set nur aus diesem Set
 3. Auffüllen mit `New`-Karten aus dem aktiven Set (Rezeptionsrichtung EN→DE zuerst) — **maximal 5 neue pro Tag und Lernendem**
 
 Zusätzlich wird eine falsch beantwortete Karte sofort als Wiederholungs-Item an die laufende Session angehängt.
@@ -286,6 +286,8 @@ Die Deckelung bei 5 neuen Karten pro Tag ist der wichtigste Parameter des ganzen
 **Rückstandsbremse.** Das Tagesbudget allein genügt nicht. Es begrenzt den Zufluss, aber nicht das Verhältnis von Zufluss zu Abfluss: Wer nur eine Einheit am Tag schafft, bekommt trotzdem jeden Tag fünf neue Wörter dazu, und der Berg fälliger Wiederholungen wächst über Monate. Deshalb gilt zusätzlich:
 
 > Neue Karten werden nur eingeführt, solange der Rückstand an fälligen Karten in **eine Session** passt (≤ 15).
+
+Die Bremse zählt alle fälligen Karten des Kindes, auch wenn ein Set gewählt ist. Wer in einem Set hinterherhängt, bekommt auch in einem anderen keine neuen Wörter.
 
 Das ist keine Feinabstimmung, sondern die Bedingung dafür, dass das System überhaupt funktioniert. Eine Simulation über ein Schuljahr (600 Karten, realistisches Antwortverhalten) zeigte den Unterschied:
 

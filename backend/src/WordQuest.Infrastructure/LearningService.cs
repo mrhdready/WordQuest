@@ -47,9 +47,17 @@ public sealed class LearningService(
 
         IQueryable<Card> cardsInScope = CardsInScope(setId);
 
+        // Die Set-Wahl begrenzt, welche Karten kommen, auch bei Wiederholung
+        // und Neulernen (D-08). Ohne Set bleibt alles wie bisher.
+        IQueryable<ReviewState> dueInScope = db.ReviewStates.Where(IsDue(learnerId, now));
+        if (setId is not null)
+        {
+            IQueryable<Guid> scopeIds = cardsInScope.Select(c => c.Id);
+            dueInScope = dueInScope.Where(r => scopeIds.Contains(r.CardId));
+        }
+
         // 1. Fehler aus vorherigen Sessions, die noch in Relearning stehen.
-        List<SessionCandidate> relearning = await db.ReviewStates
-            .Where(IsDue(learnerId, now))
+        List<SessionCandidate> relearning = await dueInScope
             .Where(r => r.State == ReviewCardState.Relearning)
             .OrderBy(r => r.DueAt)
             .Select(r => new SessionCandidate(r.CardId, r.State, r.DueAt))
@@ -57,8 +65,7 @@ public sealed class LearningService(
             .ToListAsync(ct);
 
         // 2. Faellige Wiederholungen.
-        List<SessionCandidate> due = await db.ReviewStates
-            .Where(IsDue(learnerId, now))
+        List<SessionCandidate> due = await dueInScope
             .Where(r => r.State == ReviewCardState.Review)
             .OrderBy(r => r.DueAt)
             .Select(r => new SessionCandidate(r.CardId, r.State, r.DueAt))
@@ -67,6 +74,15 @@ public sealed class LearningService(
 
         // 3. Neue Karten, begrenzt durch das Tagesbudget.
         int newBudget = await NewBudgetAsync(profile, now, ct);
+
+        // Die Rueckstandsbremse gilt fuer das ganze Kind (Konzept §6.3, D-19):
+        // Bei gewaehltem Set sieht der Composer nur dessen faellige Karten,
+        // deshalb zaehlt hier der Rueckstand ueber alle Sets.
+        if (setId is not null
+            && await DueCountAsync(learnerId, now, ct) > scheduler.Options.NewCardBacklogLimit)
+        {
+            newBudget = 0;
+        }
 
         List<SessionCandidate> fresh = [];
         if (newBudget > 0)
