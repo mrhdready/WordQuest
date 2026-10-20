@@ -22,7 +22,7 @@ docker compose version >/dev/null 2>&1 || die "'docker compose' ist nicht verfü
 [[ -f .env ]] || die "Keine .env gefunden. Ist WordQuest hier mit setup.sh eingerichtet?"
 
 # Vollstaendiger Dump: gzip heil, Endzeile von pg_dump. tail und grep -c lesen
-# den ganzen Strom, sonst bricht gunzip unter pipefail mit SIGPIPE ab
+# den ganzen Strom, sonst bricht gunzip bzw. tail unter pipefail mit SIGPIPE ab
 # (03-RESEARCH Pitfall 4). Die Endzeile steht seit pg_dump 17.6 fuenftletzt
 # (\unrestrict danach); 20 Zeilen lassen kuenftigen Zusaetzen Platz, einem
 # abgebrochenen Dump fehlt sie ganz. Ganze Zeile (-x), damit eine Datenzeile

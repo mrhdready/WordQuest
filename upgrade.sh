@@ -46,7 +46,7 @@ fi
 current="$(env_value WQ_VERSION)"
 
 # Wie restore.sh: tail und grep -c lesen den ganzen Strom, sonst bricht gunzip
-# unter pipefail mit SIGPIPE ab (03-RESEARCH Pitfall 4); Endzeile unter den
+# bzw. tail unter pipefail mit SIGPIPE ab (03-RESEARCH Pitfall 4); Endzeile unter den
 # letzten 20 Zeilen als ganze Zeile, Platz fuer kuenftige Zusaetze nach
 # \unrestrict.
 dump_complete() {

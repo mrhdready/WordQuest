@@ -148,7 +148,8 @@ docker compose exec -T backup /backup.sh </dev/null >/dev/null || fail "Manuelle
 dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1)"
 [[ -n "$dump" ]] || fail "Keine Datei backups/daily/wordquest-*.sql.gz."
 gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
-gunzip -c "$dump" | grep -q 'COPY public.app_user' || fail "$dump enthaelt die Kontodaten nicht."
+# grep -c statt -q: sonst bricht gunzip unter pipefail mit SIGPIPE ab (03-RESEARCH Pitfall 4).
+[[ "$(gunzip -c "$dump" | grep -c 'COPY public.app_user' || true)" -gt 0 ]] || fail "$dump enthaelt die Kontodaten nicht."
 echo "BACKUP OK"
 
 echo "== Seedfreier Erstdurchlauf bis zur Zusammenfassung der ersten Runde (PAR-05)"
@@ -169,7 +170,8 @@ docker compose exec -T db psql -U wordquest -d wordquest -qc \
 docker compose restart api </dev/null >/dev/null 2>&1 || true
 aborted=0
 for _ in $(seq 1 30); do
-  if docker compose logs api </dev/null 2>&1 | grep -qF "Start abgebrochen: Das Demo-Elternkonto $demo_email hat noch sein bekanntes Passwort."; then
+  # grep -c statt -q: sonst bricht docker compose logs nach dem Treffer per SIGPIPE ab.
+  if [[ "$(docker compose logs api </dev/null 2>&1 | grep -cF "Start abgebrochen: Das Demo-Elternkonto $demo_email hat noch sein bekanntes Passwort." || true)" -gt 0 ]]; then
     aborted=1; break
   fi
   sleep 2
