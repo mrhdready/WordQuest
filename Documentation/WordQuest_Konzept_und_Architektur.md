@@ -94,7 +94,7 @@ Priorisierung nach MoSCoW, bezogen auf das MVP (= „ein Kind kann damit für di
 | # | Feature | Anmerkung |
 |---|---|---|
 | M1 | Vokabelsets anlegen, Vokabeln manuell erfassen | Schnellerfassung: eine Zeile `Hund = dog`, Tab springt weiter |
-| M2 | CSV-Import | Feste Spaltenreihenfolge Quelle; Ziel; [Emoji], Trennzeichen-Erkennung (`;`, `,`, Tab), Vorschau vor dem Import |
+| M2 | CSV-Import | Feste Spaltenreihenfolge Quelle; Ziel; [Emoji], Trennzeichen-Erkennung (`;`, `,`, Tab), Vorschau vor dem Import. Die erste Zeile gilt nur als Kopfzeile, wenn jedes belegte Feld ein Kopfwort ist und jedes aus einer anderen Gruppe stammt (Quelle: `Deutsch`, `German`, `Quelle`, `Source`; Ziel: `Englisch`, `English`, `Ziel`, `Target`; Emoji: `Emoji`, `Bild`). `Quelle;source` oder `Bild;picture` sind Vokabeln; im Zweifel wird die erste Zeile importiert und erscheint in der Vorschau |
 | M3 | Spaced Repetition Engine | → §6, das Herzstück |
 | M4 | Antwortbewertung mit Tippfehlertoleranz | → §6.4 |
 | M5 | Lernsession („Quest") mit definiertem Ende | höchstens 15 Items (ein Zeitlimit gibt es nicht) |
@@ -664,7 +664,7 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 | Transport | HSTS außerhalb von Development; TLS nur in der Domain-Variante. Keine Cookies: Tokens liegen im `localStorage` und gehen im `Authorization`-Header (bewusst akzeptiertes Risiko) |
 | Autorisierung | `tenant_id` über einen EF-Core-Global-Query-Filter — nicht pro Query von Hand; zusätzlich darf ein Kind nur für sich selbst lernen (`MayActFor`, Geschwister teilen den Mandanten) |
 | Uploads | CSV wird als Text im JSON-Body übertragen, es gibt keinen Datei- oder Bild-Upload. Größenlimit: **geplant, nicht umgesetzt** (v2, `OPS2-03`) |
-| Headers | CSP in `frontend/nginx.conf`, derzeit mit `style-src 'unsafe-inline'`; `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` |
+| Headers | CSP, derzeit mit `style-src 'unsafe-inline'`; `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`. Alle mit `always` in `frontend/nginx-security-headers.conf`, eingebunden im server-Block von `frontend/nginx.conf` und in jeder location mit eigenem Cache-Control (`/assets/`, `/sw.js`, `/index.html`); sie gelten damit für jede Antwort, auch HTML, Assets, `sw.js` und Fehlerantworten |
 | Audit | Auditlog für Anmeldungen, Rollenwechsel, Löschungen: **geplant, nicht umgesetzt** |
 
 **Datensparsamkeit:** Pflichtfeld für ein Kind ist ausschließlich ein Anzeigename — ein Spitzname genügt, kein Geburtsdatum, keine E-Mail, keine Klasse. Es existiert keine Telemetrie und kein externer Analytics-Dienst. Alle Schriften und Icons werden mitgeliefert, nicht von einem CDN geladen (ein Google-Fonts-Aufruf überträgt die IP des Kindes an einen Dritten); die CSP erlaubt Schriften nur von der eigenen Origin.

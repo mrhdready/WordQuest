@@ -37,7 +37,7 @@ export class ApiError extends Error {
   Bewusste Abwaegung: httpOnly-Cookies waeren gegen XSS sicherer, aber die App
   muss offline starten und die Sitzung ueberleben, ohne dass der Server
   erreichbar ist. Der Gegenwert ist eine strikte CSP ohne inline-Skripte
-  (siehe frontend/nginx.conf) — damit bleibt XSS die Ausnahme statt der Regel.
+  (siehe frontend/nginx-security-headers.conf) — damit bleibt XSS die Ausnahme statt der Regel.
 */
 export const tokenStore = {
   get access() {

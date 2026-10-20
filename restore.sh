@@ -135,7 +135,7 @@ load_dump() {
 }
 
 # Startet alles und wartet auf die API; nginx loest api nur beim Start auf
-# (frontend/nginx.conf:40), deshalb danach web neu starten.
+# (Block location /api/ in frontend/nginx.conf), deshalb danach web neu starten.
 start_app() {
   local _
   docker compose up -d </dev/null || return 1

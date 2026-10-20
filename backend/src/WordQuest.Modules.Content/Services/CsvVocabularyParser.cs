@@ -29,11 +29,12 @@ public static class CsvVocabularyParser
 {
     private static readonly char[] Candidates = [';', ',', '\t'];
 
-    private static readonly string[] HeaderWords =
+    // Kopfwoerter nach Bedeutung: Quelle, Ziel, Emoji.
+    private static readonly string[][] HeaderGroups =
     [
-        "deutsch", "german", "quelle", "source",
-        "englisch", "english", "ziel", "target",
-        "emoji", "bild",
+        ["deutsch", "german", "quelle", "source"],
+        ["englisch", "english", "ziel", "target"],
+        ["emoji", "bild"],
     ];
 
     public static CsvParseResult Parse(string content)
@@ -117,8 +118,16 @@ public static class CsvVocabularyParser
 
     private static bool LooksLikeHeader(string firstLine, char delimiter)
     {
-        string[] fields = SplitLine(firstLine, delimiter);
-        return fields.Any(f => HeaderWords.Contains(f.Trim().ToLowerInvariant()));
+        // Ein einzelnes Kopfwort reicht nicht, weil "Quelle;source" oder "Bild;picture"
+        // echte Vokabeln sind. Kopfzeile nur, wenn jedes belegte Feld ein Kopfwort aus
+        // einer anderen Gruppe ist; im Zweifel wird die erste Zeile importiert und
+        // erscheint in der Vorschau (D-13, D-20).
+        int[] groups = SplitLine(firstLine, delimiter)
+            .Select(f => f.Trim().ToLowerInvariant())
+            .Where(f => f.Length > 0)
+            .Select(f => Array.FindIndex(HeaderGroups, group => group.Contains(f)))
+            .ToArray();
+        return groups.Length > 0 && !groups.Contains(-1) && groups.Distinct().Count() == groups.Length;
     }
 
     /// <summary>
