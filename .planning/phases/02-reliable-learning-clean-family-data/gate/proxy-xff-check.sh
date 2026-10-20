@@ -86,6 +86,7 @@ wait_ready "$NET-api"
 echo "== Heimnetz-Variante (frontend/nginx.conf)"
 docker run -d --name "$NET-home" --network "$NET" \
   --mount "type=bind,src=$ROOT/frontend/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly" \
+  --mount "type=bind,src=$ROOT/frontend/nginx-security-headers.conf,dst=/etc/nginx/security-headers.conf,readonly" \
   --mount "type=bind,src=$TMP/html,dst=/usr/share/nginx/html,readonly" \
   "$IMAGE" >/dev/null
 wait_ready "$NET-home"
@@ -107,6 +108,7 @@ echo "== Traefik-Variante (zusaetzlich frontend/nginx-traefik-realip.conf)"
 [[ -f frontend/nginx-traefik-realip.conf ]] || fail "frontend/nginx-traefik-realip.conf fehlt."
 docker run -d --name "$NET-traefik" --network "$NET" \
   --mount "type=bind,src=$ROOT/frontend/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly" \
+  --mount "type=bind,src=$ROOT/frontend/nginx-security-headers.conf,dst=/etc/nginx/security-headers.conf,readonly" \
   --mount "type=bind,src=$ROOT/frontend/nginx-traefik-realip.conf,dst=/etc/nginx/conf.d/realip.conf,readonly" \
   --mount "type=bind,src=$TMP/html,dst=/usr/share/nginx/html,readonly" \
   "$IMAGE" >/dev/null
@@ -136,9 +138,11 @@ check_headers() {
     grep -q 'X-Frame-Options: DENY' <<<"$resp" || fail "$2 $path: X-Frame-Options: DENY fehlt."
   done
   # Fehlerantworten roh per BusyBox-nc, weil wget bei 404 keine Koepfe zeigt:
-  # fehlendes Asset (nginx selbst) und 404 des Upstreams.
+  # fehlendes Asset (nginx selbst) und 404 des Upstreams. Die Eingabe bleibt kurz
+  # offen: nc schliesst sonst sofort seine Seite, und nginx bricht die Weiterleitung
+  # an den Upstream als Abbruch des Clients ab (499 ohne Antwort).
   for path in /assets/gibt-es-nicht.js /api/fehlt; do
-    resp="$(docker exec "$1" sh -c "printf 'GET $path HTTP/1.0\r\nHost: localhost\r\n\r\n' | nc 127.0.0.1 8080")" \
+    resp="$(docker exec "$1" sh -c "{ printf 'GET $path HTTP/1.0\r\nHost: localhost\r\n\r\n'; sleep 5; } | nc 127.0.0.1 8080")" \
       || fail "$2 $path: keine Antwort."
     resp="$(tr -d '\r' <<<"$resp")"
     sed -n 1p <<<"$resp" | grep -q ' 404 ' || fail "$2 $path: Status ist nicht 404."

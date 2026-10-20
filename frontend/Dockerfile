@@ -17,6 +17,8 @@ FROM nginxinc/nginx-unprivileged:alpine AS runtime
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# Ausserhalb von conf.d, damit nginx die Datei nicht zusaetzlich auf http-Ebene laedt.
+COPY frontend/nginx-security-headers.conf /etc/nginx/security-headers.conf
 
 EXPOSE 8080
 
