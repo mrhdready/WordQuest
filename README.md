@@ -25,10 +25,15 @@ bei Problemen.
 **Für Entwickler und Forks:** Die CI baut bei jedem Push auf `master` und bei
 jedem Tag `v*` die Images `ghcr.io/<account>/wordquest-api` und `-web` für
 `linux/amd64` und `linux/arm64` und legt sie auf der GitHub Container Registry
-ab. Die Installation zieht eine feste Version (`WQ_VERSION` in `.env.example`)
-vom Präfix `ghcr.io/mrhdready/wordquest`. Wer eigene Images baut, stellt seine
+ab. Bei Tags `v*` hängt die CI danach zusätzlich das Paket `wordquest.tar.gz`
+mit Prüfsumme (`wordquest.tar.gz.sha256`) an das GitHub-Release; es enthält nur
+die Dateien für den Betrieb (gebaut von `.github/release-package.sh`). Die
+Installation zieht eine feste Version (`WQ_VERSION` in `.env.example`) vom
+Präfix `ghcr.io/mrhdready/wordquest`. Wer eigene Images baut, stellt seine
 Pakete unter **GitHub → Profil → Packages → Package settings → Change
-visibility** auf *Public* und gibt bei `setup.sh` das eigene Präfix an.
+visibility** auf *Public* und gibt bei `setup.sh` das eigene Präfix an. Ein
+Fork setzt in `.env` außerdem
+`WQ_RELEASE_URL=https://github.com/<account>/WordQuest/releases/latest/download`.
 
 ### Variante B — Mit Domain und TLS (für Fortgeschrittene)
 
@@ -36,7 +41,7 @@ Mit eigener Domain und Let's-Encrypt-Zertifikat über Traefik. Nur damit lässt
 sich die App als PWA installieren.
 
 ```bash
-git clone https://github.com/<account>/WordQuest.git wordquest
+curl -fsSL https://github.com/mrhdready/WordQuest/releases/latest/download/wordquest.tar.gz | tar xz
 cd wordquest
 cp .env.example .env
 ```

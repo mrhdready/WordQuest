@@ -142,3 +142,29 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    name: Release-Paket
+    # Nur bei Tags v* und erst nach den Images: Sonst laedt upgrade.sh eine
+    # Version, deren Images noch fehlen. Schreibrecht auf Releases nur hier.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # Bricht ab, wenn der Tag nicht v plus WQ_VERSION aus .env.example ist.
+      - name: Paket bauen
+        run: bash .github/release-package.sh dist "$GITHUB_REF_NAME"
+
+      # gh ist auf ubuntu-latest vorinstalliert, also keine weitere Action.
+      # --clobber: Ein neu gestarteter Lauf ersetzt die Dateien, statt zu scheitern.
+      - name: An das Release haengen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/wordquest.tar.gz dist/wordquest.tar.gz.sha256 --clobber
