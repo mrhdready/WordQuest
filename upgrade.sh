@@ -127,7 +127,9 @@ elif [[ -z "$backup" ]]; then
   listing="$(paste -d ' ' <(tar -tvzf "$pkg" | cut -c1) <(tar -tzf "$pkg") | LC_ALL=C sort || true)"
   [[ "$listing" == "$PKG_LISTING" ]] || die "$bad_pkg"
   mkdir "$work/neu"
-  tar -xzf "$pkg" -C "$work/neu" --strip-components=1 || die "$bad_pkg"
+  # --no-same-owner: Auch mit sudo gehoeren die Dateien danach nicht der
+  # Nutzerkennung, mit der die CI das Paket gepackt hat (GNU-tar als root).
+  tar -xzf "$pkg" -C "$work/neu" --strip-components=1 --no-same-owner || die "$bad_pkg"
   for f in $PKG_FILES; do
     [[ -f "$work/neu/$f" && ! -L "$work/neu/$f" ]] || die "$bad_pkg"
   done

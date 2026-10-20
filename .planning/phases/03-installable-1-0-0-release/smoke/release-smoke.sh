@@ -53,9 +53,12 @@ REGISTRY_STARTED=0
 cleanup() {
   # wait: sonst meldet Bash den beendeten Server mit "Terminated".
   if [[ -n "$HTTP_PID" ]]; then kill "$HTTP_PID" 2>/dev/null || true; wait "$HTTP_PID" 2>/dev/null || true; fi
+  # Die Dumps gehoeren unter Linux root: Nach einem gruenen Lauf loescht sie der
+  # Container, nach einem roten bekommt sie der Nutzer (der Ordner bleibt liegen).
   if [[ "$SMOKE_DONE" == 1 ]]; then
-    # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
     (cd "$INST" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) 2>/dev/null || true
+  else
+    (cd "$INST" && docker compose exec -T backup chown -R "$(id -u):$(id -g)" /backups </dev/null >/dev/null 2>&1) 2>/dev/null || true
   fi
   (cd "$INST" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) 2>/dev/null || true
   if [[ "$REGISTRY_STARTED" == 1 ]]; then docker rm -f -v "$REGISTRY_NAME" >/dev/null 2>&1 || true; fi
@@ -68,7 +71,7 @@ cleanup() {
   # (03.1-05: restore.sh hielt einmal den Tagesdump fuer unvollstaendig).
   if [[ "$SMOKE_DONE" != 1 && -d "$INST" ]]; then
     keep="${TMPDIR:-/tmp}/wq-release-smoke-rot-$(date +%Y%m%d-%H%M%S)"
-    mv "$INST" "$keep" 2>/dev/null && echo "Installationsordner des roten Laufs: $keep" >&2
+    mv "$INST" "$keep" 2>/dev/null && echo "Installationsordner des roten Laufs: $keep (danach loeschen mit: rm -rf $keep)" >&2
   fi
   rm -rf "$WORK"
   [[ "$SMOKE_DONE" == 1 ]] || exit 1
@@ -967,6 +970,10 @@ upd_snapshot
 upgrade_run .smoke/upgrade-continue.log pass --continue backups/gibt-es-nicht.sql.gz
 assert_untouched "--continue ohne Sicherung"
 expect_msg .smoke/upgrade-continue.log 'upgrade.sh wurde mit --continue ohne gültige Sicherung aufgerufen. Starte ./upgrade.sh ohne Zusatz.'
+# Name passt, Datei fehlt.
+upgrade_run .smoke/upgrade-continue-fehlt.log pass --continue backups/vor-update-20000101-000000.sql.gz
+assert_untouched "--continue mit fehlender Sicherung"
+expect_msg .smoke/upgrade-continue-fehlt.log 'upgrade.sh wurde mit --continue ohne gültige Sicherung aufgerufen.'
 echo "Fall --continue: Exit $status"
 echo "PAKETPRUEFUNG OK"
 
