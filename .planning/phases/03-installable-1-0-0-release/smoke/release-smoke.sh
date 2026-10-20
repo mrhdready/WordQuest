@@ -5,7 +5,9 @@
 # machen (curl | tar xz, ./setup.sh), mit lokal gebauten Images, die genau so
 # heissen wie die veroeffentlichten (ghcr.io/mrhdready/wordquest-{api,web}:1.0.0).
 # Paket und Images entstehen aus einer Arbeitskopie des Arbeitsbaums ($WORK/src),
-# das Paket kommt von einem lokalen HTTP-Server (127.0.0.1:18083).
+# das Paket kommt von einem lokalen HTTP-Server (127.0.0.1:18083). Das Update
+# (03.1-06) laedt die Zielimages echt aus einer lokalen Registry (registry:2,
+# per Digest gepinnt, nur auf 127.0.0.1:18084; Freigabe D-22).
 # Eigener Compose-Projektname und Port, raeumt am Ende alles wieder ab, auch
 # nach einem Abbruch mitten im Build.
 #
@@ -44,17 +46,30 @@ CLEANUP_TAGS=""
 # deshalb zaehlt nur ein Lauf bis zum Ende als Erfolg.
 SMOKE_DONE=0
 HTTP_PID=""
+# Lokale Registry fuer den echten Pull im Update (Codex-Review 05 HIGH, D-22).
+REGISTRY_IMAGE=registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+REGISTRY_NAME=wq-release-registry
+REGISTRY_STARTED=0
 cleanup() {
   # wait: sonst meldet Bash den beendeten Server mit "Terminated".
   if [[ -n "$HTTP_PID" ]]; then kill "$HTTP_PID" 2>/dev/null || true; wait "$HTTP_PID" 2>/dev/null || true; fi
-  # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
-  (cd "$INST" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) 2>/dev/null || true
+  if [[ "$SMOKE_DONE" == 1 ]]; then
+    # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
+    (cd "$INST" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) 2>/dev/null || true
+  fi
   (cd "$INST" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) 2>/dev/null || true
+  if [[ "$REGISTRY_STARTED" == 1 ]]; then docker rm -f -v "$REGISTRY_NAME" >/dev/null 2>&1 || true; fi
   for tag in $CLEANUP_TAGS; do
     if docker image inspect "$tag" >/dev/null 2>&1; then
       docker image rm "$tag" >/dev/null 2>&1 || true
     fi
   done
+  # Roter Lauf: Installationsordner mit Dumps und Logs zur Untersuchung behalten
+  # (03.1-05: restore.sh hielt einmal den Tagesdump fuer unvollstaendig).
+  if [[ "$SMOKE_DONE" != 1 && -d "$INST" ]]; then
+    keep="${TMPDIR:-/tmp}/wq-release-smoke-rot-$(date +%Y%m%d-%H%M%S)"
+    mv "$INST" "$keep" 2>/dev/null && echo "Installationsordner des roten Laufs: $keep" >&2
+  fi
   rm -rf "$WORK"
   [[ "$SMOKE_DONE" == 1 ]] || exit 1
 }
@@ -128,14 +143,31 @@ done
 [[ "$served" == 1 ]] || fail "Der lokale Release-Server auf 127.0.0.1:18083 liefert das Paket nach 30 s nicht (Port belegt?)."
 echo "PAKET OK"
 
-echo "== Vorpruefung der lokalen Tags"
-for tag in "$API_TAG" "$WEB_TAG"; do
+echo "== Vorpruefung der lokalen Tags und der Registry"
+# Update (03.1-06): Ziel 1.0.0 kommt aus der lokalen Registry, die alte Version
+# 0.0.0-smoke liegt nur lokal unter demselben Praefix.
+REG_PREFIX=localhost:18084/wordquest
+OLD_VERSION=0.0.0-smoke
+REG_API_TAG="${REG_PREFIX}-api:${EXPECTED_VERSION}"
+REG_WEB_TAG="${REG_PREFIX}-web:${EXPECTED_VERSION}"
+OLD_API_TAG="${REG_PREFIX}-api:${OLD_VERSION}"
+OLD_WEB_TAG="${REG_PREFIX}-web:${OLD_VERSION}"
+for tag in "$API_TAG" "$WEB_TAG" "$REG_API_TAG" "$REG_WEB_TAG" "$OLD_API_TAG" "$OLD_WEB_TAG"; do
   if docker image inspect "$tag" >/dev/null 2>&1; then
     fail "Das Image $tag gibt es lokal schon; der Smoke wuerde es ueberdecken und am Ende loeschen. Entferne es vorher selbst mit: docker image rm $tag"
   fi
 done
-# Beide fehlen: Jedes, das am Ende existiert, gehoert diesem Lauf.
-CLEANUP_TAGS="$API_TAG $WEB_TAG"
+# Alle fehlen: Jedes, das am Ende existiert, gehoert diesem Lauf.
+CLEANUP_TAGS="$API_TAG $WEB_TAG $REG_API_TAG $REG_WEB_TAG $OLD_API_TAG $OLD_WEB_TAG"
+[[ -z "$(docker ps -aq --filter "name=^${REGISTRY_NAME}\$")" ]] \
+  || fail "Es gibt schon einen Container $REGISTRY_NAME. Entferne ihn vorher selbst mit: docker rm -f -v $REGISTRY_NAME"
+if curl -s -o /dev/null --max-time 5 http://127.0.0.1:18084/; then
+  fail "Auf 127.0.0.1:18084 antwortet schon ein Dienst; die lokale Registry braucht den Port."
+fi
+# Das Registry-Image selbst nur entfernen, wenn dieser Lauf es geladen hat.
+if ! docker image inspect "$REGISTRY_IMAGE" >/dev/null 2>&1; then
+  CLEANUP_TAGS="$CLEANUP_TAGS $REGISTRY_IMAGE"
+fi
 
 echo "== Build der Images aus der Arbeitskopie (ohne .env)"
 docker compose build api web </dev/null
@@ -184,7 +216,6 @@ page_cmd() {
 # Befehle der Seite, die der Smoke nicht ausfuehrt: "Befehl — Grund", je eine Zeile.
 HANDGRIFFE='sudo apt install curl — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat curl
 sudo usermod -aG docker $USER — Gruppe docker, wirkt erst nach neuer Anmeldung
-git pull — die Arbeitskopie hat kein .git; der Smoke stellt die neue Version ueber die Tags 0.0.0-smoke und 1.0.0 nach (Abschnitt Update)
 docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D-06)
 sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
 docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.de — belegt in setup-smoke.sh (RESET OK)
@@ -339,7 +370,19 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
 [[ -x restore.sh ]] || fail "restore.sh fehlt oder ist nicht ausfuehrbar."
 page_cmd './restore.sh'
 restore_run .smoke/restore.log < <(printf '%s\n' 1 ja)
-[[ "$status" == 0 ]] || fail "restore.sh endete mit Exit $status."
+if [[ "$status" != 0 ]]; then
+  # Diagnose (03.1-05, einmal rot ohne Befund): welcher Teil der Pruefung aus
+  # restore.sh scheitert, auf dem Host und im Container, sofort und nach 5 s.
+  for wait_s in 0 5; do
+    sleep "$wait_s"
+    echo "Diagnose nach $wait_s s: $daily $(ls -li "$daily")"
+    gzip -t "$daily" && echo "  gzip -t: ok" || echo "  gzip -t: FEHLER"
+    echo "  letzte Zeilen: $( (gunzip -c "$daily" 2>/dev/null || true) | tail -n 5 | tr '\n' '|')"
+    echo "  COPY public.app_user: $( (gunzip -c "$daily" 2>/dev/null || true) | grep -c 'COPY public.app_user' || true)"
+    docker compose exec -T backup sh -c "ls -li /$daily; gzip -t /$daily && echo '  Container: gzip -t ok'" </dev/null || true
+  done
+  fail "restore.sh endete mit Exit $status."
+fi
 wait_web
 tail -n 1 .smoke/restore.log | tr -d '\033' | sed 's/\[[0-9;]*m//g' | grep -q '^Fertig\.' \
   || fail "Letzte Zeile von restore.sh beginnt nicht mit 'Fertig.'."
@@ -513,21 +556,31 @@ wait_web
 rm -f backups/kaputt.sql.gz backups/fehlerhaft.sql.gz .smoke/restore-in
 echo "RESTORE-FEHLER OK"
 
-echo "== Update (REL-01)"
+echo "== Update aus dem Release-Paket (REL-01, D-16)"
 # Ab hier ohne Build-Overlay: Sonst gelten api und web als baubar, und
 # pull --ignore-buildable uebersprange sie (Review 03-03 MEDIUM).
 export COMPOSE_FILE=docker-compose.quick.yml
-# Aeltere Version: dieselben Images unter einem zweiten Namen. Veroeffentlichte
-# Images gibt es noch nicht; die Zielversion 1.0.0 stammt aus dem Build oben.
-OLD_VERSION=0.0.0-smoke
-OLD_API_TAG="${EXPECTED_PREFIX}-api:${OLD_VERSION}"
-OLD_WEB_TAG="${EXPECTED_PREFIX}-web:${OLD_VERSION}"
-for tag in "$OLD_API_TAG" "$OLD_WEB_TAG"; do
-  if docker image inspect "$tag" >/dev/null 2>&1; then
-    fail "Das Image $tag gibt es lokal schon; der Smoke wuerde es ueberdecken und am Ende loeschen. Entferne es vorher selbst mit: docker image rm $tag"
-  fi
+
+# Echter Pull (Codex-Review 05 HIGH): Die Zielimages liegen nur in der lokalen
+# Registry. Lokal fehlen sie vor dem Update; erst der Pull legt den Tag an, und
+# der RepoDigest nennt die Registry.
+REGISTRY_STARTED=1
+docker run -d --name "$REGISTRY_NAME" -p 127.0.0.1:18084:5000 "$REGISTRY_IMAGE" >/dev/null \
+  || fail "Die lokale Registry ($REGISTRY_IMAGE) startet nicht."
+registry_up=0
+for _ in $(seq 1 60); do
+  if curl -fsS http://127.0.0.1:18084/v2/ >/dev/null 2>&1; then registry_up=1; break; fi
+  sleep 1
 done
-CLEANUP_TAGS="$CLEANUP_TAGS $OLD_API_TAG $OLD_WEB_TAG"
+[[ "$registry_up" == 1 ]] || fail "Die lokale Registry antwortet nach 60 s nicht auf 127.0.0.1:18084."
+for pair in "$API_TAG $REG_API_TAG" "$WEB_TAG $REG_WEB_TAG"; do
+  src="${pair% *}"; dst="${pair#* }"
+  docker tag "$src" "$dst"
+  docker push -q "$dst" >/dev/null || fail "Push von $dst in die lokale Registry fehlgeschlagen."
+  docker image rm "$dst" >/dev/null
+  if docker image inspect "$dst" >/dev/null 2>&1; then fail "$dst liegt nach dem Push noch lokal."; fi
+done
+# Aeltere Version: dieselben Images unter einem zweiten Namen, nur lokal.
 docker tag "$API_TAG" "$OLD_API_TAG"
 docker tag "$WEB_TAG" "$OLD_WEB_TAG"
 
@@ -552,6 +605,42 @@ check_upd_backup() {
   [[ "$(gunzip -c "$1" | grep -c 'Erstes Kind' || true)" -gt 0 ]] || fail "$1 enthaelt 'Erstes Kind' nicht."
 }
 
+# Ausgeliefertes Paket: das aus der CI-Nachbildung oben, mit anderer Version in
+# .env.example (grep -v und angehaengte Zeile: ein | verduerbe einen sed-Ersatz).
+# Mit "falsch" passt die Pruefsumme nicht zum Paket.
+PKG_FILES='docker-compose.quick.yml docker-compose.yml .env.example setup.sh upgrade.sh restore.sh frontend/nginx-traefik-realip.conf'
+pkg_unpack() {
+  rm -rf "$WORK/pkg"
+  mkdir "$WORK/pkg"
+  tar -xzf "$WORK/release-base/wordquest.tar.gz" -C "$WORK/pkg"
+}
+pkg_pack() {
+  (cd "$WORK/pkg" && COPYFILE_DISABLE=1 tar --no-xattrs -czf "$WORK/release/wordquest.tar.gz" wordquest)
+  if [[ "${1:-}" == falsch ]]; then
+    (cd "$WORK/pkg/wordquest" && sha256sum setup.sh | sed 's/setup\.sh$/wordquest.tar.gz/') >"$WORK/release/wordquest.tar.gz.sha256"
+  else
+    (cd "$WORK/release" && sha256sum wordquest.tar.gz >wordquest.tar.gz.sha256)
+  fi
+}
+serve_pkg() {
+  pkg_unpack
+  { grep -v '^WQ_VERSION=' "$WORK/pkg/wordquest/.env.example"; echo "WQ_VERSION=$1"; } >"$WORK/pkg/env-example"
+  mv "$WORK/pkg/env-example" "$WORK/pkg/wordquest/.env.example"
+  pkg_pack "${2:-}"
+}
+# Summen der sieben Paketdateien im Installationsordner und von secrets/.
+pkg_sums() { for f in $PKG_FILES; do shasum "$f" 2>&1 || true; done; ls -l $PKG_FILES 2>&1 | cut -c1-10; }
+secrets_sum() { (cd secrets && ls -ln | cut -c1-10 && shasum ./*) 2>&1 || true; }
+# Jede der sieben Dateien gleicht der im ausgelieferten Paket.
+pkg_is_served() {
+  local f
+  for f in $PKG_FILES; do
+    tar -xOzf "$WORK/release/wordquest.tar.gz" "wordquest/$f" | cmp -s - "$f" || return 1
+  done
+}
+no_workdir() { [[ -z "$(ls -d .upgrade.* 2>/dev/null || true)" ]]; }
+
+set_env WQ_IMAGE_PREFIX "$REG_PREFIX"
 set_env WQ_VERSION "$OLD_VERSION"
 docker compose up -d </dev/null
 wait_api
@@ -562,60 +651,86 @@ for table in learner_profile vocabulary_entry review_log; do
 done
 fp_f0="$(fingerprint)"
 
-# Pull-Spy (Review 03-03 MEDIUM): Ein docker vorn im PATH protokolliert bei
-# "docker compose pull" die Zielversion aus der Umgebung und den Stand der .env
-# und meldet Erfolg; alles andere geht an das echte docker. Nur aktiv mit
-# WQ_SPY_PULL=ok, also nur fuer die Aufrufe von upgrade.sh mit Spy.
+# Docker-Spy (Review 03-03 MEDIUM, Codex-Review 05 HIGH): Ein docker vorn im
+# PATH protokolliert bei "docker compose pull" die Zielversion aus der Umgebung,
+# den Stand der .env und die Kommandozeile des Aufrufers. Mit WQ_SPY_PULL=pass
+# laedt danach das echte docker, mit WQ_SPY_PULL=ok meldet er Erfolg ohne Laden
+# (nur fuer Startfehler mit absichtlich fehlendem Image).
 SPY_DIR="$INST/.smoke/spy"
 SPY_LOG="$INST/.smoke/spy-pull"
 REAL_DOCKER="$(command -v docker)"
 mkdir "$SPY_DIR"
 : >"$SPY_LOG"
+: >"$SPY_LOG-args"
 cat >"$SPY_DIR/docker" <<EOF
 #!/usr/bin/env bash
-if [[ "\${WQ_SPY_PULL:-}" == ok && "\${1:-}" == compose && "\${2:-}" == pull ]]; then
+if [[ -n "\${WQ_SPY_PULL:-}" && "\${1:-}" == compose && "\${2:-}" == pull ]]; then
   printf 'ziel=%s env=%s\n' "\${WQ_VERSION:-}" "\$(sed -n 's/^WQ_VERSION=//p' .env | tail -n 1)" >>"$SPY_LOG"
-  exit 0
+  ps -o args= -p "\$PPID" >>"$SPY_LOG-args"
+  [[ "\$WQ_SPY_PULL" == pass ]] || exit 0
 fi
 exec "$REAL_DOCKER" "\$@"
 EOF
 chmod +x "$SPY_DIR/docker"
 spy_lines() { grep -c . "$SPY_LOG" || true; }
-# upgrade.sh ohne Eingabe, mit Spy, wenn $2 = spy. Exit-Code in $status, wie restore_run.
+# upgrade.sh ohne Eingabe; $2 ist die Art des Spy (pass, ok) oder leer, danach
+# die Argumente. Exit-Code in $status, wie restore_run.
 upgrade_run() {
+  local log="$1" art="$2"
+  shift 2
   status=0
-  if [[ "${2:-}" == spy ]]; then
-    PATH="$SPY_DIR:$PATH" WQ_SPY_PULL=ok ./upgrade.sh </dev/null >"$1" 2>&1 || status=$?
+  if [[ -n "$art" ]]; then
+    PATH="$SPY_DIR:$PATH" WQ_SPY_PULL="$art" ./upgrade.sh "$@" </dev/null >"$log" 2>&1 || status=$?
   else
-    ./upgrade.sh </dev/null >"$1" 2>&1 || status=$?
+    ./upgrade.sh "$@" </dev/null >"$log" 2>&1 || status=$?
   fi
-  cat "$1"
+  cat "$log"
 }
 
 [[ -x upgrade.sh ]] || fail "upgrade.sh fehlt oder ist nicht ausfuehrbar."
 [[ "$(backup_count)" == 0 ]] || fail "Vor dem Update gibt es schon eine Sicherung vor-update-*."
+for tag in "$REG_API_TAG" "$REG_WEB_TAG"; do
+  if docker image inspect "$tag" >/dev/null 2>&1; then fail "$tag liegt vor dem Update schon lokal."; fi
+done
+serve_pkg "$EXPECTED_VERSION"
+# Die installierte Fassung weicht vom Paket ab: Danach muss sie ersetzt sein.
+echo '# Smoke: installierte Fassung vor dem Update' >>upgrade.sh
 page_cmd './upgrade.sh'
 # Die .env behaelt ihre Rechte (WR-01): In der Traefik-Variante steht dort ein Token.
 chmod 600 .env
 env_mode="$(ls -l .env | cut -c1-10)"
-upgrade_run .smoke/upgrade.log spy
+secrets_before="$(secrets_sum)"
+upgrade_run .smoke/upgrade.log pass
 [[ "$status" == 0 ]] || fail "upgrade.sh endete mit Exit $status."
 [[ "$(ls -l .env | cut -c1-10)" == "$env_mode" ]] \
   || fail ".env hat nach dem Update die Rechte $(ls -l .env | cut -c1-10) statt $env_mode."
 [[ ! -e .env.tmp ]] || fail ".env.tmp liegt nach dem Update noch da."
+no_workdir || fail "Arbeitsordner .upgrade.* liegt nach dem Update noch da."
+[[ "$(secrets_sum)" == "$secrets_before" ]] || fail "secrets/ hat sich beim Update geaendert."
+expect_msg .smoke/upgrade.log '✓ Prüfsumme stimmt.'
 expect_msg .smoke/upgrade.log '✓ Sicherung geprüft:'
 upd="$(upd_file .smoke/upgrade.log)"
 last="$(tail -n 1 .smoke/upgrade.log | tr -d '\033' | sed 's/\[[0-9;]*m//g')"
 [[ "$last" == "Fertig. WordQuest läuft jetzt mit Version $EXPECTED_VERSION. Die Sicherung von vorher liegt in $upd." ]] \
   || fail "Letzte Zeile von upgrade.sh: $last"
-echo "Spy-Protokoll: $(cat "$SPY_LOG")"
+tar -xOzf "$WORK/release/wordquest.tar.gz" wordquest/upgrade.sh | cmp -s - upgrade.sh \
+  || fail "Die installierte upgrade.sh ist nicht die aus dem Paket."
+pkg_is_served || fail "Die Dateien im Installationsordner gleichen nicht dem ausgelieferten Paket."
+echo "Spy-Protokoll: $(cat "$SPY_LOG") | $(cat "$SPY_LOG-args")"
 [[ "$(cat "$SPY_LOG")" == "ziel=$EXPECTED_VERSION env=$OLD_VERSION" ]] \
   || fail "Spy-Protokoll nicht genau eine Zeile mit Zielversion $EXPECTED_VERSION bei .env $OLD_VERSION: $(cat "$SPY_LOG")"
+grep -qF -- "--continue $upd" "$SPY_LOG-args" \
+  || fail "Geladen hat nicht die neue Fassung mit --continue $upd: $(cat "$SPY_LOG-args")"
 [[ "$(backup_count)" == 1 ]] || fail "Nicht genau eine Sicherung vor-update-*."
 check_upd_backup "$upd"
 grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail ".env enthaelt nach dem Update nicht WQ_VERSION=$EXPECTED_VERSION."
-[[ "$(image_of api)" == "$API_TAG" ]] || fail "api laeuft nach dem Update mit '$(image_of api)' statt '$API_TAG'."
-[[ "$(image_of web)" == "$WEB_TAG" ]] || fail "web laeuft nach dem Update mit '$(image_of web)' statt '$WEB_TAG'."
+[[ "$(image_of api)" == "$REG_API_TAG" ]] || fail "api laeuft nach dem Update mit '$(image_of api)' statt '$REG_API_TAG'."
+[[ "$(image_of web)" == "$REG_WEB_TAG" ]] || fail "web laeuft nach dem Update mit '$(image_of web)' statt '$REG_WEB_TAG'."
+for tag in "$REG_API_TAG" "$REG_WEB_TAG"; do
+  digests="$(docker image inspect -f '{{json .RepoDigests}}' "$tag")"
+  echo "RepoDigests $tag: $digests"
+  [[ "$digests" == *"${tag%:*}@sha256:"* ]] || fail "$tag stammt nicht aus der Registry: $digests"
+done
 docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null \
   || fail "API nach upgrade.sh nicht bereit."
 # Vor jeder Anmeldung: Kinder, Sets und Lernstand unveraendert.
@@ -632,20 +747,38 @@ grep -q '^ *[0-9][0-9]*) backups/vor-update-' .smoke/restore-nach-update.log \
 expect_msg .smoke/restore-nach-update.log 'Eingabe beendet. Es wurde nichts geändert.'
 echo "UPDATE OK"
 
-echo "== Update: Abbruch- und Startfehlerpfade (D-05, Review 03-03 HIGH)"
-cp .env.example .smoke/env-example-orig
-set_target() { sed -e "s|^WQ_VERSION=.*|WQ_VERSION=$1|" .smoke/env-example-orig >.env.example; }
+echo "== Update: Abbruch- und Startfehlerpfade (D-05, Review 03-03 HIGH, Codex-Review 05 MEDIUM)"
 upd_snapshot() {
   env_sum="$(shasum .env)"; n_upd="$(backup_count)"; n_spy="$(spy_lines)"
   api_image="$(image_of api)"; started_before="$(api_started)"; fp_before="$(fingerprint)"
+  pkg_before="$(pkg_sums)"; secrets_before="$(secrets_sum)"
 }
-# Abbruch vor dem Umstellen: .env, laufende api und Daten wie vorher.
-assert_not_switched() {
+# Abbruch vor dem Ersetzen: nichts geaendert, auch keine Paketdatei und keine Sicherung.
+assert_untouched() {
   [[ "$status" != 0 ]] || fail "$1: upgrade.sh endete mit Exit 0."
+  [[ "$(pkg_sums)" == "$pkg_before" ]] || fail "$1: Paketdatei im Installationsordner geaendert."
   [[ "$(shasum .env)" == "$env_sum" ]] || fail "$1: .env geaendert."
+  [[ "$(secrets_sum)" == "$secrets_before" ]] || fail "$1: secrets/ geaendert."
+  [[ "$(backup_count)" == "$n_upd" ]] || fail "$1: neue Datei vor-update-*."
+  [[ "$(spy_lines)" == "$n_spy" ]] || fail "$1: trotzdem geladen ($(tail -n 1 "$SPY_LOG"))."
   [[ "$(image_of api)" == "$api_image" ]] || fail "$1: api laeuft mit '$(image_of api)' statt '$api_image'."
   [[ "$(api_started)" == "$started_before" ]] || fail "$1: api wurde neu gestartet."
   [[ "$(fingerprint)" == "$fp_before" ]] || fail "$1: Fingerabdruck geaendert."
+  no_workdir || fail "$1: Arbeitsordner .upgrade.* liegt noch da."
+}
+# Abbruch nach dem Ersetzen: Paketdateien neu, genau eine neue geprufte
+# Sicherung; .env, laufende api, Daten und secrets/ wie vorher.
+assert_not_switched() {
+  [[ "$status" != 0 ]] || fail "$1: upgrade.sh endete mit Exit 0."
+  [[ "$(shasum .env)" == "$env_sum" ]] || fail "$1: .env geaendert."
+  [[ "$(secrets_sum)" == "$secrets_before" ]] || fail "$1: secrets/ geaendert."
+  pkg_is_served || fail "$1: Paketdateien gleichen nicht dem ausgelieferten Paket."
+  [[ "$(backup_count)" == $((n_upd + 1)) ]] || fail "$1: nicht genau eine neue Sicherung."
+  check_upd_backup "$(upd_file "$2")"
+  [[ "$(image_of api)" == "$api_image" ]] || fail "$1: api laeuft mit '$(image_of api)' statt '$api_image'."
+  [[ "$(api_started)" == "$started_before" ]] || fail "$1: api wurde neu gestartet."
+  [[ "$(fingerprint)" == "$fp_before" ]] || fail "$1: Fingerabdruck geaendert."
+  no_workdir || fail "$1: Arbeitsordner .upgrade.* liegt noch da."
 }
 # Startfehler: Meldung mit Sicherungsdatei und Weg zurueck. Gibt die Datei aus.
 assert_way_back_named() {
@@ -659,48 +792,45 @@ assert_way_back_named() {
   upd_way_back="$f"
 }
 
-# Ungueltige Zielversion in .env.example (W-7): Abbruch vor der Sicherung,
-# nichts geladen, nichts umgestellt. Ein | verdurbe sonst den sed-Ersatz.
-{ grep -v '^WQ_VERSION=' .smoke/env-example-orig; echo 'WQ_VERSION=1.0.0|x'; } >.env.example
+# Ungueltige Zielversion im Paket (W-7): Abbruch vor der Sicherung.
+serve_pkg '1.0.0|x'
 upd_snapshot
-upgrade_run .smoke/upgrade-version.log spy
-cp .smoke/env-example-orig .env.example
-assert_not_switched "Ungueltige Zielversion"
-expect_msg .smoke/upgrade-version.log 'In .env.example steht keine gültige Version'
-[[ "$(backup_count)" == "$n_upd" ]] || fail "Ungueltige Zielversion: neue Datei vor-update-*."
-[[ "$(spy_lines)" == "$n_spy" ]] || fail "Ungueltige Zielversion: trotzdem geladen ($(tail -n 1 "$SPY_LOG"))."
+upgrade_run .smoke/upgrade-version.log pass
+assert_untouched "Ungueltige Zielversion"
+expect_msg .smoke/upgrade-version.log 'Das WordQuest-Paket ist unvollständig oder nennt keine gültige Version. Es wurde nichts geändert.'
 echo "Fall ungueltige Zielversion: Exit $status"
 
-# Keine Sicherung moeglich: Dann wird nichts geladen und nichts umgestellt.
+# Keine Sicherung moeglich: Dann wird nichts ersetzt und nichts geladen.
+serve_pkg "$EXPECTED_VERSION"
 upd_snapshot
 chmod 500 backups
-upgrade_run .smoke/upgrade-ohne-sicherung.log spy
+upgrade_run .smoke/upgrade-ohne-sicherung.log pass
 chmod 700 backups
-assert_not_switched "Keine Sicherung"
+assert_untouched "Keine Sicherung"
 expect_msg .smoke/upgrade-ohne-sicherung.log 'Die Sicherung vor dem Update ist fehlgeschlagen. Es wurde nichts geändert.'
-[[ "$(backup_count)" == "$n_upd" ]] || fail "Keine Sicherung: neue Datei vor-update-*."
-[[ "$(spy_lines)" == "$n_spy" ]] || fail "Keine Sicherung: trotzdem geladen ($(tail -n 1 "$SPY_LOG"))."
 echo "Fall keine Sicherung: Exit $status"
 
-# Zielversion fehlt in der Registry: echter Pull ohne Spy. Ohne Netz scheitert
-# das Laden ebenso, der Fall bleibt aussagekraeftig.
-set_target 9.9.9-fehlt
+# Zielversion fehlt in der Registry: echter Pull, der scheitert. Die
+# Paketdateien sind schon neu, WordQuest laeuft mit der bisherigen Version.
+serve_pkg 9.9.9-fehlt
 upd_snapshot
-upgrade_run .smoke/upgrade-fehlt.log
-assert_not_switched "Zielversion fehlt"
+upgrade_run .smoke/upgrade-fehlt.log pass
+assert_not_switched "Zielversion fehlt" .smoke/upgrade-fehlt.log
+grep -qx 'WQ_VERSION=9.9.9-fehlt' .env.example || fail "Zielversion fehlt: .env.example nennt nicht 9.9.9-fehlt."
 expect_msg .smoke/upgrade-fehlt.log 'Die Version 9.9.9-fehlt ließ sich nicht laden.'
-expect_msg .smoke/upgrade-fehlt.log 'Es wurde nichts geändert.'
-[[ "$(backup_count)" == $((n_upd + 1)) ]] || fail "Zielversion fehlt: nicht genau eine neue Sicherung."
-check_upd_backup "$(upd_file .smoke/upgrade-fehlt.log)"
+expect_msg .smoke/upgrade-fehlt.log 'WordQuest läuft unverändert mit der bisherigen Version weiter'
+if grep -qF 'Es wurde nichts geändert.' .smoke/upgrade-fehlt.log; then
+  fail "Zielversion fehlt: Meldung behauptet 'Es wurde nichts geändert.', obwohl die Dateien neu sind."
+fi
 docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null \
   || fail "Zielversion fehlt: API nicht bereit."
 echo "Fall Zielversion fehlt: Exit $status"
 
 # Start scheitert: Der Spy meldet das Laden als gelungen, das Image gibt es
 # aber nicht, also scheitert docker compose up -d.
-set_target 7.7.7-ohne-image
+serve_pkg 7.7.7-ohne-image
 upd_snapshot
-upgrade_run .smoke/upgrade-start.log spy
+upgrade_run .smoke/upgrade-start.log ok
 assert_way_back_named .smoke/upgrade-start.log "Start scheitert"
 [[ "$(spy_lines)" == $((n_spy + 1)) && "$(tail -n 1 "$SPY_LOG")" == "ziel=7.7.7-ohne-image env=$EXPECTED_VERSION" ]] \
   || fail "Start scheitert: Spy-Protokoll ohne Zielversion 7.7.7-ohne-image bei .env $EXPECTED_VERSION: $(tail -n 1 "$SPY_LOG")"
@@ -708,21 +838,21 @@ expect_msg .smoke/upgrade-start.log 'Der Start der Version 7.7.7-ohne-image ist 
 expect_msg .smoke/upgrade-start.log "Trage in .env WQ_VERSION=$EXPECTED_VERSION ein"
 echo "Fall Start scheitert: Exit $status"
 # Weg zurueck genau wie in der Meldung.
-cp .smoke/env-example-orig .env.example
 set_env WQ_VERSION "$EXPECTED_VERSION"
 restore_run .smoke/upgrade-start-zurueck.log "$upd_way_back" < <(printf 'ja\n')
 [[ "$status" == 0 ]] || fail "Start scheitert, Weg zurueck: restore.sh endete mit Exit $status."
 wait_web
 wait_api
-[[ "$(image_of api)" == "$API_TAG" ]] || fail "Start scheitert, Weg zurueck: api laeuft mit '$(image_of api)'."
+[[ "$(image_of api)" == "$REG_API_TAG" ]] || fail "Start scheitert, Weg zurueck: api laeuft mit '$(image_of api)'."
 [[ "$(fingerprint)" == "$fp_before" ]] || fail "Start scheitert, Weg zurueck: Fingerabdruck ungleich vorher."
 
 # API wird nicht bereit: Mit WQ_SEED_DEMO_DATA=true in .env bricht die API in
 # Production ab (Program.cs:34-41).
+serve_pkg "$EXPECTED_VERSION"
 upd_snapshot
 set_env WQ_SEED_DEMO_DATA true
 t0="$(date +%s)"
-upgrade_run .smoke/upgrade-bereit.log spy
+upgrade_run .smoke/upgrade-bereit.log ok
 echo "Fall API nicht bereit: Exit $status nach $(( $(date +%s) - t0 )) s"
 assert_way_back_named .smoke/upgrade-bereit.log "API nicht bereit"
 expect_msg .smoke/upgrade-bereit.log 'Die API ist nach zwei Minuten nicht bereit.'
@@ -745,12 +875,14 @@ code="$(login eltern@example.de geheim-123)"
 printf '%s' "$(grep -v '^WQ_VERSION=' .env)" >.smoke/env-ohne-version
 cp .smoke/env-ohne-version .env
 last_env="$(tail -n 1 .env)"
+serve_pkg "$EXPECTED_VERSION"
 upd_snapshot
-upgrade_run .smoke/upgrade-nochmal.log spy
+upgrade_run .smoke/upgrade-nochmal.log ok
 [[ "$status" == 0 ]] || fail "Zweiter Aufruf: upgrade.sh endete mit Exit $status."
 grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail "Zweiter Aufruf: .env ohne WQ_VERSION=$EXPECTED_VERSION."
 grep -qxF -- "$last_env" .env || fail "Zweiter Aufruf: Die Zeile '$last_env' ist in .env verklebt."
 [[ "$(fingerprint)" == "$fp_before" ]] || fail "Zweiter Aufruf: Fingerabdruck geaendert."
+no_workdir || fail "Zweiter Aufruf: Arbeitsordner .upgrade.* liegt noch da."
 echo "UPDATE-ABBRUCH OK"
 
 echo "== Seite gegen den Lauf"

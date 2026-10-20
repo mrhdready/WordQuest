@@ -98,19 +98,21 @@ Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App au
 
 ## Update
 
-Starte das Update, wenn gerade niemand lernt: Was während des Updates gelernt wird, steht nicht in der Sicherung. Wechsle in den Ordner `wordquest`, lade den neuen Stand von WordQuest herunter und starte das Update:
+Starte das Update, wenn gerade niemand lernt: Was während des Updates gelernt wird, steht nicht in der Sicherung. Wechsle in den Ordner `wordquest` und starte das Update:
 
 ```bash
 cd wordquest
-git pull
 ./upgrade.sh
 ```
 
-`upgrade.sh` nimmt die Version, die `git pull` mitgebracht hat. Bevor es etwas ändert, sichert es die Datenbank nach `backups/vor-update-<Datum>-<Uhrzeit>.sql.gz` und prüft die Sicherung. Erst danach lädt es die neue Version, trägt sie in `.env` ein, startet WordQuest damit und wartet, bis es bereit ist. Deine Kinder, Vokabeln und der Lernstand bleiben dabei erhalten. Am Ende siehst du unter anderem diese Zeilen:
+`upgrade.sh` lädt das neueste WordQuest-Paket von GitHub herunter und prüft seine Prüfsumme. Bevor es etwas ändert, sichert es die Datenbank nach `backups/vor-update-<Datum>-<Uhrzeit>.sql.gz` und prüft die Sicherung. Erst danach ersetzt es seine eigenen Dateien durch die aus dem Paket, startet sich mit der neuen Fassung neu, lädt die neue Version, trägt sie in `.env` ein, startet WordQuest damit und wartet, bis es bereit ist. Deine Kinder, Vokabeln und der Lernstand bleiben dabei erhalten. Am Ende siehst du unter anderem diese Zeilen:
 
 ```text
+Lade das neueste WordQuest-Paket …
+✓ Prüfsumme stimmt.
 Aktualisiere WordQuest von <alte Version> auf <neue Version>.
 ✓ Sicherung geprüft: backups/vor-update-<Datum>-<Uhrzeit>.sql.gz
+Ersetze die Dateien von WordQuest …
 Lade Version <neue Version> …
 Starte Version <neue Version> …
 Warte auf die API …
@@ -124,10 +126,10 @@ Hast du eine Datei von WordQuest selbst geändert, zum Beispiel den Port in eine
 
 Wenn etwas schiefgeht:
 
-- **Die neue Version ist noch nicht verfügbar.** Kurz nach dem Erscheinen einer Version dauert es einige Minuten, bis sie geladen werden kann. Dann endet `upgrade.sh` mit dieser Meldung und ändert nichts, WordQuest läuft mit der alten Version weiter:
+- **Die neue Version lässt sich nicht laden.** Dann endet `upgrade.sh` mit dieser Meldung. Die Dateien von WordQuest sind dann schon neu, aber `.env`, deine Daten und das laufende WordQuest bleiben, wie sie waren:
 
   ```text
-  Die Version <neue Version> ließ sich nicht laden. Wenn sie gerade erst erschienen ist, versuche es in einer Viertelstunde erneut; sonst prüfe die Internetverbindung und WQ_IMAGE_PREFIX in .env. Es wurde nichts geändert. Die Sicherung liegt in <Datei>.
+  Die Version <neue Version> ließ sich nicht laden. Wenn sie gerade erst erschienen ist, versuche es in einer Viertelstunde erneut; sonst prüfe die Internetverbindung und WQ_IMAGE_PREFIX in .env. WordQuest läuft unverändert mit der bisherigen Version weiter; ein neuer Aufruf von ./upgrade.sh setzt das Update fort. Die Sicherung liegt in <Datei>.
   ```
 
 - **Die Sicherung gelingt nicht.** Dann lädt `upgrade.sh` die neue Version gar nicht erst und meldet „Die Sicherung vor dem Update ist fehlgeschlagen. Es wurde nichts geändert.“
