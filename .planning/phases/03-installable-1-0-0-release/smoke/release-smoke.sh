@@ -454,7 +454,7 @@ gzip -t "$before_files" || fail "$before_files ist kein gueltiges gzip."
 # Nur fuer den Besitzer lesbar wie vor-update-… (W-2, IN-01).
 [[ "$(ls -l "$before_files" | cut -c1-10)" == -rw------- ]] \
   || fail "$before_files ist nicht nur fuer den Besitzer lesbar: $(ls -l "$before_files" | cut -c1-10)"
-gunzip -c "$before_files" | tail -n 20 | grep -q 'PostgreSQL database dump complete' \
+[[ "$(gunzip -c "$before_files" | tail -n 20 | grep -cx -- '-- PostgreSQL database dump complete' || true)" -gt 0 ]] \
   || fail "$before_files hat die Endzeile nicht."
 [[ "$(gunzip -c "$before_files" | grep -c 'Erstes Kind' || true)" == 0 ]] \
   || fail "$before_files enthaelt den Stand vor dem Loeschen."
@@ -580,7 +580,7 @@ expect_msg .smoke/restore-drop.log "$newest"
 [[ -z "$(docker compose ps --status running -q api </dev/null)" ]] \
   || fail "Drop-Fehler: api laeuft nach doppeltem Fehlschlag."
 gzip -t "$newest" || fail "$newest ist kein gueltiges gzip."
-gunzip -c "$newest" | tail -n 20 | grep -q 'PostgreSQL database dump complete' \
+[[ "$(gunzip -c "$newest" | tail -n 20 | grep -cx -- '-- PostgreSQL database dump complete' || true)" -gt 0 ]] \
   || fail "$newest hat die Endzeile nicht."
 db_admin 'ALTER DATABASE wordquest IS_TEMPLATE false'
 # Weg aus der Meldung, schlimmster Fall: Die Datenbank fehlt ganz (DROP gelang,
@@ -640,7 +640,7 @@ check_upd_backup() {
   [[ -n "$1" && -f "$1" ]] || fail "Die Sicherung '$1' aus der Ausgabe von upgrade.sh gibt es nicht."
   gzip -t "$1" || fail "$1 ist kein gueltiges gzip."
   [[ "$(ls -l "$1" | cut -c1-10)" == -rw------- ]] || fail "$1 ist nicht nur fuer den Besitzer lesbar: $(ls -l "$1" | cut -c1-10)"
-  gunzip -c "$1" | tail -n 20 | grep -q 'PostgreSQL database dump complete' || fail "$1 hat die Endzeile nicht."
+  [[ "$(gunzip -c "$1" | tail -n 20 | grep -cx -- '-- PostgreSQL database dump complete' || true)" -gt 0 ]] || fail "$1 hat die Endzeile nicht."
   [[ "$(gunzip -c "$1" | grep -c 'Erstes Kind' || true)" -gt 0 ]] || fail "$1 enthaelt 'Erstes Kind' nicht."
 }
 

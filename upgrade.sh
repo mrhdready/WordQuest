@@ -51,7 +51,7 @@ current="$(env_value WQ_VERSION)"
 # \unrestrict.
 dump_complete() {
   gzip -t "$1" 2>/dev/null || return 1
-  gunzip -c "$1" | tail -n 20 | grep -qx -- '-- PostgreSQL database dump complete' || return 1
+  [[ "$(gunzip -c "$1" | tail -n 20 | grep -cx -- '-- PostgreSQL database dump complete' || true)" -gt 0 ]] || return 1
 }
 check_dump() {
   dump_complete "$1" || return 1

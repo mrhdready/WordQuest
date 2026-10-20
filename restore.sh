@@ -29,7 +29,7 @@ docker compose version >/dev/null 2>&1 || die "'docker compose' ist nicht verfü
 # mit demselben Text nicht zaehlt.
 dump_complete() {
   gzip -t "$1" 2>/dev/null || return 1
-  gunzip -c "$1" | tail -n 20 | grep -qx -- '-- PostgreSQL database dump complete' || return 1
+  [[ "$(gunzip -c "$1" | tail -n 20 | grep -cx -- '-- PostgreSQL database dump complete' || true)" -gt 0 ]] || return 1
 }
 # WordQuest-Sicherung: vollstaendig und mit Kontotabelle, also keine fremde Datei.
 check_dump() {
