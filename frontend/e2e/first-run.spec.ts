@@ -10,7 +10,7 @@ test.use({ storageState: guardianStorageState })
 
 // Rate-Limit "auth" (10 pro Minute, eigener Limiter des Smoke-Stacks): der Smoke
 // nutzt vorher 4 Logins, dazu globalSetup, Profilwahl und learner-login, also 7.
-test('Erste Installation bis zur ersten Lernantwort', async ({ page, browser, baseURL }) => {
+test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ page, browser, baseURL }) => {
   const childName = 'Erstes Kind'
   const pin = '2468'
 
@@ -57,20 +57,27 @@ test('Erste Installation bis zur ersten Lernantwort', async ({ page, browser, ba
   expect(login.status(), 'Rate-Limit auth erreicht').toBe(200)
   await expect(child.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
 
-  // Erste Frage, richtige Antwort aus dem Eintrag, Rueckmeldung sichtbar.
+  // Ganze Runde: jede Aufgabe aus der Start-Antwort richtig beantworten, je nach
+  // Richtung aus dem Eintrag. Ohne Fehler kommt keine Wiederholung dazu, die
+  // Runde endet nach der letzten Aufgabe mit der Zusammenfassung (Muster learn.spec.ts).
   const [started] = await Promise.all([
     child.waitForResponse((response) => response.url().endsWith('/api/v1/sessions')),
     child.getByRole('button', { name: 'Los geht’s' }).click(),
   ])
-  const first = ((await started.json()) as SessionView).items[0]
-  expect(first, 'Runde ohne Frage').toBeDefined()
-  await expect(child.getByRole('textbox')).toBeVisible()
-  await child.getByRole('textbox').fill(first!.prompt === 'Hund' ? 'dog' : 'Hund')
-  const [answered] = await Promise.all([
-    child.waitForResponse((response) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(response.url())),
-    child.getByRole('textbox').press('Enter'),
-  ])
-  expect(answered.status()).toBe(200)
-  await expect(child.getByText('Richtig!', { exact: true })).toBeVisible()
+  const items = ((await started.json()) as SessionView).items
+  expect(items.length, 'Runde ohne Frage').toBeGreaterThan(0)
+  for (const [index, item] of items.entries()) {
+    if (index > 0) await child.getByRole('button', { name: 'Weiter' }).click()
+    await expect(child.getByRole('textbox')).toHaveValue('')
+    await child.getByRole('textbox').fill(item.prompt === 'Hund' ? 'dog' : 'Hund')
+    const [answered] = await Promise.all([
+      child.waitForResponse((response) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(response.url())),
+      child.getByRole('textbox').press('Enter'),
+    ])
+    expect(answered.status()).toBe(200)
+    await expect(child.getByText('Richtig!', { exact: true })).toBeVisible()
+  }
+  await child.getByRole('button', { name: 'Weiter' }).click()
+  await expect(child.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
   await context.close()
 })
