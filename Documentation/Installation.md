@@ -122,7 +122,7 @@ Fertig. WordQuest läuft jetzt mit Version <neue Version>. Die Sicherung von vor
 
 Die Sicherung steht danach in der Liste von `./restore.sh` (siehe „Wiederherstellen“). Gibt es keine neue Version, legt `./upgrade.sh` eine weitere Sicherung an und lädt für alle Dienste die Images, die sich seit dem letzten Laden geändert haben; deine Daten bleiben unverändert.
 
-Hast du eine Datei von WordQuest selbst geändert, zum Beispiel den Port in einer Compose-Datei, bricht `git pull` ab, wenn das Update dieselbe Datei ändert, und ändert nichts. Mach deine Änderung dann mit `git checkout -- <Datei>` rückgängig, trag die Einstellung in `.env` ein, zum Beispiel `WQ_PORT=9000`, und starte `git pull` erneut. Einstellungen gehören nur in `.env`; `git pull` lässt `.env`, `secrets/` und `backups/` unverändert.
+Einstellungen gehören nur in `.env`, zum Beispiel `WQ_PORT=9000` für einen anderen Port. `upgrade.sh` ersetzt seine eigenen Dateien durch die aus dem Paket und lässt `.env`, `secrets/` und `backups/` unverändert; eigene Änderungen an den Compose-Dateien gehen beim Update verloren. Dateien, die eine neue Version nicht mehr braucht, bleiben im Ordner liegen und stören nicht.
 
 Wenn etwas schiefgeht:
 

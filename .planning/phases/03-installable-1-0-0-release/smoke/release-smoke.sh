@@ -970,6 +970,33 @@ expect_msg .smoke/upgrade-continue.log 'upgrade.sh wurde mit --continue ohne gü
 echo "Fall --continue: Exit $status"
 echo "PAKETPRUEFUNG OK"
 
+echo "== Update aus einem frueheren Klon (D-16)"
+# Mit .git nimmt upgrade.sh die Version aus dem eigenen Ordner und laedt kein
+# Paket; die Adresse zeigt deshalb auf einen Pfad mit 404.
+grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env.example || fail "Klon: .env.example nennt nicht $EXPECTED_VERSION."
+mkdir .git
+upd_snapshot
+n_args="$(grep -c . "$SPY_LOG-args" || true)"
+n_req="$(http_requests)"
+WQ_RELEASE_URL="$LOCAL_RELEASE_URL/gibt-es-nicht"
+upgrade_run .smoke/upgrade-klon.log ok
+WQ_RELEASE_URL="$LOCAL_RELEASE_URL"
+rmdir .git
+[[ "$status" == 0 ]] || fail "Klon: upgrade.sh endete mit Exit $status."
+expect_msg .smoke/upgrade-klon.log 'Git-Klon erkannt'
+[[ "$(http_requests)" == "$n_req" ]] || fail "Klon: upgrade.sh hat ein Paket angefragt."
+[[ "$(backup_count)" == $((n_upd + 1)) ]] || fail "Klon: nicht genau eine neue Sicherung."
+check_upd_backup "$(upd_file .smoke/upgrade-klon.log)"
+[[ "$(spy_lines)" == $((n_spy + 1)) && "$(tail -n 1 "$SPY_LOG")" == "ziel=$EXPECTED_VERSION env=$EXPECTED_VERSION" ]] \
+  || fail "Klon: Spy-Protokoll ohne Zielversion $EXPECTED_VERSION: $(tail -n 1 "$SPY_LOG")"
+[[ "$(grep -c . "$SPY_LOG-args" || true)" == $((n_args + 1)) ]] || fail "Klon: keine Kommandozeile im Spy-Protokoll."
+if tail -n 1 "$SPY_LOG-args" | grep -qF -- '--continue'; then
+  fail "Klon: upgrade.sh hat sich mit --continue neu gestartet: $(tail -n 1 "$SPY_LOG-args")"
+fi
+[[ "$(pkg_sums)" == "$pkg_before" ]] || fail "Klon: Paketdatei im Installationsordner geaendert."
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "Klon: Fingerabdruck geaendert."
+echo "KLON OK"
+
 echo "== Seite gegen den Lauf"
 # Abschnitte nach D-09: genau diese Ueberschriften zweiter Ebene, in dieser
 # Reihenfolge; Zeilen in Codebloecken zaehlen nicht.

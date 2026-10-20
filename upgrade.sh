@@ -87,8 +87,18 @@ fetch() {
   fi
 }
 
+# --- Frueherer Git-Klon: Version aus diesem Ordner --------------------------------
+if [[ -z "$backup" && -e .git ]]; then
+  # Ein frueherer Klon darf weiter funktionieren (D-16): kein Paket, kein
+  # Ersetzen, kein Neustart; die Version kommt mit git pull in .env.example.
+  say "Git-Klon erkannt: upgrade.sh nimmt die Version aus diesem Ordner und lädt kein Paket."
+  target="$(version_in .env.example || true)"
+  [[ -n "$target" ]] || die "In .env.example steht keine gültige Version (WQ_VERSION=). Lade WordQuest mit git pull vollständig herunter und starte upgrade.sh erneut. Es wurde nichts geändert."
+  say "Aktualisiere WordQuest von ${current:-unbekannt} auf ${target}."
+  make_backup
+
 # --- Phase A: Paket laden, pruefen, sichern, ersetzen -----------------------------
-if [[ -z "$backup" ]]; then
+elif [[ -z "$backup" ]]; then
   # Adresse wie COMPOSE_FILE in setup.sh: Umgebung, dann .env, dann GitHub.
   url="${WQ_RELEASE_URL:-$(env_value WQ_RELEASE_URL)}"
   url="${url:-$RELEASE_URL_DEFAULT}"
@@ -148,7 +158,7 @@ if [[ -z "$backup" ]]; then
   exec ./upgrade.sh --continue "$backup"
 fi
 
-# --- Phase B: neue Version laden und starten --------------------------------------
+# --- Phase B (und Klon): neue Version laden und starten ---------------------------
 target="$(version_in .env.example || true)"
 [[ -n "$target" ]] || die "In .env.example steht keine gültige Version (WQ_VERSION=). WordQuest läuft unverändert mit der bisherigen Version weiter; starte ./upgrade.sh erneut. Die Sicherung liegt in $backup."
 

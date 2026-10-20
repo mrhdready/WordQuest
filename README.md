@@ -19,8 +19,8 @@ Memory) und der Offline-Betrieb stehen noch aus.
 Für den Betrieb im Heimnetz auf einem Raspberry Pi 5 oder einem NAS gibt es
 genau eine Anleitung: [`Documentation/Installation.md`](Documentation/Installation.md).
 Sie führt vom leeren Gerät bis zur ersten Anmeldung, erklärt Update
-(`git pull`, `./upgrade.sh`) und Wiederherstellen (`./restore.sh`) und hilft
-bei Problemen.
+(`./upgrade.sh` holt das neueste Release selbst) und Wiederherstellen
+(`./restore.sh`) und hilft bei Problemen.
 
 **Für Entwickler und Forks:** Die CI baut bei jedem Push auf `master` und bei
 jedem Tag `v*` die Images `ghcr.io/<account>/wordquest-api` und `-web` für
