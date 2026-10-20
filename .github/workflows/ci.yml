@@ -154,6 +154,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        # Das Token mit Schreibrecht nicht in .git/config ablegen; gh nimmt GH_TOKEN.
+        with:
+          persist-credentials: false
 
       # Bricht ab, wenn der Tag nicht v plus WQ_VERSION aus .env.example ist.
       - name: Paket bauen

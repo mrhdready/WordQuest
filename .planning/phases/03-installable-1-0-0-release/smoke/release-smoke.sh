@@ -116,13 +116,15 @@ HTTP_PID=$!
 export WQ_RELEASE_URL=http://127.0.0.1:18083
 served=0
 for _ in $(seq 1 30); do
-  if curl -fsS -o /dev/null "$WQ_RELEASE_URL/wordquest.tar.gz.sha256" 2>/dev/null; then
+  # Inhalt vergleichen: Ein fremder Dienst auf dem Port fiele sonst nicht auf.
+  if curl -fsS "$WQ_RELEASE_URL/wordquest.tar.gz.sha256" 2>/dev/null \
+    | cmp -s - "$WORK/release/wordquest.tar.gz.sha256"; then
     served=1
     break
   fi
   sleep 1
 done
-[[ "$served" == 1 ]] || fail "Der lokale Release-Server auf 127.0.0.1:18083 antwortet nach 30 s nicht."
+[[ "$served" == 1 ]] || fail "Der lokale Release-Server auf 127.0.0.1:18083 liefert das Paket nach 30 s nicht (Port belegt?)."
 echo "PAKET OK"
 
 echo "== Vorpruefung der lokalen Tags"
@@ -299,7 +301,7 @@ restore_run() {
   cat "$1"
 }
 
-# Echter Lernstand: Kind, Set und eine Lernantwort ueber die Oberflaeche.
+# Echter Lernstand: Kind, Set und eine ganze erste Runde ueber die Oberflaeche.
 # Anmelde-Limit: globalSetup, Profilwahl und learner-login (first-run.spec.ts:11-12).
 auth_budget 3
 # Das Passwort steht nur fuer diesen einen Aufruf in der Umgebung.

@@ -151,7 +151,7 @@ gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
 gunzip -c "$dump" | grep -q 'COPY public.app_user' || fail "$dump enthaelt die Kontodaten nicht."
 echo "BACKUP OK"
 
-echo "== Seedfreier Erstdurchlauf bis zur ersten Lernantwort (PAR-05)"
+echo "== Seedfreier Erstdurchlauf bis zur Zusammenfassung der ersten Runde (PAR-05)"
 # Playwright aus dem Repo (dort liegen node_modules), gegen diesen Stack. Das
 # Reset-Passwort steht nur fuer diesen einen Aufruf in der Umgebung, nie in der Ausgabe.
 WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
