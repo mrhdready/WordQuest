@@ -885,6 +885,91 @@ grep -qxF -- "$last_env" .env || fail "Zweiter Aufruf: Die Zeile '$last_env' ist
 no_workdir || fail "Zweiter Aufruf: Arbeitsordner .upgrade.* liegt noch da."
 echo "UPDATE-ABBRUCH OK"
 
+echo "== Update: Paketpruefung vor jeder Aenderung (Plan-Checker W1, Codex-Review 05 HIGH)"
+LOCAL_RELEASE_URL="$WQ_RELEASE_URL"
+http_requests() { grep -c 'GET ' "$WORK/http.log" || true; }
+# Paket mit gueltiger Pruefsumme, aber anderem Inhalt als die feste Liste.
+serve_bad() {
+  local d="$WORK/pkg/wordquest"
+  pkg_unpack
+  case "$1" in
+    env) printf 'WQ_PORT=1\n' >"$d/.env" ;;
+    secrets) mkdir "$d/secrets" && printf 'fremd\n' >"$d/secrets/x" ;;
+    backups) mkdir "$d/backups" && printf 'fremd\n' >"$d/backups/x" ;;
+    extra) printf 'fremd\n' >"$d/extra.txt" ;;
+    symlink) rm "$d/setup.sh" && ln -s upgrade.sh "$d/setup.sh" ;;
+    fifo) mkfifo "$d/fifo" ;;
+    fehlt) rm "$d/restore.sh" ;;
+    modus) chmod 644 "$d/upgrade.sh" ;;
+    *) fail "serve_bad: unbekannte Art $1" ;;
+  esac
+  pkg_pack
+}
+for art in env secrets backups extra symlink fifo fehlt modus; do
+  serve_bad "$art"
+  upd_snapshot
+  upgrade_run ".smoke/upgrade-paket-$art.log" pass
+  assert_untouched "Paket $art"
+  expect_msg ".smoke/upgrade-paket-$art.log" 'Das WordQuest-Paket enthält andere Dateien als erwartet. Es wurde nichts geändert.'
+  if [[ -e "secrets/x" || -e "backups/x" || -e extra.txt || -e fifo ]]; then
+    fail "Paket $art: Datei aus dem Paket liegt im Installationsordner."
+  fi
+  echo "Fall Paket $art: Exit $status"
+done
+
+# Download scheitert: Adresse aus der Umgebung zeigt auf einen Pfad mit 404.
+serve_pkg "$EXPECTED_VERSION"
+upd_snapshot
+WQ_RELEASE_URL="$LOCAL_RELEASE_URL/gibt-es-nicht"
+upgrade_run .smoke/upgrade-download.log pass
+WQ_RELEASE_URL="$LOCAL_RELEASE_URL"
+assert_untouched "Download"
+expect_msg .smoke/upgrade-download.log 'Das WordQuest-Paket ließ sich nicht herunterladen. Prüfe die Internetverbindung und starte upgrade.sh erneut. Es wurde nichts geändert.'
+echo "Fall Download: Exit $status"
+
+# Adresse nur in .env: Die Anfrage muss beim lokalen Server ankommen, sonst
+# haette upgrade.sh still die GitHub-Adresse genommen.
+printf 'WQ_RELEASE_URL=%s\n' "$LOCAL_RELEASE_URL/nur-in-env" >>.env
+upd_snapshot
+unset WQ_RELEASE_URL
+upgrade_run .smoke/upgrade-download-env.log pass
+export WQ_RELEASE_URL="$LOCAL_RELEASE_URL"
+assert_untouched "Adresse aus .env"
+expect_msg .smoke/upgrade-download-env.log 'Das WordQuest-Paket ließ sich nicht herunterladen.'
+grep -qF 'GET /nur-in-env/wordquest.tar.gz' "$WORK/http.log" \
+  || fail "Adresse aus .env: Keine Anfrage an $LOCAL_RELEASE_URL/nur-in-env beim lokalen Server."
+grep -v '^WQ_RELEASE_URL=' .env >.smoke/env-ohne-url
+cat .smoke/env-ohne-url >.env
+echo "Fall Adresse aus .env: Exit $status"
+
+# Pruefsumme passt nicht zum Paket.
+serve_pkg "$EXPECTED_VERSION" falsch
+upd_snapshot
+upgrade_run .smoke/upgrade-pruefsumme.log pass
+assert_untouched "Pruefsumme"
+expect_msg .smoke/upgrade-pruefsumme.log 'Die Prüfsumme des WordQuest-Pakets stimmt nicht. Starte upgrade.sh später erneut. Es wurde nichts geändert.'
+echo "Fall Pruefsumme: Exit $status"
+
+# Anderes Protokoll: abgelehnt, bevor curl etwas anfragt.
+serve_pkg "$EXPECTED_VERSION"
+upd_snapshot
+n_req="$(http_requests)"
+WQ_RELEASE_URL=ftp://127.0.0.1:18083
+upgrade_run .smoke/upgrade-ftp.log pass
+WQ_RELEASE_URL="$LOCAL_RELEASE_URL"
+assert_untouched "ftp://"
+expect_msg .smoke/upgrade-ftp.log 'WQ_RELEASE_URL muss mit http:// oder https:// beginnen. Es wurde nichts geändert.'
+[[ "$(http_requests)" == "$n_req" ]] || fail "ftp://: Der lokale Server bekam eine Anfrage."
+echo "Fall ftp://: Exit $status"
+
+# --continue mit erfundener Sicherung.
+upd_snapshot
+upgrade_run .smoke/upgrade-continue.log pass --continue backups/gibt-es-nicht.sql.gz
+assert_untouched "--continue ohne Sicherung"
+expect_msg .smoke/upgrade-continue.log 'upgrade.sh wurde mit --continue ohne gültige Sicherung aufgerufen. Starte ./upgrade.sh ohne Zusatz.'
+echo "Fall --continue: Exit $status"
+echo "PAKETPRUEFUNG OK"
+
 echo "== Seite gegen den Lauf"
 # Abschnitte nach D-09: genau diese Ueberschriften zweiter Ebene, in dieser
 # Reihenfolge; Zeilen in Codebloecken zaehlen nicht.

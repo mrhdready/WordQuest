@@ -27,6 +27,9 @@ version_in() {
 # Dateien des Release-Pakets (.github/release-package.sh). Nur sie werden
 # ersetzt; .env, secrets/ und backups/ bleiben unberuehrt.
 PKG_FILES='docker-compose.quick.yml docker-compose.yml .env.example setup.sh upgrade.sh restore.sh frontend/nginx-traefik-realip.conf'
+# Erwarteter Paketinhalt aus derselben Liste: Typzeichen und Name je Eintrag,
+# sortiert (GNU- und BSD-tar liefern dieselben Typzeichen; 03.1-05).
+PKG_LISTING="$( { echo 'd wordquest/'; echo 'd wordquest/frontend/'; for f in $PKG_FILES; do echo "- wordquest/$f"; done; } | LC_ALL=C sort)"
 RELEASE_URL_DEFAULT=https://github.com/mrhdready/WordQuest/releases/latest/download
 
 command -v docker >/dev/null || die "Docker ist nicht installiert."
@@ -37,6 +40,8 @@ docker compose version >/dev/null 2>&1 || die "'docker compose' ist nicht verfü
 backup=""
 if [[ "${1:-}" == --continue ]]; then
   backup="${2:-}"
+  [[ "$backup" =~ ^backups/vor-update-[0-9]{8}-[0-9]{6}\.sql\.gz$ && -f "$backup" ]] \
+    || die "upgrade.sh wurde mit --continue ohne gültige Sicherung aufgerufen. Starte ./upgrade.sh ohne Zusatz."
 fi
 current="$(env_value WQ_VERSION)"
 
@@ -72,6 +77,15 @@ make_backup() {
   fi
   say "✓ Sicherung geprüft: $backup"
 }
+# Bei https bleibt curl auf https: Eine Weiterleitung von https auf http wird
+# abgelehnt. Zwei Aufrufe statt eines Arrays (leeres Array unter set -u, Bash 3.2).
+fetch() {
+  if [[ "$1" == https://* ]]; then
+    curl -fsSL --proto '=https' --proto-redir '=https' -o "$2" "$1"
+  else
+    curl -fsSL -o "$2" "$1"
+  fi
+}
 
 # --- Phase A: Paket laden, pruefen, sichern, ersetzen -----------------------------
 if [[ -z "$backup" ]]; then
@@ -79,13 +93,16 @@ if [[ -z "$backup" ]]; then
   url="${WQ_RELEASE_URL:-$(env_value WQ_RELEASE_URL)}"
   url="${url:-$RELEASE_URL_DEFAULT}"
   url="${url%/}"
+  # Nur http(s): Sonst laese curl den Wert womoeglich als Option oder anderes Protokoll.
+  [[ "$url" == http://* || "$url" == https://* ]] \
+    || die "WQ_RELEASE_URL muss mit http:// oder https:// beginnen. Es wurde nichts geändert."
 
   say "Lade das neueste WordQuest-Paket …"
   # Im Installationsordner, damit mv unten im selben Dateisystem umbenennt.
   work="$(mktemp -d ./.upgrade.XXXXXX)"
   trap 'rm -rf "$work"' EXIT
   pkg="$work/wordquest.tar.gz"
-  { curl -fsSL -o "$pkg" "$url/wordquest.tar.gz" && curl -fsSL -o "$pkg.sha256" "$url/wordquest.tar.gz.sha256"; } \
+  { fetch "$url/wordquest.tar.gz" "$pkg" && fetch "$url/wordquest.tar.gz.sha256" "$pkg.sha256"; } \
     || die "Das WordQuest-Paket ließ sich nicht herunterladen. Prüfe die Internetverbindung und starte upgrade.sh erneut. Es wurde nichts geändert."
   expected="$(awk 'NR == 1 { print $1 }' "$pkg.sha256")"
   actual="$(sha256sum "$pkg" | awk '{ print $1 }')"
@@ -93,9 +110,20 @@ if [[ -z "$backup" ]]; then
     || die "Die Prüfsumme des WordQuest-Pakets stimmt nicht. Starte upgrade.sh später erneut. Es wurde nichts geändert."
   say "✓ Prüfsumme stimmt."
 
+  # Die Pruefsumme belegt nur die Uebertragung. Vor dem Entpacken muss der
+  # Inhalt genau die Liste sein: keine .env, keine secrets/, keine Symlinks,
+  # FIFOs oder fremden Dateien (Plan-Checker W1, Codex-Review 05 HIGH).
+  bad_pkg="Das WordQuest-Paket enthält andere Dateien als erwartet. Es wurde nichts geändert."
+  listing="$(paste -d ' ' <(tar -tvzf "$pkg" | cut -c1) <(tar -tzf "$pkg") | LC_ALL=C sort || true)"
+  [[ "$listing" == "$PKG_LISTING" ]] || die "$bad_pkg"
   mkdir "$work/neu"
-  tar -xzf "$pkg" -C "$work/neu" --strip-components=1 \
-    || die "Das WordQuest-Paket ist unvollständig oder nennt keine gültige Version. Es wurde nichts geändert."
+  tar -xzf "$pkg" -C "$work/neu" --strip-components=1 || die "$bad_pkg"
+  for f in $PKG_FILES; do
+    [[ -f "$work/neu/$f" && ! -L "$work/neu/$f" ]] || die "$bad_pkg"
+  done
+  for f in setup.sh upgrade.sh restore.sh; do
+    [[ -x "$work/neu/$f" ]] || die "$bad_pkg"
+  done
   target="$(version_in "$work/neu/.env.example" || true)"
   [[ -n "$target" ]] || die "Das WordQuest-Paket ist unvollständig oder nennt keine gültige Version. Es wurde nichts geändert."
   say "Aktualisiere WordQuest von ${current:-unbekannt} auf ${target}."

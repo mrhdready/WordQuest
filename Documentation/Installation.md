@@ -126,6 +126,7 @@ Hast du eine Datei von WordQuest selbst geändert, zum Beispiel den Port in eine
 
 Wenn etwas schiefgeht:
 
+- **Das Paket lässt sich nicht laden oder ist nicht in Ordnung.** Dann endet `upgrade.sh`, bevor es etwas sichert oder ersetzt, mit einer dieser Meldungen: „Das WordQuest-Paket ließ sich nicht herunterladen. Prüfe die Internetverbindung und starte upgrade.sh erneut. Es wurde nichts geändert.“, „Die Prüfsumme des WordQuest-Pakets stimmt nicht. Starte upgrade.sh später erneut. Es wurde nichts geändert.“ oder „Das WordQuest-Paket enthält andere Dateien als erwartet. Es wurde nichts geändert.“ WordQuest läuft dann unverändert weiter; ein späterer Aufruf von `./upgrade.sh` genügt.
 - **Die neue Version lässt sich nicht laden.** Dann endet `upgrade.sh` mit dieser Meldung. Die Dateien von WordQuest sind dann schon neu, aber `.env`, deine Daten und das laufende WordQuest bleiben, wie sie waren:
 
   ```text
