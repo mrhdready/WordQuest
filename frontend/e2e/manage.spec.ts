@@ -533,4 +533,23 @@ test.describe(() => {
       expect(scrollWidth, `${path}: waagerechter Scrollbalken`).toBeLessThanOrEqual(320)
     }
   })
+
+  // Codex-Befund 11 (D-14): Ladefehler sichtbar und barrierefrei, auch mit offenem Formular.
+  test('Ladefehler der Set-Liste: Meldung, Formular bleibt, axe 0', async ({ page }) => {
+    await page.route(/\/api\/v1\/sets$/, (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 500 }) : route.fallback(),
+    )
+    const message = page.getByRole('alert').filter({
+      hasText: 'Das hat nicht geklappt. Versuche es noch einmal.',
+    })
+    await page.goto('/verwalten')
+    // App-Client wiederholt einmal (retry: 1), daher etwas mehr Zeit.
+    await expect(message).toBeVisible({ timeout: 15_000 })
+    await checkPage(page)
+
+    await page.goto('/verwalten?neu=1')
+    await expect(message).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByLabel('Titel')).toBeVisible()
+    await checkPage(page)
+  })
 })
