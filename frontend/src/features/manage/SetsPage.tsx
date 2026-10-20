@@ -62,6 +62,8 @@ export function SetsPage() {
   return (
     <div className="flex flex-col gap-4">
       {message ? <SuccessNote message={message} /> : null}
+      {/* Ohne fruehes return: "Neues Set" bleibt auch bei Ladefehler erreichbar (D-14). */}
+      {sets.isError && !sets.data ? <ErrorNote message={sets.error.message} /> : null}
       {showForm ? (
         <Card>
           <form onSubmit={submit} className="flex flex-col gap-4">

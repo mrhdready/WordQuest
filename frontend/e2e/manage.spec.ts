@@ -536,6 +536,8 @@ test.describe(() => {
 
   // Codex-Befund 11 (D-14): Ladefehler sichtbar und barrierefrei, auch mit offenem Formular.
   test('Ladefehler der Set-Liste: Meldung, Formular bleibt, axe 0', async ({ page }) => {
+    // Zwei volle checkPage-Laeufe plus Wiederholung des App-Clients je Aufruf.
+    test.slow()
     await page.route(/\/api\/v1\/sets$/, (route) =>
       route.request().method() === 'GET' ? route.fulfill({ status: 500 }) : route.fallback(),
     )
