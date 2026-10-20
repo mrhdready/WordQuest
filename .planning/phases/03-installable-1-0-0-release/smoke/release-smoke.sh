@@ -45,7 +45,8 @@ CLEANUP_TAGS=""
 SMOKE_DONE=0
 HTTP_PID=""
 cleanup() {
-  if [[ -n "$HTTP_PID" ]]; then kill "$HTTP_PID" 2>/dev/null || true; fi
+  # wait: sonst meldet Bash den beendeten Server mit "Terminated".
+  if [[ -n "$HTTP_PID" ]]; then kill "$HTTP_PID" 2>/dev/null || true; wait "$HTTP_PID" 2>/dev/null || true; fi
   # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
   (cd "$INST" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) 2>/dev/null || true
   (cd "$INST" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) 2>/dev/null || true
