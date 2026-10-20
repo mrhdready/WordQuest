@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: "03.1"
 current_phase_name: Release Hardening
 status: executing
-stopped_at: Completed 03.1-04-PLAN.md
-last_updated: "2026-10-20T10:46:04.818Z"
+stopped_at: Completed 03.1-05-PLAN.md
+last_updated: "2026-10-20T11:25:07.465Z"
 last_activity: 2026-10-20
-last_activity_desc: 03.1-03 ausgefuehrt (Lernen konsistent, HARD-02 komplett, Befunde 6-8), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
-state_head: 9a5f4fb36a68f61457397de0d3cced13ee5ce76d
+last_activity_desc: 03.1-05 ausgefuehrt (Release-Paket, Installation ohne Git, ganze erste Runde im Smoke), Plan-Gate gruen; manuelle Abnahme Phase 1 und 2 und Nach-Release-Abnahme Phase 3 offen
+state_head: 1cfca4f54c7a4410dccd330318ab291a6e6bf217
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 27
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-24)
 ## Current Position
 
 Phase: 03.1 (Release Hardening) — EXECUTING
-Plan: 4 of 7 ausgefuehrt (naechster: 03.1-05)
-Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). 03.1-03 fertig (Set-Wahl begrenzt die ganze Runde bei kontoweiter Rueckstandsbremse, offene Runden der letzten 30 Minuten reservieren neue Karten, LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs ohne Migration; HARD-02 komplett; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, LOW 1 behoben). 03.1-04 fertig (Sicherheits-Header aus nginx-security-headers.conf an jeder nginx-Antwort beider Varianten, auch an 404; CSV-Kopfzeile nur bei eindeutiger Zeile; Ladefehler der Set-Liste als ErrorNote mit axe 0; HARD-04 komplett; Plan-Gate gruen, e2e 55 passed, Review ohne BLOCKER/HIGH/MEDIUM, LOW-1/LOW-2 behoben). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
-Last activity: 2026-10-20 — 03.1-03 ausgefuehrt (8 Commits, Backend 137 + 272 passed, Frontend 247 passed, e2e 50 passed mit axe)
+Plan: 5 of 7 ausgefuehrt (naechster: 03.1-06)
+Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). 03.1-03 fertig (Set-Wahl begrenzt die ganze Runde bei kontoweiter Rueckstandsbremse, offene Runden der letzten 30 Minuten reservieren neue Karten, LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs ohne Migration; HARD-02 komplett; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, LOW 1 behoben). 03.1-04 fertig (Sicherheits-Header aus nginx-security-headers.conf an jeder nginx-Antwort beider Varianten, auch an 404; CSV-Kopfzeile nur bei eindeutiger Zeile; Ladefehler der Set-Liste als ErrorNote mit axe 0; HARD-04 komplett; Plan-Gate gruen, e2e 55 passed, Review ohne BLOCKER/HIGH/MEDIUM, LOW-1/LOW-2 behoben). 03.1-05 fertig (Release-Paket per .github/release-package.sh mit fester Dateiliste und SHA256, CI-Job release nur bei Tags v* mit contents: write, Installation ohne Git per curl | tar xz im Release-Smoke belegt, first-run.spec.ts bis zur Zusammenfassung; HARD-05 erst nach 03.1-06/07; Plan-Gate gruen, Review ohne HIGH, R-03/R-04 behoben, R-01 zurueckgewiesen bis 03.1-06). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird nach 03.1 auf den End-Commit versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
+Last activity: 2026-10-20 — 03.1-05 ausgefuehrt (5 Commits, Backend 144 + 272 passed, Frontend 250 passed, e2e 55 passed mit axe, Release-Smoke und Install-Smoke gruen)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -80,6 +80,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03.1 P02 | 20min | 3 tasks | 6 files |
 | Phase 03.1 P03 | 134min | 3 tasks | 7 files |
 | Phase 03.1 P04 | 711min | 3 tasks | 14 files |
+| Phase 03.1 P05 | 36min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,9 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-03: D-10 ueber LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs, keine Migration
 - [Phase 03.1]: 03.1-04: BusyBox-nc hält die Eingabe 5 s offen, sonst bricht nginx die Upstream-Weiterleitung mit 499 ab
 - [Phase 03.1]: 03.1-04: Verweis in upgrade.sh schon hier auf den Anker location /api/ gesetzt (Review LOW-2)
+- [Phase 03.1]: 03.1-05: Installationszeile im Release-Smoke aus der Seitenzeile erzeugt (nur Adresse ersetzt, bash -o pipefail -c)
+- [Phase 03.1]: 03.1-05: Job release checkt mit persist-credentials: false aus; gh nimmt GH_TOKEN (Review R-04)
+- [Phase 03.1]: 03.1-05: README nennt WQ_RELEASE_URL nach Plan schon jetzt; gelesen wird es erst ab 03.1-06 (Review R-01 zurueckgewiesen)
 
 ### Pending Todos
 
@@ -168,6 +172,7 @@ Recent decisions affecting current work:
 ### Blockers/Concerns
 
 - [Phase 2]: Only a pure domain test project exists; QUAL-01 needs a new integration test project with real PostgreSQL
+- Kein Tag v* vor Abschluss von 03.1-06/03.1-07: Update-Abschnitt nennt noch git pull, WQ_RELEASE_URL wird noch nicht gelesen (03.1-05 Review R-01/R-02)
 
 ## Deferred Items
 
@@ -179,6 +184,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-20T10:46:04.747Z
-Stopped at: Completed 03.1-04-PLAN.md
+Last session: 2026-10-20T11:25:07.383Z
+Stopped at: Completed 03.1-05-PLAN.md
 Resume file: None
