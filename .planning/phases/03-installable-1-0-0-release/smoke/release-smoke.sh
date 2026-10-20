@@ -107,23 +107,24 @@ echo "VERSION OK"
 echo "== Vollstaendigkeitspruefung der Sicherung in restore.sh und upgrade.sh"
 # pg_dump 17.6 setzt nach der Endzeile noch vier Zeilen (\unrestrict); eine
 # weitere Zeile einer kuenftigen Version darf nicht jede Sicherung durchfallen
-# lassen, ein abgeschnittener Dump (pg_dump bricht mitten im COPY ab, gzip
-# schliesst sauber) bleibt abgelehnt. Geprueft wird check_dump, wie es im
-# Skript steht.
+# lassen. Ein abgeschnittener Dump (pg_dump bricht mitten im COPY ab, gzip
+# schliesst sauber) bleibt abgelehnt, auch wenn eine Datenzeile den Text der
+# Endzeile enthaelt. Geprueft wird check_dump, wie es im Skript steht.
 dump_with_end() {
   {
-    printf '%s\n' '--' '-- PostgreSQL database dump' '--' 'COPY public.app_user (id) FROM stdin;' '1' '\.'
-    if [[ "$2" != cut ]]; then
-      printf '%s\n' '' '--' '-- PostgreSQL database dump complete' '--' '' '\unrestrict abc' ''
-    fi
+    printf '%s\n' '--' '-- PostgreSQL database dump' '--' 'COPY public.app_user (id, name) FROM stdin;'
+    printf '1\tKind\n'
+    case "$2" in
+      cut) ;;
+      cut-text) printf '2\tPostgreSQL database dump complete\n' ;;
+      *) printf '%s\n' '\.' '' '--' '-- PostgreSQL database dump complete' '--' '' '\unrestrict abc' '' ;;
+    esac
     if [[ "$2" == plus1 ]]; then echo '-- zusaetzliche Zeile einer kuenftigen pg_dump-Version'; fi
   } | gzip >"$1"
 }
-dump_with_end "$WORK/dump-heute.sql.gz" heute
-dump_with_end "$WORK/dump-plus1.sql.gz" plus1
-dump_with_end "$WORK/dump-cut.sql.gz" cut
+for name in heute plus1 cut cut-text; do dump_with_end "$WORK/dump-$name.sql.gz" "$name"; done
 for script in restore.sh upgrade.sh; do
-  for case_ in heute:0 plus1:0 cut:1; do
+  for case_ in heute:0 plus1:0 cut:1 cut-text:1; do
     name="${case_%:*}"; want="${case_#*:}"
     got=0
     (eval "$(sed -n '/^dump_complete() {/,/^}/p; /^check_dump() {/,/^}/p' "$script")" \
