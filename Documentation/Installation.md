@@ -15,10 +15,10 @@ Auf dem Gerät brauchst du:
    sudo usermod -aG docker $USER
    ```
 
-3. **git**, um WordQuest herunterzuladen. Fehlt es (zum Beispiel bei Raspberry Pi OS Lite), installierst du es so:
+3. **curl**, um WordQuest herunterzuladen. Meist ist es schon da; fehlt es, installierst du es so:
 
    ```bash
-   sudo apt install git
+   sudo apt install curl
    ```
 
 Prüfe danach, ob Docker Compose läuft:
@@ -35,10 +35,10 @@ Docker Compose version <Versionsnummer>
 
 ## Installation
 
-Lade WordQuest in den Ordner `wordquest` herunter und wechsle hinein:
+Lade die neueste Version von WordQuest herunter und wechsle in den Ordner `wordquest`, der dabei entsteht:
 
 ```bash
-git clone https://github.com/mrhdready/WordQuest.git wordquest
+curl -fsSL https://github.com/mrhdready/WordQuest/releases/latest/download/wordquest.tar.gz | tar xz
 cd wordquest
 ```
 

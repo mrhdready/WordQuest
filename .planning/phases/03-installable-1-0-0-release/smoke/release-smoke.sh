@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 #
-# Release-Smoke der Phase 3 (REL-04, REL-03): frische Installation aus einer
-# Arbeitskopie des Arbeitsbaums mit lokal gebauten Images, die genau so heissen
-# wie die veroeffentlichten (ghcr.io/mrhdready/wordquest-{api,web}:1.0.0).
+# Release-Smoke der Phase 3 (REL-04, REL-03) und 03.1 (D-16): frische
+# Installation aus dem lokal gebauten Release-Paket, so wie Eltern sie ohne Git
+# machen (curl | tar xz, ./setup.sh), mit lokal gebauten Images, die genau so
+# heissen wie die veroeffentlichten (ghcr.io/mrhdready/wordquest-{api,web}:1.0.0).
+# Paket und Images entstehen aus einer Arbeitskopie des Arbeitsbaums ($WORK/src),
+# das Paket kommt von einem lokalen HTTP-Server (127.0.0.1:18083).
 # Eigener Compose-Projektname und Port, raeumt am Ende alles wieder ab, auch
 # nach einem Abbruch mitten im Build.
+#
+# Nur Bash-3.2-Mittel, weil der Smoke unter macOS mit /bin/bash 3.2 laeuft
+# (verbotene Mittel: 03.1-05-PLAN.md, Flagged Assumptions).
 #
 #   bash .planning/phases/03-installable-1-0-0-release/smoke/release-smoke.sh
 #
@@ -12,6 +18,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 WORK="$(mktemp -d)"
+# Quellbaum fuer Build und Paket; installiert wird daneben aus dem Paket.
+SRC="$WORK/src"
+INST="$WORK/wordquest"
 
 export COMPOSE_PROJECT_NAME=wq-release
 export WQ_PORT=18082
@@ -34,10 +43,12 @@ CLEANUP_TAGS=""
 # Bash 3.2 endet mit trap EXIT nach einer ungesetzten Variable mit Exit 0;
 # deshalb zaehlt nur ein Lauf bis zum Ende als Erfolg.
 SMOKE_DONE=0
+HTTP_PID=""
 cleanup() {
+  if [[ -n "$HTTP_PID" ]]; then kill "$HTTP_PID" 2>/dev/null || true; fi
   # Die Dumps gehoeren unter Linux root; sonst scheitert rm -rf unten.
-  (cd "$WORK" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) || true
-  (cd "$WORK" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) || true
+  (cd "$INST" && docker compose exec -T backup sh -c 'rm -rf /backups/*' </dev/null >/dev/null 2>&1) 2>/dev/null || true
+  (cd "$INST" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) 2>/dev/null || true
   for tag in $CLEANUP_TAGS; do
     if docker image inspect "$tag" >/dev/null 2>&1; then
       docker image rm "$tag" >/dev/null 2>&1 || true
@@ -51,9 +62,8 @@ trap cleanup EXIT
 tar -C "$ROOT" \
   --exclude=.git --exclude=node_modules --exclude=bin --exclude=obj \
   --exclude=./secrets --exclude=./.env --exclude=./backups \
-  -cf - . | tar -C "$WORK" -xf -
-cd "$WORK"
-mkdir .smoke
+  -cf - . | { mkdir "$SRC" && tar -C "$SRC" -xf -; }
+cd "$SRC"
 
 echo "== Version und Image-Praefix an drei Stellen (D-04)"
 example_value() { sed -n "s/^$1=//p" .env.example; }
@@ -75,6 +85,46 @@ for file in docker-compose.quick.yml docker-compose.yml; do
 done
 echo "VERSION OK"
 
+echo "== Release-Paket wie in der CI (D-16)"
+bash "$SRC/.github/release-package.sh" "$WORK/release-base" "v$EXPECTED_VERSION" \
+  || fail "Das Release-Paket liess sich nicht bauen (.github/release-package.sh)."
+(cd "$WORK/release-base" && sha256sum -c wordquest.tar.gz.sha256) \
+  || fail "Die Pruefsumme des Pakets stimmt nicht."
+# Typzeichen und Name je Eintrag, sortiert. GNU- und BSD-tar liefern dieselben
+# Typzeichen (d, -, l, p, h); dieselbe Liste gilt fuer upgrade.sh (03.1-06).
+# LC_ALL=C: sonst sortiert .env.example je nach Locale anders ein.
+pkg_listing() {
+  paste -d ' ' <(tar -tvzf "$1" | cut -c1) <(tar -tzf "$1") | LC_ALL=C sort
+}
+PKG_EXPECTED='- wordquest/.env.example
+- wordquest/docker-compose.quick.yml
+- wordquest/docker-compose.yml
+- wordquest/frontend/nginx-traefik-realip.conf
+- wordquest/restore.sh
+- wordquest/setup.sh
+- wordquest/upgrade.sh
+d wordquest/
+d wordquest/frontend/'
+listing="$(pkg_listing "$WORK/release-base/wordquest.tar.gz")"
+[[ "$listing" == "$PKG_EXPECTED" ]] \
+  || fail "Paketinhalt weicht ab: $(printf '%s' "$listing" | tr '\n' '|')"
+# Auslieferung wie ein GitHub-Release: beide Dateien unter einer Adresse.
+mkdir "$WORK/release"
+cp "$WORK/release-base/wordquest.tar.gz" "$WORK/release-base/wordquest.tar.gz.sha256" "$WORK/release/"
+python3 -m http.server --bind 127.0.0.1 --directory "$WORK/release" 18083 >"$WORK/http.log" 2>&1 &
+HTTP_PID=$!
+export WQ_RELEASE_URL=http://127.0.0.1:18083
+served=0
+for _ in $(seq 1 30); do
+  if curl -fsS -o /dev/null "$WQ_RELEASE_URL/wordquest.tar.gz.sha256" 2>/dev/null; then
+    served=1
+    break
+  fi
+  sleep 1
+done
+[[ "$served" == 1 ]] || fail "Der lokale Release-Server auf 127.0.0.1:18083 antwortet nach 30 s nicht."
+echo "PAKET OK"
+
 echo "== Vorpruefung der lokalen Tags"
 for tag in "$API_TAG" "$WEB_TAG"; do
   if docker image inspect "$tag" >/dev/null 2>&1; then
@@ -90,7 +140,7 @@ docker compose build api web </dev/null
 # Anmelde-Limit (Program.cs:113-138): 10 Auth-Anfragen pro Minute je Absender,
 # im Speicher der API. Gezaehlt wird je API-Start, das ist strenger als das
 # Minutenfenster. Zaehler in einer Datei, weil login in $(...) laeuft.
-AUTH_FILE="$WORK/.smoke/auth-budget"
+AUTH_FILE="$INST/.smoke/auth-budget"
 auth_budget() {
   local started saved="" count=0
   started="$(docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q api </dev/null)")" || true
@@ -114,7 +164,7 @@ login() {
 
 # Seitenabgleich (REL-03, D-10): Jeder Befehl der Installationsseite laeuft hier
 # oder steht mit Grund in HANDGRIFFE; jede zitierte Ausgabe kommt in einem Log vor.
-PAGE=Documentation/Installation.md
+PAGE="$SRC/Documentation/Installation.md"
 # Zeilen aus den Codebloecken einer Sprache (bash oder text), ohne Einrueckung.
 page_lines() {
   awk -v lang="$1" '{ sub(/^[ \t]+/, "") }
@@ -126,13 +176,11 @@ page_lines() {
 page_cmd() {
   [[ -f "$PAGE" ]] || fail "Die Installationsseite $PAGE fehlt."
   grep -Fxq -- "$1" <(page_lines bash) || fail "Seitenbefehl steht nicht auf $PAGE: $1"
-  printf '%s\n' "$1" >>.smoke/page-cmds
+  printf '%s\n' "$1" >>"$INST/.smoke/page-cmds"
 }
 # Befehle der Seite, die der Smoke nicht ausfuehrt: "Befehl — Grund", je eine Zeile.
-HANDGRIFFE='sudo apt install git — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat git
+HANDGRIFFE='sudo apt install curl — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat curl
 sudo usermod -aG docker $USER — Gruppe docker, wirkt erst nach neuer Anmeldung
-git clone https://github.com/mrhdready/WordQuest.git wordquest — der Smoke arbeitet in einer Arbeitskopie des Arbeitsbaums
-cd wordquest — Ordnerwechsel nach dem Klonen und vor dem Update; der Smoke steht schon in der Arbeitskopie
 git pull — die Arbeitskopie hat kein .git; der Smoke stellt die neue Version ueber die Tags 0.0.0-smoke und 1.0.0 nach (Abschnitt Update)
 docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D-06)
 sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
@@ -142,7 +190,26 @@ hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht
 ./restore.sh backups/daily/wordquest-20261001.sql.gz — Beispielname; die Form mit Pfad laeuft im Smoke mit dem Tagesdump und den Testdateien
 ./restore.sh backups/vor-update-20261001-193000.sql.gz — Beispielname; der Smoke geht den Weg mit der Datei aus der Meldung von upgrade.sh (UPDATE-ABBRUCH OK)'
 
-echo "== Installation"
+echo "== Installation aus dem Paket (D-16)"
+mkdir -p "$INST/.smoke"
+cd "$WORK"
+# Die Zeile der Seite, nur mit der Adresse des lokalen Servers. Den echten
+# Download von GitHub prueft die Nach-Release-Abnahme (03.1-VALIDATION.md).
+GH_RELEASE_URL=https://github.com/mrhdready/WordQuest/releases/latest/download
+INSTALL_LINE="curl -fsSL $GH_RELEASE_URL/wordquest.tar.gz | tar xz"
+page_cmd "$INSTALL_LINE"
+local_line="${INSTALL_LINE/"$GH_RELEASE_URL"/$WQ_RELEASE_URL}"
+[[ "$local_line" != "$INSTALL_LINE" ]] || fail "Adresse in der Installationszeile nicht ersetzt."
+bash -o pipefail -c "$local_line" || fail "Laden und Entpacken des Pakets fehlgeschlagen: $local_line"
+page_cmd 'cd wordquest'
+cd wordquest
+for script in setup.sh upgrade.sh restore.sh; do
+  [[ -f "$script" && -x "$script" ]] || fail "$script fehlt im Paket oder ist nicht ausfuehrbar."
+done
+# Nur fuer den Smoke: Mit dem Build-Overlay gelten api und web als baubar, und
+# pull --ignore-buildable in setup.sh ersetzt die lokal gebauten 1.0.0-Tags
+# nicht durch veroeffentlichte.
+cp "$SRC/docker-compose.build.yml" .
 # Grossbuchstaben im Praefix werden abgelehnt, danach uebernimmt Enter den Standard.
 page_cmd './setup.sh'
 printf '%s\n' 'GHCR.io/X' '' eltern@example.de geheim-123 geheim-123 \
@@ -496,8 +563,8 @@ fp_f0="$(fingerprint)"
 # "docker compose pull" die Zielversion aus der Umgebung und den Stand der .env
 # und meldet Erfolg; alles andere geht an das echte docker. Nur aktiv mit
 # WQ_SPY_PULL=ok, also nur fuer die Aufrufe von upgrade.sh mit Spy.
-SPY_DIR="$WORK/.smoke/spy"
-SPY_LOG="$WORK/.smoke/spy-pull"
+SPY_DIR="$INST/.smoke/spy"
+SPY_LOG="$INST/.smoke/spy-pull"
 REAL_DOCKER="$(command -v docker)"
 mkdir "$SPY_DIR"
 : >"$SPY_LOG"
