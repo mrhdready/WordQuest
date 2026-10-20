@@ -120,11 +120,16 @@ dump_with_end() {
       *) printf '%s\n' '\.' '' '--' '-- PostgreSQL database dump complete' '--' '' '\unrestrict abc' '' ;;
     esac
     if [[ "$2" == plus1 ]]; then echo '-- zusaetzliche Zeile einer kuenftigen pg_dump-Version'; fi
+    # Lange Zeilen nach der Endzeile: Liest grep nach dem Treffer nicht weiter,
+    # bricht tail unter pipefail mit SIGPIPE ab (immer statt nur gelegentlich).
+    if [[ "$2" == plus-lang ]]; then
+      for _ in 1 2 3; do head -c 100000 /dev/zero | tr '\0' x; echo; done
+    fi
   } | gzip >"$1"
 }
-for name in heute plus1 cut cut-text; do dump_with_end "$WORK/dump-$name.sql.gz" "$name"; done
+for name in heute plus1 plus-lang cut cut-text; do dump_with_end "$WORK/dump-$name.sql.gz" "$name"; done
 for script in restore.sh upgrade.sh; do
-  for case_ in heute:0 plus1:0 cut:1 cut-text:1; do
+  for case_ in heute:0 plus1:0 plus-lang:0 cut:1 cut-text:1; do
     name="${case_%:*}"; want="${case_#*:}"
     got=0
     (eval "$(sed -n '/^dump_complete() {/,/^}/p; /^check_dump() {/,/^}/p' "$script")" \
