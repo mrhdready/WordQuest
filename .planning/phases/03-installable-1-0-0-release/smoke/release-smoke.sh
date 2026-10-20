@@ -61,7 +61,15 @@ cleanup() {
     (cd "$INST" && docker compose exec -T backup chown -R "$(id -u):$(id -g)" /backups </dev/null >/dev/null 2>&1) 2>/dev/null || true
   fi
   (cd "$INST" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) 2>/dev/null || true
-  if [[ "$REGISTRY_STARTED" == 1 ]]; then docker rm -f -v "$REGISTRY_NAME" >/dev/null 2>&1 || true; fi
+  if [[ "$REGISTRY_STARTED" == 1 ]]; then
+    docker rm -f -v "$REGISTRY_NAME" >/dev/null 2>&1 || true
+    # Docker Desktop gibt den Port erst Sekunden nach dem Entfernen frei; ein
+    # direkt folgender Lauf oder eine Nachpruefung saehe ihn sonst belegt.
+    for _ in $(seq 1 30); do
+      lsof -nP -iTCP:18084 -sTCP:LISTEN >/dev/null 2>&1 || break
+      sleep 1
+    done
+  fi
   for tag in $CLEANUP_TAGS; do
     if docker image inspect "$tag" >/dev/null 2>&1; then
       docker image rm "$tag" >/dev/null 2>&1 || true
