@@ -46,10 +46,11 @@ fi
 current="$(env_value WQ_VERSION)"
 
 # Wie restore.sh: tail und grep -c lesen den ganzen Strom, sonst bricht gunzip
-# unter pipefail mit SIGPIPE ab (03-RESEARCH Pitfall 4).
+# unter pipefail mit SIGPIPE ab (03-RESEARCH Pitfall 4); Endzeile unter den
+# letzten 20 Zeilen, Platz fuer kuenftige Zusaetze nach \unrestrict.
 dump_complete() {
   gzip -t "$1" 2>/dev/null || return 1
-  gunzip -c "$1" | tail -n 5 | grep -q 'PostgreSQL database dump complete' || return 1
+  gunzip -c "$1" | tail -n 20 | grep -q 'PostgreSQL database dump complete' || return 1
 }
 check_dump() {
   dump_complete "$1" || return 1
