@@ -104,6 +104,36 @@ for file in docker-compose.quick.yml docker-compose.yml; do
 done
 echo "VERSION OK"
 
+echo "== Vollstaendigkeitspruefung der Sicherung in restore.sh und upgrade.sh"
+# pg_dump 17.6 setzt nach der Endzeile noch vier Zeilen (\unrestrict); eine
+# weitere Zeile einer kuenftigen Version darf nicht jede Sicherung durchfallen
+# lassen, ein abgeschnittener Dump (pg_dump bricht mitten im COPY ab, gzip
+# schliesst sauber) bleibt abgelehnt. Geprueft wird check_dump, wie es im
+# Skript steht.
+dump_with_end() {
+  {
+    printf '%s\n' '--' '-- PostgreSQL database dump' '--' 'COPY public.app_user (id) FROM stdin;' '1' '\.'
+    if [[ "$2" != cut ]]; then
+      printf '%s\n' '' '--' '-- PostgreSQL database dump complete' '--' '' '\unrestrict abc' ''
+    fi
+    if [[ "$2" == plus1 ]]; then echo '-- zusaetzliche Zeile einer kuenftigen pg_dump-Version'; fi
+  } | gzip >"$1"
+}
+dump_with_end "$WORK/dump-heute.sql.gz" heute
+dump_with_end "$WORK/dump-plus1.sql.gz" plus1
+dump_with_end "$WORK/dump-cut.sql.gz" cut
+for script in restore.sh upgrade.sh; do
+  for case_ in heute:0 plus1:0 cut:1; do
+    name="${case_%:*}"; want="${case_#*:}"
+    got=0
+    (eval "$(sed -n '/^dump_complete() {/,/^}/p; /^check_dump() {/,/^}/p' "$script")" \
+      && declare -f check_dump >/dev/null || exit 2
+      check_dump "$WORK/dump-$name.sql.gz") || got=$?
+    [[ "$got" == "$want" ]] || fail "$script: check_dump fuer Dump '$name' endete mit $got statt $want."
+  done
+done
+echo "DUMP-PRUEFUNG OK"
+
 echo "== Release-Paket wie in der CI (D-16)"
 bash "$SRC/.github/release-package.sh" "$WORK/release-base" "v$EXPECTED_VERSION" \
   || fail "Das Release-Paket liess sich nicht bauen (.github/release-package.sh)."
