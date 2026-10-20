@@ -1,6 +1,6 @@
 # WordQuest — Betrieb im Heimnetz ueber HTTP (Standard).
 #
-# Eingerichtet wird aus dem Repo-Klon mit:
+# Eingerichtet wird im entpackten Release-Paket mit:
 #
 #   ./setup.sh
 #
