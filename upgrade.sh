@@ -108,7 +108,7 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 [[ "$ready" == 1 ]] || start_failed "Die API ist nach zwei Minuten nicht bereit."
-# nginx loest api nur beim Start auf (frontend/nginx.conf:40, wie restore.sh):
+# nginx loest api nur beim Start auf (Block location /api/ in frontend/nginx.conf, wie restore.sh):
 # Wurde nur api neu erzeugt, liefe web sonst ins Leere.
 docker compose restart web </dev/null || start_failed "Der Start der Version $target ist fehlgeschlagen."
 trap - INT TERM

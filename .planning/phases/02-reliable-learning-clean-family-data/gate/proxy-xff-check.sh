@@ -136,6 +136,9 @@ check_headers() {
       || fail "$2 $path: keine erfolgreiche Antwort."
     grep -q 'Content-Security-Policy: ' <<<"$resp" || fail "$2 $path: Content-Security-Policy fehlt."
     grep -q 'X-Frame-Options: DENY' <<<"$resp" || fail "$2 $path: X-Frame-Options: DENY fehlt."
+    grep -q 'X-Content-Type-Options: nosniff' <<<"$resp" || fail "$2 $path: X-Content-Type-Options: nosniff fehlt."
+    grep -q 'Referrer-Policy: same-origin' <<<"$resp" || fail "$2 $path: Referrer-Policy: same-origin fehlt."
+    grep -q 'Permissions-Policy: ' <<<"$resp" || fail "$2 $path: Permissions-Policy fehlt."
   done
   # Fehlerantworten roh per BusyBox-nc, weil wget bei 404 keine Koepfe zeigt:
   # fehlendes Asset (nginx selbst) und 404 des Upstreams. Die Eingabe bleibt kurz
@@ -148,6 +151,9 @@ check_headers() {
     sed -n 1p <<<"$resp" | grep -q ' 404 ' || fail "$2 $path: Status ist nicht 404."
     grep -q 'Content-Security-Policy: ' <<<"$resp" || fail "$2 $path (404): Content-Security-Policy fehlt."
     grep -q 'X-Frame-Options: DENY' <<<"$resp" || fail "$2 $path (404): X-Frame-Options: DENY fehlt."
+    grep -q 'X-Content-Type-Options: nosniff' <<<"$resp" || fail "$2 $path (404): X-Content-Type-Options: nosniff fehlt."
+    grep -q 'Referrer-Policy: same-origin' <<<"$resp" || fail "$2 $path (404): Referrer-Policy: same-origin fehlt."
+    grep -q 'Permissions-Policy: ' <<<"$resp" || fail "$2 $path (404): Permissions-Policy fehlt."
   done
   echo "$2: Sicherheits-Header an allen Pfaden, auch an 404"
 }

@@ -51,6 +51,7 @@ public sealed class CsvVocabularyParserTests
     [Theory]
     [InlineData("source;target\nHund;dog")]
     [InlineData("Quelle;Ziel;Emoji\nHund;dog;🐶")]
+    [InlineData("\"Deutsch\";\"Englisch\";\nHund;dog")]
     public void SkipsAnUnambiguousHeaderRow(string content)
     {
         CsvParseResult result = CsvVocabularyParser.Parse(content);
