@@ -10,10 +10,9 @@ import { avatarFor } from '@/lib/avatars'
 import { cn } from '@/lib/utils'
 import type { LearnerTile } from '@/types'
 
-// PIN mit 4 bis 6 Ziffern (PAR-02). Die Anzeige beginnt immer bei 4 Punkten,
-// damit sie die Laenge der gespeicherten PIN nicht verraet (D-09).
-const MIN_PIN_LENGTH = 4
-const MAX_PIN_LENGTH = 6
+// PIN mit genau 4 Ziffern (PAR-02); die vierte Ziffer sendet ab, ohne Tipp
+// auf "Los geht’s" (Entscheidung 2026-10-21).
+const PIN_LENGTH = 4
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 // keypad-key: Glasfarbe ohne Blur je Taste (viele Blur-Ebenen ruckeln auf
@@ -23,7 +22,7 @@ const keyClass =
   'transition active:scale-95 disabled:opacity-50'
 
 /**
- * Startbildschirm des Kindes: Avatar antippen, Zahlen eingeben, "Los geht’s".
+ * Startbildschirm des Kindes: Avatar antippen, vier Zahlen eingeben, fertig.
  *
  * Kein Passwortfeld: das ist die haeufigste Abbruchstelle bei Lern-Apps
  * (Konzept §3). Eine angeschlossene Tastatur funktioniert trotzdem (FIX-08).
@@ -36,6 +35,10 @@ export function ProfilePickerPage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Spiegel als Refs: Tasten im selben Takt saehen den State noch vor dem
+  // Rendern; so sendet die vierte Ziffer genau einmal und eine fuenfte zaehlt nicht.
+  const pinRef = useRef('')
+  const busyRef = useRef(false)
   const firstKey = useRef<HTMLButtonElement>(null)
   const tiles = useRef<HTMLDivElement>(null)
   const retried = useRef(false)
@@ -59,36 +62,41 @@ export function ProfilePickerPage() {
     tiles.current?.querySelector('button')?.focus()
   }, [profiles.isSuccess])
 
-  const canSubmit = !busy && pin.length >= MIN_PIN_LENGTH
+  function updatePin(next: string) {
+    pinRef.current = next
+    setPin(next)
+  }
 
-  async function submit() {
-    if (!selected || !canSubmit) return
+  async function submit(learnerId: string, entered: string) {
+    busyRef.current = true
     setBusy(true)
     setError(null)
     try {
-      await loginAsLearner(selected.id, pin)
+      await loginAsLearner(learnerId, entered)
       navigate('/', { replace: true })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Das hat nicht geklappt.')
-      setPin('')
+      updatePin('')
     } finally {
+      busyRef.current = false
       setBusy(false)
     }
   }
 
   function press(digit: string) {
-    if (busy) return
-    setPin((current) => (current.length >= MAX_PIN_LENGTH ? current : current + digit))
+    if (!selected || busyRef.current || pinRef.current.length >= PIN_LENGTH) return
+    updatePin(pinRef.current + digit)
+    if (pinRef.current.length === PIN_LENGTH) void submit(selected.id, pinRef.current)
   }
 
   function removeLast() {
-    if (busy) return
-    setPin((current) => current.slice(0, -1))
+    if (busyRef.current) return
+    updatePin(pinRef.current.slice(0, -1))
   }
 
   function choose(profile: LearnerTile | null) {
     setSelected(profile)
-    setPin('')
+    updatePin('')
     setError(null)
   }
 
@@ -101,11 +109,6 @@ export function ProfilePickerPage() {
         press(event.key)
       } else if (event.key === 'Backspace') {
         removeLast()
-      } else if (event.key === 'Enter') {
-        // Ein fokussierter Button handelt selbst, sonst wuerde doppelt ausgeloest.
-        if (event.target instanceof HTMLButtonElement) return
-        event.preventDefault()
-        void submit()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -113,8 +116,6 @@ export function ProfilePickerPage() {
   })
 
   if (profiles.isLoading) return <Spinner />
-
-  const dotCount = Math.min(MAX_PIN_LENGTH, Math.max(MIN_PIN_LENGTH, pin.length))
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
@@ -190,15 +191,9 @@ export function ProfilePickerPage() {
             <p className="type-body-md text-ink">Gib deine Zahlen ein.</p>
           </div>
 
-          <form
-            className="mt-auto flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void submit()
-            }}
-          >
+          <div className="mt-auto flex flex-col gap-4">
             <div data-testid="ziffern-punkte" className="flex justify-center gap-4" aria-hidden>
-              {Array.from({ length: dotCount }, (_, index) => (
+              {Array.from({ length: PIN_LENGTH }, (_, index) => (
                 <span
                   key={index}
                   className={cn(
@@ -250,15 +245,11 @@ export function ProfilePickerPage() {
               </button>
             </div>
 
-            <Button
-              type="submit"
-              size="lg"
-              className="sticky bottom-float-bottom w-full"
-              disabled={!canSubmit}
-            >
+            {/* Sendet nie selbst: die vierte Ziffer sendet ab, der Button zeigt das Warten. */}
+            <Button type="button" size="lg" className="sticky bottom-float-bottom w-full" disabled>
               {busy ? 'Einen Moment …' : 'Los geht’s'}
             </Button>
-          </form>
+          </div>
         </>
       )}
     </main>
