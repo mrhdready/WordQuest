@@ -17,7 +17,7 @@
 ### Parent Basics
 
 - [ ] **PAR-01**: Parent can edit a child (name, reset PIN, daily new-card limit)
-- [ ] **PAR-02**: PIN must be exactly 4 digits (validated server-side; changed from 4–6 on 2026-10-21, existing 5–6 digit PINs are not migrated)
+- [ ] **PAR-02**: PIN must be exactly 4 digits (validated server-side; the parent forms accept at most 4 characters)
 - [ ] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
 - [x] **PAR-03**: Parent can delete a child including all learning history
 - [x] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
