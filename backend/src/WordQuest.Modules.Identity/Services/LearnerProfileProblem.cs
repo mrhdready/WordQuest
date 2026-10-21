@@ -12,7 +12,7 @@ public enum LearnerProfileProblem
     /// <summary>Die PIN fehlt, obwohl sie Pflicht ist.</summary>
     PinMissing = 2,
 
-    /// <summary>Die PIN besteht nicht aus 4 bis 6 Ziffern 0 bis 9.</summary>
+    /// <summary>Die PIN besteht nicht aus genau 4 Ziffern 0 bis 9.</summary>
     PinInvalid = 3,
 
     /// <summary>Der Avatar-Schluessel ist nach dem Trimmen laenger als <see cref="AccountRules.MaxAvatarKeyLength"/>.</summary>

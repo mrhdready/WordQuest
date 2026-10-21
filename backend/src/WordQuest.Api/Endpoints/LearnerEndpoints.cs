@@ -162,8 +162,8 @@ public static class LearnerEndpoints
             {
                 LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
                 LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: $"Der Name darf höchstens {AccountRules.MaxDisplayNameLength} Zeichen lang sein."),
-                LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 bis 6 Ziffern ein."),
-                LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus 4 bis 6 Ziffern bestehen."),
+                LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 Ziffern ein."),
+                LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus genau 4 Ziffern bestehen."),
                 LearnerProfileProblem.AvatarKeyTooLong => (Field: "avatarKey", Message: $"Das Bild darf höchstens {AccountRules.MaxAvatarKeyLength} Zeichen lang sein."),
                 _ => throw new UnreachableException($"Unbekannter Befund {problem}."),
             })

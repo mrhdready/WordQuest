@@ -112,8 +112,8 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
 
     [Theory]
     [InlineData("1234")]
-    [InlineData("123456")]
-    public async Task Pin_with_4_to_6_digits_is_accepted(string pin)
+    [InlineData("0000")]
+    public async Task Pin_with_exactly_4_digits_is_accepted(string pin)
     {
         LearnerDto learner = await CreatedAsync(await CreateAsync(new { displayName = UniqueName(), pin }));
 
@@ -291,7 +291,7 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
 
     [Theory]
     [InlineData("1234")]
-    [InlineData("123456")]
+    [InlineData("0000")]
     public async Task New_pin_replaces_the_old_one(string pin)
     {
         (User owner, User child) = await SeedFamilyAsync(OldPin);

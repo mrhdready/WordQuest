@@ -56,13 +56,13 @@ public static class AccountRules
         !string.IsNullOrWhiteSpace(password) && password.Length >= MinPasswordLength;
 
     /// <summary>
-    /// 4 bis 6 Zeichen, jedes aus '0' bis '9' (PAR-02). Bewusst kein
+    /// Genau 4 Zeichen, jedes aus '0' bis '9' (PAR-02). Bewusst kein
     /// <c>char.IsDigit</c> bzw. <c>\d</c>: die treffen auch andere
     /// Unicode-Ziffern, die das Kind auf dem Ziffernfeld nicht eingeben kann.
     /// Kein Trimmen.
     /// </summary>
     public static bool IsValidPin(string? pin) =>
-        pin is { Length: >= 4 and <= 6 } && pin.All(c => c is >= '0' and <= '9');
+        pin is { Length: 4 } && pin.All(c => c is >= '0' and <= '9');
 
     /// <summary>
     /// Alle Befunde zu Name, PIN und Avatar-Schluessel eines Kinderprofils auf
