@@ -126,11 +126,14 @@ describe('PIN-Eingabe', () => {
     // Enter auf der fokussierten Taste "1" haengt keine Ziffer an (Review 261021-p4z).
     await userEvent.keyboard('{Enter}')
     expect(status()).toBe('1 Ziffer eingegeben')
-    await userEvent.keyboard('234')
+    // Die Leertaste bedient die fokussierte Taste weiter.
+    await userEvent.keyboard(' ')
+    expect(status()).toBe('2 Ziffern eingegeben')
+    await userEvent.keyboard('23')
     expect(await screen.findByText('/')).toBeTruthy()
     expect(logins).toEqual([
       { learnerId: 'kind-1', pin: '9999' },
-      { learnerId: 'kind-1', pin: '1234' },
+      { learnerId: 'kind-1', pin: '1123' },
     ])
   })
 })

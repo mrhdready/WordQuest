@@ -77,7 +77,7 @@ export function ProfilePickerPage() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Das hat nicht geklappt.')
       updatePin('')
-    } finally {
+      // Nur nach einem Fehler frei: nach Erfolg bis zum Seitenwechsel keine zweite Anmeldung.
       busyRef.current = false
       setBusy(false)
     }
@@ -109,6 +109,14 @@ export function ProfilePickerPage() {
         press(event.key)
       } else if (event.key === 'Backspace') {
         removeLast()
+      } else if (
+        event.key === 'Enter' &&
+        event.target instanceof HTMLButtonElement &&
+        /^[0-9]$/.test(event.target.textContent ?? '')
+      ) {
+        // Enter waere ein Klick auf die fokussierte Ziffer (nach einem Fehler "1"):
+        // ein Enter aus Gewohnheit haengte sonst eine Ziffer an. Leertaste bedient die Taste weiter.
+        event.preventDefault()
       }
     }
     window.addEventListener('keydown', onKeyDown)

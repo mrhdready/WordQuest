@@ -138,10 +138,12 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
   await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()
   expect(logins.count).toBe(1)
 
+  // Enter auf der fokussierten Taste "1" haengt keine Ziffer an.
+  await page.keyboard.press('Enter')
+  await expect(status(page)).toHaveText('1 Ziffer eingegeben')
+  await page.keyboard.press('Backspace')
+
   // Schnelles Tippen: fuenfte Ziffer und Enter direkt hinterher ergeben genau eine Anfrage.
-  // Neu gewaehlt, damit der Fokus auf keiner Taste liegt (Enter dort waere ein Klick).
-  await page.getByRole('button', { name: 'Zurück zur Profilwahl' }).click()
-  await page.getByRole('button', { name: childName }).click()
   await sendLogin(page, async () => {
     await page.keyboard.type('88885')
     await page.keyboard.press('Enter')
