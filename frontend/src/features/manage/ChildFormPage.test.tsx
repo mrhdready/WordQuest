@@ -98,8 +98,6 @@ describe('Kind anlegen', () => {
     { title: 'Limit keine Zahl', values: { limit: 'abc' }, field: 'limit', message: limitInvalid },
     { title: 'PIN leer', values: { pin: '' }, field: 'pin', message: pinMissing },
     { title: 'PIN 3 Ziffern', values: { pin: '123' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN 5 Ziffern', values: { pin: '12345' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN 6 Ziffern', values: { pin: '123456' }, field: 'pin', message: pinInvalid },
     { title: 'PIN mit Buchstaben', values: { pin: '12a4' }, field: 'pin', message: pinInvalid },
     { title: 'PIN ١٢٣٤ (arabisch-indische Ziffern)', values: { pin: '١٢٣٤' }, field: 'pin', message: pinInvalid },
   ]
@@ -219,6 +217,18 @@ describe('Kind anlegen', () => {
     expect(bodies).toHaveLength(1)
   })
 
+  // Mehr als 4 Ziffern lassen sich nicht eingeben (Entscheidung 2026-10-21); 5/6 Ziffern prueft der Server.
+  it('PIN-Feld nimmt höchstens 4 Ziffern an', async () => {
+    const bodies = stubFetch(created)
+    const f = await fill({ pin: '123456' })
+    expect(f.pin.maxLength).toBe(4)
+    expect(f.pin.inputMode).toBe('numeric')
+    expect(f.pin.value).toBe('1234')
+    await userEvent.click(f.button)
+    await screen.findByText('/verwalten/kinder')
+    expect(bodies).toEqual([{ displayName: valid.name, pin: '1234', dailyNewLimit: 5 }])
+  })
+
   it('Hinweis nennt genau 4 Ziffern', async () => {
     await fill({})
     expect(screen.getByText('Genau 4 Ziffern. Sag sie deinem Kind.')).toBeTruthy()
@@ -305,10 +315,8 @@ describe('Kind bearbeiten', () => {
     { title: 'Limit 5.5', values: { limit: '5.5' }, field: 'limit', message: limitInvalid },
     { title: 'Limit keine Zahl', values: { limit: 'abc' }, field: 'limit', message: limitInvalid },
     { title: 'PIN 3 Ziffern', values: { pin: '123' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN 5 Ziffern', values: { pin: '12345' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN 6 Ziffern', values: { pin: '123456' }, field: 'pin', message: pinInvalid },
     { title: 'PIN mit Buchstaben', values: { pin: '12a4' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN mit Leerzeichen', values: { pin: '12 34' }, field: 'pin', message: pinInvalid },
+    { title: 'PIN mit Leerzeichen', values: { pin: '12 4' }, field: 'pin', message: pinInvalid },
     { title: 'PIN nur Leerzeichen', values: { pin: '    ' }, field: 'pin', message: pinInvalid },
     { title: 'PIN ١٢٣٤ (arabisch-indische Ziffern)', values: { pin: '١٢٣٤' }, field: 'pin', message: pinInvalid },
   ]
@@ -343,6 +351,17 @@ describe('Kind bearbeiten', () => {
       expect(bodies[0]).toMatchObject(body)
     })
   }
+
+  it('Neue PIN nimmt höchstens 4 Ziffern an', async () => {
+    const bodies = stubEdit()
+    const f = await fillEdit({ pin: '123456' })
+    expect(f.pin.maxLength).toBe(4)
+    expect(f.pin.inputMode).toBe('numeric')
+    expect(f.pin.value).toBe('1234')
+    await userEvent.click(f.button)
+    await screen.findByText(savedWithPin)
+    expect(bodies).toEqual([{ displayName: 'Mia', dailyNewLimit: 7, pin: '1234' }])
+  })
 
   it('Laden zeigt den Spinner, danach vorbefuellte Felder und leere PIN', async () => {
     let release: () => void = () => {}
