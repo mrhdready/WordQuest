@@ -17,7 +17,7 @@
 ### Parent Basics
 
 - [ ] **PAR-01**: Parent can edit a child (name, reset PIN, daily new-card limit)
-- [ ] **PAR-02**: PIN must be 4–6 digits (validated server-side)
+- [ ] **PAR-02**: PIN must be exactly 4 digits (validated server-side; changed from 4–6 on 2026-10-21, existing 5–6 digit PINs are not migrated)
 - [ ] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
 - [x] **PAR-03**: Parent can delete a child including all learning history
 - [x] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
@@ -29,7 +29,7 @@
 - [x] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
 - [x] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
 - [x] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
-- [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace, Enter), not only by tapping
+- [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace), not only by tapping; the 4th digit submits exactly once (2026-10-21)
 - [x] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
 - [x] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
 - [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart
