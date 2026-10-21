@@ -100,7 +100,7 @@ last_mapped_at: 2026-09-24
 
 - Risk: PIN accepts any string (including 1 char) when set via create/update.
 - Files: `backend/src/WordQuest.Api/Endpoints/LearnerEndpoints.cs:70`, `backend/src/WordQuest.Api/Endpoints/LearnerEndpoints.cs:117-122`, `backend/src/WordQuest.Api/Contracts/Contracts.cs:33-39`
-- Recommendations: Validate format (e.g. 4-6 digits) server-side.
+- Recommendations: Validate format server-side (done: exactly 4 digits, PAR-02, quick-261021-p4z).
 
 **Unbounded import payloads:**
 
