@@ -123,6 +123,9 @@ describe('PIN-Eingabe', () => {
     await userEvent.keyboard('1')
     expect(status()).toBe('1 Ziffer eingegeben')
     expect(screen.getByRole('alert').textContent).toBe(wrongPin)
+    // Enter auf der fokussierten Taste "1" haengt keine Ziffer an (Review 261021-p4z).
+    await userEvent.keyboard('{Enter}')
+    expect(status()).toBe('1 Ziffer eingegeben')
     await userEvent.keyboard('234')
     expect(await screen.findByText('/')).toBeTruthy()
     expect(logins).toEqual([
