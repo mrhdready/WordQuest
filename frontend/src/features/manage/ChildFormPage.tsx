@@ -268,6 +268,7 @@ function ChildForm({ learner }: { learner?: Learner }) {
               {...control}
               ref={refs.pin}
               inputMode="numeric"
+              maxLength={4}
               autoComplete="off"
               value={pin}
               onChange={(event) => setPin(event.target.value)}
