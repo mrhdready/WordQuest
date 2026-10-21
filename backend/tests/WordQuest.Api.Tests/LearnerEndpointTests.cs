@@ -23,8 +23,8 @@ namespace WordQuest.Api.Tests;
 public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
 {
     private const string Path = "/api/v1/learners";
-    private const string PinMissing = "Bitte gib eine PIN mit 4 bis 6 Ziffern ein.";
-    private const string PinInvalid = "Die PIN muss aus 4 bis 6 Ziffern bestehen.";
+    private const string PinMissing = "Bitte gib eine PIN mit 4 Ziffern ein.";
+    private const string PinInvalid = "Die PIN muss aus genau 4 Ziffern bestehen.";
     private const string OldPin = "9999";
 
     private readonly ApiFactory _factory;
@@ -122,7 +122,8 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
 
     [Theory]
     [InlineData("123")]
-    [InlineData("1234567")]
+    [InlineData("12345")]
+    [InlineData("123456")]
     [InlineData("12a4")]
     [InlineData("١٢٣٤")]
     public async Task Invalid_pin_returns_400_on_pin(string pin)
@@ -240,11 +241,11 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Created_child_logs_in_with_its_pin()
     {
-        LearnerDto learner = await CreatedAsync(await CreateAsync(new { displayName = UniqueName(), pin = "482913" }));
+        LearnerDto learner = await CreatedAsync(await CreateAsync(new { displayName = UniqueName(), pin = "4829" }));
         using HttpClient client = _factory.CreateClient();
 
         HttpResponseMessage login = await client.PostAsJsonAsync(
-            "/api/v1/auth/learner-login", new { learnerId = learner.Id, pin = "482913" });
+            "/api/v1/auth/learner-login", new { learnerId = learner.Id, pin = "4829" });
 
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
     }
@@ -271,7 +272,8 @@ public sealed class LearnerEndpointTests : IClassFixture<ApiFactory>
     // Invariante: dieselbe Regel auf beiden Wegen, auch bei direktem API-Aufruf.
     [Theory]
     [InlineData("123")]
-    [InlineData("1234567")]
+    [InlineData("12345")]
+    [InlineData("123456")]
     [InlineData("12a4")]
     [InlineData("12 34")]
     [InlineData("   ")]

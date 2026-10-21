@@ -26,9 +26,10 @@ public sealed class AccountRulesTests
 
     [Theory]
     [InlineData("1234", true)]
-    [InlineData("123456", true)]
+    [InlineData("0000", true)]
     [InlineData("123", false)]
-    [InlineData("1234567", false)]
+    [InlineData("12345", false)]
+    [InlineData("123456", false)]
     [InlineData("12a4", false)]
     [InlineData("12 34", false)]
     [InlineData(" 1234", false)]
