@@ -5,9 +5,9 @@ current_phase: "03.1"
 current_phase_name: Release Hardening
 status: executing
 stopped_at: Completed 03.1-07-PLAN.md
-last_updated: "2026-10-20T13:06:11.387Z"
-last_activity: 2026-10-20
-last_activity_desc: 03.1-07 ausgefuehrt (Prod-Stack aus fe24d8b im Wegwerf-Klon gruen, volles Phasen-Gate gruen, Befund-Nachweis 11/11); Tag v1.0.0 setzt der Orchestrator; manuelle Abnahmen offen
+last_updated: "2026-10-21T19:30:00.000Z"
+last_activity: 2026-10-21
+last_activity_desc: Quick 261021-p4z (Kinder-PIN genau 4 Ziffern, Anmeldung mit der vierten Ziffer); Gate, e2e, beide Smokes gruen; Tag-Kandidat fe24d8b enthaelt die Aenderung nicht
 state_head: fe24d8bdba5ba73c7217ebe4a2cb3b33ef1afb7c
 progress:
   total_phases: 4
@@ -162,6 +162,7 @@ Recent decisions affecting current work:
 - [Phase 03.1]: 03.1-07: Dump-Endzeile als ganze Zeile unter den letzten 20 Zeilen, per grep -c gezaehlt (kein grep -q hinter tail unter pipefail)
 - [Phase 03.1]: 03.1-07: Release-Smoke wartet beim Aufraeumen, bis Docker Desktop Port 18084 freigibt
 - [Phase 03.1]: 03.1-07: Kandidat fuer das Tag v1.0.0 ist fe24d8b (Prod-Stack und volles Gate auf diesem Commit)
+- [Quick 261021-p4z]: Kinder-PIN genau 4 Ziffern, vierte Ziffer sendet ab (Dennis, 2026-10-21); keine Migration 5-/6-stelliger PINs; Enter auf fokussierter Ziffern-Taste verworfen
 
 ### Pending Todos
 
@@ -175,10 +176,12 @@ Recent decisions affecting current work:
 | ID | Aufgabe | Stand | Nachweis |
 |----|---------|-------|----------|
 | 261006-r7l | Installer, Container-Secrets und HTTP-Lernen | Umgesetzt; axe-Lauf offen | [Zusammenfassung](quick/261006-r7l-installer-rechte-lesbare-docker-secrets-/261006-r7l-SUMMARY.md) |
+| 261021-p4z | Kinder-PIN genau 4 Ziffern, Anmeldung mit der vierten Ziffer (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install- und Release-Smoke gruen; Frage zu „Los geht’s“ offen | [Zusammenfassung](quick/261021-p4z-kinder-pin-genau-4-ziffern/261021-p4z-SUMMARY.md) |
 
 ### Blockers/Concerns
 
 - [Phase 2]: Only a pure domain test project exists; QUAL-01 needs a new integration test project with real PostgreSQL
+- Quick 261021-p4z aendert Code nach fe24d8b (PIN genau 4 Ziffern): soll das in 1.0.0, muss der Tag-Kandidat neu bestimmt werden
 - 03.1-07 abgeschlossen: Tag v1.0.0 nur auf fe24d8b (Prod-Stack und volles Gate auf diesem Commit; danach nur .planning/ geaendert); setzt der Orchestrator
 - e2e-Laeufe ueber 15 min scheitern vermutlich am geteilten Refresh-Token aus global-setup.ts (03.1-07-SUMMARY, Offene Punkte); nicht aufgetreten, nicht ausgebaut
 
@@ -192,6 +195,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-20T13:06:11.320Z
-Stopped at: Completed 03.1-07-PLAN.md
+Last session: 2026-10-21T19:30:00.000Z
+Stopped at: Completed quick 261021-p4z
 Resume file: None
