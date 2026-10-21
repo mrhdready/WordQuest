@@ -58,7 +58,8 @@ const status = (page: Page) => page.getByRole('status').filter({ hasText: 'einge
 const dots = (page: Page) => page.getByTestId('ziffern-punkte').locator('span')
 const goButton = (page: Page) => page.getByRole('button', { name: 'Los geht’s' })
 
-// Profil per Tab und Enter, Ziffern ueber die Tastatur, Enter sendet.
+// Profil per Tab und Enter, Ziffern ueber die Tastatur, die vierte sendet ab;
+// ein Enter direkt danach loest keine zweite Anfrage aus.
 // withAxe: checkPage auf Profilwahl, Ziffernfeld und Lern-Startseite.
 async function loginByKeyboard(page: Page, withAxe = false) {
   const logins = countLearnerLogins(page)
@@ -72,11 +73,14 @@ async function loginByKeyboard(page: Page, withAxe = false) {
   await expect(page.getByRole('heading', { name: `Hallo, ${childName}!` })).toBeVisible()
   if (withAxe) await checkPage(page)
 
-  for (const digit of demoPin) await page.keyboard.press(digit)
-  await expect(status(page)).toHaveText('4 Ziffern eingegeben')
-  expect(logins.count, 'Anfrage schon nach der vierten Ziffer').toBe(0)
+  for (const digit of demoPin.slice(0, 3)) await page.keyboard.press(digit)
+  await expect(status(page)).toHaveText('3 Ziffern eingegeben')
+  expect(logins.count, 'Anfrage schon vor der vierten Ziffer').toBe(0)
 
-  await sendLogin(page, () => page.keyboard.press('Enter'))
+  await sendLogin(page, async () => {
+    await page.keyboard.press(demoPin.slice(3))
+    await page.keyboard.press('Enter')
+  })
   await expect(page.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
   expect(logins.count).toBe(1)
   if (withAxe) await checkPage(page)
@@ -97,22 +101,17 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
   await expect(dots(page)).toHaveCount(4)
   await expect(goButton(page)).toBeDisabled()
 
-  // Unter 4 Ziffern bleibt Enter wirkungslos.
+  // Unter 4 Ziffern bleibt Enter wirkungslos; Backspace loescht, es bleiben 4 Punkte.
   for (const digit of '123') await page.keyboard.press(digit)
   await expect(status(page)).toHaveText('3 Ziffern eingegeben')
   await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: `Hallo, ${childName}!` })).toBeVisible()
   expect(logins.count).toBe(0)
-
-  // Siebte Ziffer wird ignoriert, die Punkte wachsen bis 6.
-  for (const digit of '4567') await page.keyboard.press(digit)
-  await expect(status(page)).toHaveText('6 Ziffern eingegeben')
-  await expect(dots(page)).toHaveCount(6)
   await page.keyboard.press('Backspace')
-  await expect(status(page)).toHaveText('5 Ziffern eingegeben')
-  await expect(dots(page)).toHaveCount(5)
+  await expect(status(page)).toHaveText('2 Ziffern eingegeben')
+  await expect(dots(page)).toHaveCount(4)
 
-  // Jedes Profil beginnt bei 4 Punkten: die Laenge der gespeicherten PIN bleibt geheim.
+  // Jedes Profil beginnt bei 4 leeren Punkten.
   await page.getByRole('button', { name: 'Zurück zur Profilwahl' }).click()
   for (let index = 0; index < profileCount; index += 1) {
     await profileButtons.nth(index).click()
@@ -121,22 +120,35 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
     await page.getByRole('button', { name: 'Zurück zur Profilwahl' }).click()
   }
 
-  // Klickpfad: die vierte Ziffer per Maus sendet nichts, erst "Los geht’s".
+  // Klickpfad: der Klick auf die vierte Ziffer sendet ab, "Los geht’s" bleibt gesperrt.
   await page.getByRole('button', { name: childName }).click()
-  for (let step = 0; step < 4; step += 1) {
-    await page.getByRole('button', { name: '9', exact: true }).click()
-  }
-  await expect(status(page)).toHaveText('4 Ziffern eingegeben')
-  expect(logins.count, 'Anfrage durch einen Klick auf eine Ziffern-Taste').toBe(0)
+  const nine = page.getByRole('button', { name: '9', exact: true })
+  for (let step = 0; step < 3; step += 1) await nine.click()
+  await expect(status(page)).toHaveText('3 Ziffern eingegeben')
+  expect(logins.count, 'Anfrage vor der vierten Ziffer').toBe(0)
+  await expect(goButton(page)).toBeDisabled()
 
-  await sendLogin(page, () => goButton(page).click())
+  await sendLogin(page, () => nine.click())
   await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()
   // Fokus zurueck an den Anfang des Ziffernfelds; keine zweite Ansage neben der Fehlermeldung.
   await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused()
   await expect(status(page)).toHaveCount(0)
   await page.keyboard.press('1')
   await expect(status(page)).toHaveText('1 Ziffer eingegeben')
+  await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()
   expect(logins.count).toBe(1)
+
+  // Schnelles Tippen: fuenfte Ziffer und Enter direkt hinterher ergeben genau eine Anfrage.
+  // Neu gewaehlt, damit der Fokus auf keiner Taste liegt (Enter dort waere ein Klick).
+  await page.getByRole('button', { name: 'Zurück zur Profilwahl' }).click()
+  await page.getByRole('button', { name: childName }).click()
+  await sendLogin(page, async () => {
+    await page.keyboard.type('88885')
+    await page.keyboard.press('Enter')
+  })
+  await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()
+  await expect(status(page)).toHaveCount(0)
+  expect(logins.count).toBe(2)
 })
 
 // FIX-05: beide Zustaende des Serien-Badges ohne Verstoss. Nur das Feld streak der
@@ -302,8 +314,8 @@ test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, brow
   await openPicker(page)
   await page.getByRole('button', { name }).click()
   await expect(page.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
-  for (const digit of pin) await page.keyboard.press(digit)
-  await sendLogin(page, () => page.keyboard.press('Enter'))
+  for (const digit of pin.slice(0, -1)) await page.keyboard.press(digit)
+  await sendLogin(page, () => page.keyboard.press(pin.slice(-1)))
   const home = page.getByRole('heading', { name: 'Was möchtest du üben?' })
   await expect(home).toBeVisible()
 

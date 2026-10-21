@@ -49,10 +49,11 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
   expect(profiles.status(), 'Rate-Limit auth erreicht').toBe(200)
   await expect(child.getByRole('main').getByRole('button')).toHaveCount(1)
   await child.getByRole('button', { name: childName }).click()
-  for (const digit of pin) await child.keyboard.press(digit)
+  for (const digit of pin.slice(0, -1)) await child.keyboard.press(digit)
+  // Die vierte Ziffer sendet ab (PAR-02).
   const [login] = await Promise.all([
     child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/learner-login')),
-    child.keyboard.press('Enter'),
+    child.keyboard.press(pin.slice(-1)),
   ])
   expect(login.status(), 'Rate-Limit auth erreicht').toBe(200)
   await expect(child.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()

@@ -18,10 +18,11 @@ async function openAsLearner(browser: Browser, baseURL: string | undefined, name
   expect(profiles.status(), 'Rate-Limit auth erreicht').not.toBe(429)
   await child.getByRole('button', { name }).click()
   await expect(child.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
-  for (const digit of pin) await child.keyboard.press(digit)
+  for (const digit of pin.slice(0, -1)) await child.keyboard.press(digit)
+  // Die vierte Ziffer sendet ab (PAR-02).
   const [login] = await Promise.all([
     child.waitForResponse((response) => response.url().endsWith('/api/v1/auth/learner-login')),
-    child.keyboard.press('Enter'),
+    child.keyboard.press(pin.slice(-1)),
   ])
   expect(login.status()).toBe(200)
   await expect(child.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
@@ -36,7 +37,7 @@ async function learnerLogin(browser: Browser, baseURL: string | undefined, name:
 // (globalSetup, je Anmeldetest Profilwahl und learner-login, Profilwahl nach dem Loeschen).
 test('Kind anlegen und anmelden', async ({ page, browser, baseURL }) => {
   const name = `Testkind ${Date.now()}`
-  const pin = '583920'
+  const pin = '5839'
 
   await page.goto('/verwalten/kinder')
   await page.getByRole('link', { name: 'Kind anlegen' }).click()
@@ -232,7 +233,7 @@ test('Kinder barrierefrei', async ({ page }) => {
   await page.getByRole('button', { name: 'Kind anlegen' }).click()
   const expected = [
     ['Name', 'Wie soll das Kind heißen? Ein Spitzname genügt.'],
-    ['PIN', 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'],
+    ['PIN', 'Bitte gib eine PIN mit 4 Ziffern ein.'],
   ] as const
   for (const [label, message] of expected) {
     const field = page.getByLabel(label, { exact: true })
