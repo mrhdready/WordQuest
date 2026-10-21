@@ -10,8 +10,8 @@ import { avatarFor } from '@/lib/avatars'
 import { cn } from '@/lib/utils'
 import type { LearnerTile } from '@/types'
 
-// PIN mit genau 4 Ziffern (PAR-02); die vierte Ziffer sendet ab, ohne Tipp
-// auf "Los geht’s" (Entscheidung 2026-10-21).
+// PIN mit genau 4 Ziffern (PAR-02); die vierte Ziffer sendet ab, es gibt keinen
+// Absende-Button (Entscheidung 2026-10-21).
 const PIN_LENGTH = 4
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -212,13 +212,16 @@ export function ProfilePickerPage() {
               ))}
             </div>
             {/* Leer, solange nach einem Fehler noch nichts eingegeben ist: sonst kaeme
-                "0 Ziffern eingegeben" als zweite Ansage neben der Fehlermeldung. */}
+                "0 Ziffern eingegeben" als zweite Ansage neben der Fehlermeldung.
+                Waehrend der Anmeldung sagt sie das Warten an (kein Button mehr dafuer). */}
             <span className="sr-only" role="status">
-              {error && pin.length === 0
-                ? ''
-                : pin.length === 1
-                  ? '1 Ziffer eingegeben'
-                  : `${pin.length} Ziffern eingegeben`}
+              {busy
+                ? 'Einen Moment …'
+                : error && pin.length === 0
+                  ? ''
+                  : pin.length === 1
+                    ? '1 Ziffer eingegeben'
+                    : `${pin.length} Ziffern eingegeben`}
             </span>
 
             {error ? <ErrorNote message={error} /> : null}
@@ -252,11 +255,6 @@ export function ProfilePickerPage() {
                 <Delete className="size-8" aria-hidden />
               </button>
             </div>
-
-            {/* Sendet nie selbst: die vierte Ziffer sendet ab, der Button zeigt das Warten. */}
-            <Button type="button" size="lg" className="sticky bottom-float-bottom w-full" disabled>
-              {busy ? 'Einen Moment …' : 'Los geht’s'}
-            </Button>
           </div>
         </>
       )}
