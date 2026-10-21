@@ -99,7 +99,7 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
 
   await page.getByRole('button', { name: childName }).click()
   await expect(dots(page)).toHaveCount(4)
-  await expect(goButton(page)).toBeDisabled()
+  await expect(goButton(page)).toHaveCount(0)
 
   // Unter 4 Ziffern bleibt Enter wirkungslos; Backspace loescht, es bleiben 4 Punkte.
   for (const digit of '123') await page.keyboard.press(digit)
@@ -120,13 +120,13 @@ test('Ziffernfeld-Grenzen und falsche PIN', async ({ page }) => {
     await page.getByRole('button', { name: 'Zurück zur Profilwahl' }).click()
   }
 
-  // Klickpfad: der Klick auf die vierte Ziffer sendet ab, "Los geht’s" bleibt gesperrt.
+  // Klickpfad: der Klick auf die vierte Ziffer sendet ab; ein „Los geht’s“ gibt es hier nicht.
   await page.getByRole('button', { name: childName }).click()
   const nine = page.getByRole('button', { name: '9', exact: true })
   for (let step = 0; step < 3; step += 1) await nine.click()
   await expect(status(page)).toHaveText('3 Ziffern eingegeben')
   expect(logins.count, 'Anfrage vor der vierten Ziffer').toBe(0)
-  await expect(goButton(page)).toBeDisabled()
+  await expect(goButton(page)).toHaveCount(0)
 
   await sendLogin(page, () => nine.click())
   await expect(page.getByText('Die PIN stimmt nicht.')).toBeVisible()

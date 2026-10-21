@@ -59,6 +59,8 @@ describe('PIN-Eingabe', () => {
     const logins = stubLogin(loggedIn)
     await openPin()
     expect(dots()).toHaveLength(4)
+    // Kein „Los geht’s“ mehr: die vierte Ziffer ist der einzige Weg (Entscheidung 2026-10-21).
+    expect(screen.queryByRole('button', { name: /Los geht/ })).toBeNull()
     for (const digit of '123') await userEvent.click(key(digit))
     await settle()
     expect(logins).toHaveLength(0)
@@ -81,7 +83,8 @@ describe('PIN-Eingabe', () => {
       for (const name of ['1', '2', '3', '4', '5', 'Enter', 'Enter'])
         window.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }))
     })
-    await screen.findByRole('button', { name: 'Einen Moment …' })
+    // Ohne Button sagt die Statuszeile das Warten an.
+    await waitFor(() => expect(status()).toBe('Einen Moment …'))
     expect(dots()).toHaveLength(4)
     await userEvent.keyboard('6{Enter}')
     await settle()
