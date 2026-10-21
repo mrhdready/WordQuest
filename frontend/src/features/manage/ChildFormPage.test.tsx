@@ -7,8 +7,8 @@ import { renderWithProviders } from '@/test/render'
 const valid = { name: 'Mia', limit: '5', pin: '1234' }
 const nameMissing = 'Wie soll das Kind heißen? Ein Spitzname genügt.'
 const limitInvalid = 'Bitte gib eine Zahl von 3 bis 15 ein.'
-const pinMissing = 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'
-const pinInvalid = 'Die PIN muss aus 4 bis 6 Ziffern bestehen.'
+const pinMissing = 'Bitte gib eine PIN mit 4 Ziffern ein.'
+const pinInvalid = 'Die PIN muss aus genau 4 Ziffern bestehen.'
 const nameTooLong = 'Der Name darf höchstens 100 Zeichen lang sein.'
 const unreachable = 'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
 const success = 'Das Kind ist angelegt. Es kann sich jetzt mit seiner PIN anmelden.'
@@ -98,7 +98,8 @@ describe('Kind anlegen', () => {
     { title: 'Limit keine Zahl', values: { limit: 'abc' }, field: 'limit', message: limitInvalid },
     { title: 'PIN leer', values: { pin: '' }, field: 'pin', message: pinMissing },
     { title: 'PIN 3 Ziffern', values: { pin: '123' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN 7 Ziffern', values: { pin: '1234567' }, field: 'pin', message: pinInvalid },
+    { title: 'PIN 5 Ziffern', values: { pin: '12345' }, field: 'pin', message: pinInvalid },
+    { title: 'PIN 6 Ziffern', values: { pin: '123456' }, field: 'pin', message: pinInvalid },
     { title: 'PIN mit Buchstaben', values: { pin: '12a4' }, field: 'pin', message: pinInvalid },
     { title: 'PIN ١٢٣٤ (arabisch-indische Ziffern)', values: { pin: '١٢٣٤' }, field: 'pin', message: pinInvalid },
   ]
@@ -116,7 +117,6 @@ describe('Kind anlegen', () => {
     { title: 'Grenze Limit 3 angenommen', values: { limit: '3' }, body: { dailyNewLimit: 3 } },
     { title: 'Grenze Limit 15 angenommen', values: { limit: '15' }, body: { dailyNewLimit: 15 } },
     { title: 'Grenze PIN 4 Ziffern angenommen', values: { pin: '0000' }, body: { pin: '0000' } },
-    { title: 'Grenze PIN 6 Ziffern angenommen', values: { pin: '987654' }, body: { pin: '987654' } },
     {
       title: 'Grenze Name 100 Zeichen angenommen',
       values: { name: 'n'.repeat(100) },
@@ -219,13 +219,18 @@ describe('Kind anlegen', () => {
     expect(bodies).toHaveLength(1)
   })
 
+  it('Hinweis nennt genau 4 Ziffern', async () => {
+    await fill({})
+    expect(screen.getByText('Genau 4 Ziffern. Sag sie deinem Kind.')).toBeTruthy()
+  })
+
   it('Happy Path: Umlaut und Emoji, Weiterleitung mit Erfolgsmeldung', async () => {
     const bodies = stubFetch(created)
-    const f = await fill({ name: 'Jürgen 🦊', limit: '7', pin: '123456' })
+    const f = await fill({ name: 'Jürgen 🦊', limit: '7', pin: '2580' })
     await userEvent.click(f.button)
     await screen.findByText('/verwalten/kinder')
     expect(screen.getByText(success)).toBeTruthy()
-    expect(bodies).toEqual([{ displayName: 'Jürgen 🦊', pin: '123456', dailyNewLimit: 7 }])
+    expect(bodies).toEqual([{ displayName: 'Jürgen 🦊', pin: '2580', dailyNewLimit: 7 }])
   })
 })
 
@@ -300,7 +305,8 @@ describe('Kind bearbeiten', () => {
     { title: 'Limit 5.5', values: { limit: '5.5' }, field: 'limit', message: limitInvalid },
     { title: 'Limit keine Zahl', values: { limit: 'abc' }, field: 'limit', message: limitInvalid },
     { title: 'PIN 3 Ziffern', values: { pin: '123' }, field: 'pin', message: pinInvalid },
-    { title: 'PIN 7 Ziffern', values: { pin: '1234567' }, field: 'pin', message: pinInvalid },
+    { title: 'PIN 5 Ziffern', values: { pin: '12345' }, field: 'pin', message: pinInvalid },
+    { title: 'PIN 6 Ziffern', values: { pin: '123456' }, field: 'pin', message: pinInvalid },
     { title: 'PIN mit Buchstaben', values: { pin: '12a4' }, field: 'pin', message: pinInvalid },
     { title: 'PIN mit Leerzeichen', values: { pin: '12 34' }, field: 'pin', message: pinInvalid },
     { title: 'PIN nur Leerzeichen', values: { pin: '    ' }, field: 'pin', message: pinInvalid },
@@ -320,7 +326,6 @@ describe('Kind bearbeiten', () => {
     { title: 'Grenze Limit 3 angenommen', values: { limit: '3' }, body: { dailyNewLimit: 3 } },
     { title: 'Grenze Limit 15 angenommen', values: { limit: '15' }, body: { dailyNewLimit: 15 } },
     { title: 'Grenze PIN 4 Ziffern angenommen', values: { pin: '0000' }, body: { pin: '0000' } },
-    { title: 'Grenze PIN 6 Ziffern angenommen', values: { pin: '987654' }, body: { pin: '987654' } },
     {
       title: 'Grenze Name 100 Zeichen angenommen',
       values: { name: 'n'.repeat(100) },
@@ -350,7 +355,7 @@ describe('Kind bearbeiten', () => {
     expect(f.name.value).toBe('Mia')
     expect(f.limit.value).toBe('7')
     expect(f.pin.value).toBe('')
-    expect(screen.getByText('4 bis 6 Ziffern. Leer lassen, wenn die PIN gleich bleiben soll.')).toBeTruthy()
+    expect(screen.getByText('Genau 4 Ziffern. Leer lassen, wenn die PIN gleich bleiben soll.')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Kind bearbeiten' })).toBeTruthy()
   })
 
