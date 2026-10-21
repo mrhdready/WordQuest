@@ -15,7 +15,7 @@ import type { CreateLearnerRequest, Learner, UpdateLearnerSettingsRequest } from
 // Spiegelt AccountRules (MaxDisplayNameLength, IsValidPin, Tageslimit 3 bis 15);
 // massgeblich bleibt der Server. [0-9] statt \d: nur die Ziffern des Ziffernfelds.
 const MAX_NAME_LENGTH = 100
-const PIN_PATTERN = /^[0-9]{4,6}$/
+const PIN_PATTERN = /^[0-9]{4}$/
 
 interface Errors {
   name?: string
@@ -34,8 +34,8 @@ function validate(name: string, limit: string, pin: string, pinOptional: boolean
   if (!limit.trim() || !Number.isInteger(count) || count < 3 || count > 15)
     errors.limit = 'Bitte gib eine Zahl von 3 bis 15 ein.'
   if (!pin) {
-    if (!pinOptional) errors.pin = 'Bitte gib eine PIN mit 4 bis 6 Ziffern ein.'
-  } else if (!PIN_PATTERN.test(pin)) errors.pin = 'Die PIN muss aus 4 bis 6 Ziffern bestehen.'
+    if (!pinOptional) errors.pin = 'Bitte gib eine PIN mit 4 Ziffern ein.'
+  } else if (!PIN_PATTERN.test(pin)) errors.pin = 'Die PIN muss aus genau 4 Ziffern bestehen.'
   return errors
 }
 
@@ -223,9 +223,9 @@ function ChildForm({ learner }: { learner?: Learner }) {
 
   const submitLabel = learner ? 'Änderungen speichern' : 'Kind anlegen'
   const pinHint = !learner
-    ? '4 bis 6 Ziffern. Sag sie deinem Kind.'
+    ? 'Genau 4 Ziffern. Sag sie deinem Kind.'
     : learner.hasPin
-      ? '4 bis 6 Ziffern. Leer lassen, wenn die PIN gleich bleiben soll.'
+      ? 'Genau 4 Ziffern. Leer lassen, wenn die PIN gleich bleiben soll.'
       : 'Für dieses Kind ist noch keine PIN gesetzt.'
 
   return (
