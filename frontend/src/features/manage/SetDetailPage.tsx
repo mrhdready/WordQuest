@@ -25,6 +25,16 @@ const WORD_TOO_LONG = 'Das Wort darf höchstens 200 Zeichen lang sein.'
 const MAX_FILE_BYTES = 1024 * 1024
 const FILE_TOO_BIG = 'Die Datei ist zu groß. Eine Vokabelliste darf höchstens 1 MB groß sein.'
 const FILE_UNREADABLE = 'Die Datei ließ sich nicht lesen. Wähle sie noch einmal aus oder füge den Text ein.'
+const PICTURE_UNREADABLE = 'Diese Datei lässt sich nicht als Bild öffnen. Wähle ein Foto oder ein anderes Bild aus.'
+const PICTURE_TOO_BIG = 'Das Bild ist zu groß. Erlaubt sind höchstens 300 KB.'
+
+function pictureError(caught: unknown): string {
+  // nginx bleibt bewusst beim Standard von 1 MB und antwortet darueber selbst mit einer
+  // HTML-Seite, bevor die API die Anfrage sieht; api() kennte dann nur den allgemeinen
+  // Text. Jede 413 bekommt deshalb denselben Satz wie die 413 des Endpoints (D-08).
+  if (caught instanceof ApiError && caught.status === 413) return PICTURE_TOO_BIG
+  return caught instanceof ApiError ? caught.message : GENERIC
+}
 
 // UTF-16 nur am BOM erkennbar (Excel „Unicode-Text“ ist UTF-16LE). Sonst erst strikt UTF-8;
 // scheitert das, ist es fast immer eine CSV aus Excel unter Windows, also windows-1252.
@@ -597,7 +607,14 @@ function EntryPicture({
     // Die Meldung gehoert zur letzten Aktion.
     setNote(null)
     try {
-      const picture = await shrinkPicture(file)
+      let picture: Blob
+      try {
+        picture = await shrinkPicture(file)
+      } catch {
+        // Kein Bild (PDF) oder eines, das der Browser nicht dekodiert: nichts hochladen.
+        setNote({ ok: false, message: PICTURE_UNREADABLE })
+        return
+      }
       const saved = await api<{ pictureVersion: string }>(`/sets/${setId}/entries/${entry.id}/picture`, {
         method: 'PUT',
         body: picture,
@@ -608,7 +625,7 @@ function EntryPicture({
       void queryClient.invalidateQueries({ queryKey: ['entries', setId] })
     } catch (caught) {
       onGone(caught)
-      setNote({ ok: false, message: caught instanceof ApiError ? caught.message : GENERIC })
+      setNote({ ok: false, message: pictureError(caught) })
     } finally {
       busyRef.current = false
       setWorking(false)

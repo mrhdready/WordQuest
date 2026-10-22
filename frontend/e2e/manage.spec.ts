@@ -494,6 +494,71 @@ test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Li
   await expect(row.getByTestId('vokabelbild').locator('img')).toBeVisible()
 })
 
+async function chooseInDialog(page: Page, sourceText: string, file: { name: string; mimeType: string; buffer: Buffer }) {
+  await page.getByRole('button', { name: `${sourceText} bearbeiten` }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const choose = dialog.getByRole('button', { name: 'Bild wählen' })
+  const chooser = page.waitForEvent('filechooser')
+  await choose.click()
+  await (await chooser).setFiles(file)
+  return { dialog, choose }
+}
+
+// D-08, T-03.1.1-04: nginx bleibt bei 1 MB und antwortet darueber selbst mit HTML;
+// die App zeigt trotzdem den deutschen Text des Endpoints.
+test('Zu großes Bild: 413 von nginx mit deutschem Text', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bild zu groß ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+  const entryId = await entryIdOf(page, setId, 'Hund')
+  const huge = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(1_572_864 - 6), Buffer.from([0xff, 0xd9])])
+  expect(huge.length).toBe(1_572_864)
+
+  const direct = await page.request.put(`/api/v1/sets/${setId}/entries/${entryId}/picture`, {
+    headers: { Authorization: `Bearer ${await accessToken(page)}`, 'Content-Type': 'image/jpeg' },
+    data: huge,
+  })
+  expect(direct.status()).toBe(413)
+  expect(direct.headers()['content-type']).toMatch(/^text\/html/)
+
+  // Der Dialog schickt ein kleines Bild; unterwegs wird der Body auf 1,5 MB vergroessert.
+  const pictureUrl = '**/api/v1/sets/*/entries/*/picture'
+  await page.route(pictureUrl, (route) =>
+    route.request().method() === 'PUT' ? route.continue({ postData: huge }) : route.fallback(),
+  )
+  const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
+  const { dialog, choose } = await chooseInDialog(page, 'Hund', { name: 'hund.png', mimeType: 'image/png', buffer: png })
+  await expect(dialog.getByRole('alert')).toHaveText('Das Bild ist zu groß. Erlaubt sind höchstens 300 KB.')
+  await expect(choose).toBeFocused()
+  await expect(dialog.getByRole('img')).toHaveCount(0)
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.unroute(pictureUrl)
+})
+
+// Kanaltoleranz 40: WebP ist verlustbehaftet.
+function expectColor(actual: number[], expected: number[]) {
+  expected.forEach((channel, index) => expect(Math.abs((actual[index] ?? -999) - channel)).toBeLessThanOrEqual(40))
+}
+
+// D-04 (Review MEDIUM, Codex 03.1.1-02): echtes Verkleinern im Browser, nicht nur gemockt.
+test('Großes Foto wird auf 512 px verkleinert', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E großes Foto ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+  const photo = await canvasPicture(page, { type: 'image/jpeg', width: 2000, height: 1000 })
+
+  const { dialog } = await chooseInDialog(page, 'Hund', { name: 'gross.jpg', mimeType: 'image/jpeg', buffer: photo })
+  await expect(dialog.getByRole('status')).toHaveText('Das Bild ist gespeichert.')
+
+  const decoded = await decodePicture(page, await storedPicture(page, setId, 'Hund'))
+  expect(Math.abs(decoded.width - 512)).toBeLessThanOrEqual(1)
+  expect(Math.abs(decoded.height - 256)).toBeLessThanOrEqual(1)
+  // Links rot, rechts blau: weder gedreht noch gespiegelt.
+  expectColor(decoded.left, [255, 0, 0])
+  expectColor(decoded.right, [0, 0, 255])
+})
+
 // D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.
 test('Set-Dialoge barrierefrei', async ({ page }) => {
   const title = `Zz E2E Barrierefrei ${Date.now()}`

@@ -1340,6 +1340,125 @@ describe('Vokabelbild', () => {
     expect(input.hasAttribute('capture')).toBe(false)
   })
 
+  const unreadable = 'Diese Datei lässt sich nicht als Bild öffnen. Wähle ein Foto oder ein anderes Bild aus.'
+  const notAPicture = 'Das Bild muss eine vollständige WebP-, JPEG- oder PNG-Datei sein.'
+  const tooBig = 'Das Bild ist zu groß. Erlaubt sind höchstens 300 KB.'
+  const conflict = 'Das Bild wurde gerade gleichzeitig geändert. Versuche es noch einmal.'
+  const problem = (status: number, detail: string) => async () => Response.json({ title: 'x', detail }, { status })
+
+  // Fehler: Text im Dialog, kein Bild, Fokus bleibt auf „Bild wählen“.
+  async function expectPictureError(message: string, choose: HTMLElement) {
+    const dialog = screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(message)
+    expect(within(dialog).queryByRole('img')).toBeNull()
+    expect(document.activeElement).toBe(choose)
+  }
+
+  it('1: Auswahl abgebrochen → kein PUT, keine Meldung', async () => {
+    const calls = stubPicture(async () => Response.json({ pictureVersion: 'pv-1' }))
+    const { dialog, input } = await openPicture()
+    pick(input)
+    await settle()
+    expect(vi.mocked(shrinkPicture)).not.toHaveBeenCalled()
+    expect(calls.puts).toHaveLength(0)
+    expect(within(dialog).queryByRole('alert')).toBeNull()
+    expect(within(dialog).queryByRole('status')).toBeNull()
+  })
+
+  it.each([
+    ['2: PDF', new File(['%PDF-1.7'], 'liste.pdf', { type: 'application/pdf' })],
+    ['3: kaputtes Bild', new File([new Uint8Array([0xff, 0xd8, 0x00])], 'kaputt.jpg', { type: 'image/jpeg' })],
+  ])('%s (nicht dekodierbar) → „nicht als Bild öffnen“, kein PUT', async (_name, file) => {
+    vi.mocked(shrinkPicture).mockRejectedValue(new DOMException('The source image could not be decoded.'))
+    const calls = stubPicture(async () => Response.json({ pictureVersion: 'pv-1' }))
+    const { choose, input } = await openPicture()
+    choose.focus()
+    pick(input, file)
+    await expectPictureError(unreadable, choose)
+    expect(calls.puts).toHaveLength(0)
+  })
+
+  it.each([
+    ['4: Server 400', async () => Response.json({ title: 'x', errors: { picture: [notAPicture] } }, { status: 400 }), notAPicture],
+    ['5: Server 413 vom Endpoint (Problem-JSON)', problem(413, tooBig), tooBig],
+    // nginx antwortet ueber 1 MB selbst, mit einer HTML-Seite statt Problem-JSON.
+    [
+      '6: Server 413 von nginx (HTML)',
+      async () =>
+        new Response('<html><head><title>413 Request Entity Too Large</title></head></html>', {
+          status: 413,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+      tooBig,
+    ],
+    ['8: Server 409', problem(409, conflict), conflict],
+    ['9: Server nicht erreichbar', offline, unreachable],
+  ])('%s → exakter Text, ein PUT', async (_name, respond, message) => {
+    const calls = stubPicture(respond)
+    const { choose, input } = await openPicture()
+    choose.focus()
+    pick(input, photo())
+    await expectPictureError(message, choose)
+    expect(calls.puts).toHaveLength(1)
+  })
+
+  it('7: Server 404 → Text im Dialog; Esc → Zeile weg, Fokus auf der Set-Überschrift', async () => {
+    const calls = stubPicture(entryNotFound, [hund, katze], [katze])
+    const { choose, input } = await openPicture()
+    choose.focus()
+    pick(input, photo())
+    await expectPictureError(entryGone, choose)
+    await settle()
+    expect(calls.entryGets).toBe(1)
+
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByText('Hund → dog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(heading()))
+  })
+
+  it('10: zwei Auswahlen im selben Takt → genau ein PUT; Esc schließt während der Anfrage nicht', async () => {
+    let release: () => void = () => {}
+    const calls = stubPicture(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(Response.json({ pictureVersion: 'pv-1' }))
+        }),
+    )
+    const { dialog, input } = await openPicture()
+    pick(input, photo())
+    pick(input, photo())
+    await waitFor(() => expect(within(dialog).getByRole('status').textContent).toBe('Einen Moment …'))
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })).toBeTruthy()
+    release()
+    expect(await within(dialog).findByText('Das Bild ist gespeichert.')).toBeTruthy()
+    expect(calls.puts).toHaveLength(1)
+  })
+
+  it('11: Ersetzen bei vorhandenem Bild → zweites Bild, Vorschau mit der neuen Version', async () => {
+    const withPicture = { ...hund, pictureVersion: 'pv-alt' }
+    const calls = stubPicture(async () => Response.json({ pictureVersion: 'pv-neu' }), [withPicture])
+    const pictureGets = () =>
+      vi.mocked(fetch).mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/pictures/'))
+    const { dialog, input } = await openPicture()
+    expect(await within(dialog).findByRole('img', { name: 'Bild zu „Hund“' })).toBeTruthy()
+    pick(input, photo())
+    expect(await within(dialog).findByText('Das Bild ist gespeichert.')).toBeTruthy()
+    await waitFor(() => expect(pictureGets()).toContain('/api/v1/pictures/pv-neu'))
+    expect(await within(dialog).findByRole('img', { name: 'Bild zu „Hund“' })).toBeTruthy()
+    expect(calls.puts).toEqual([{ url: pictureUrl, body: small }])
+  })
+
+  it('Neue Auswahl nimmt die alte Meldung weg', async () => {
+    vi.mocked(shrinkPicture).mockRejectedValueOnce(new Error('kaputt'))
+    stubPicture(() => new Promise<Response>(() => {}))
+    const { dialog, input } = await openPicture()
+    pick(input, photo())
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(unreadable)
+    pick(input, photo())
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).toBeNull())
+  })
+
   it('Happy Path: Bild hinzufügen → PUT mit dem verkleinerten Blob, Vorschau, Meldung, Fokus, Liste neu', async () => {
     const calls = stubPicture(async () => Response.json({ pictureVersion: 'pv-neu' }))
     const { dialog, choose, input } = await openPicture()
