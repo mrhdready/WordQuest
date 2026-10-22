@@ -1059,3 +1059,86 @@ describe('CSV-Import', () => {
     expect(calls.imports).toHaveLength(0)
   })
 })
+
+// „Löwe;lion“ als Bytes: der Umlaut entscheidet, ob die Kodierung stimmt.
+const loeweUtf8 = [...new TextEncoder().encode('Löwe;lion')]
+const loeweWindows1252 = [0x4c, 0xf6, 0x77, 0x65, ...new TextEncoder().encode(';lion')]
+const fileTooBig = 'Die Datei ist zu groß. Eine Vokabelliste darf höchstens 1 MB groß sein.'
+const fileUnreadable = 'Die Datei ließ sich nicht lesen. Wähle sie noch einmal aus oder füge den Text ein.'
+
+async function openImportFile() {
+  renderPage()
+  await userEvent.click(await screen.findByRole('button', { name: 'Liste importieren (CSV)' }))
+  expect(screen.getByRole('button', { name: 'Datei wählen' })).toBeTruthy()
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement
+  expect(input.accept).toBe('.csv,.txt,text/csv,text/plain')
+  const textarea = screen.getByRole('textbox', { name: /^Eine Zeile pro Vokabel/ }) as HTMLTextAreaElement
+  return { input, textarea }
+}
+
+const csvFile = (bytes: number[] | Uint8Array, name = 'loewe.csv') =>
+  new File([new Uint8Array(bytes)], name, { type: 'text/csv' })
+
+describe('CSV-Import: Datei wählen', () => {
+  it.each([
+    ['UTF-8', loeweUtf8],
+    ['UTF-8 mit BOM', [0xef, 0xbb, 0xbf, ...loeweUtf8]],
+    ['Windows-1252', loeweWindows1252],
+  ])('%s: „Löwe;lion“ im Textfeld, Statusmeldung', async (_name, bytes) => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    await userEvent.upload(input, csvFile(bytes))
+    expect((await screen.findByRole('status')).textContent).toBe('Die Datei „loewe.csv“ ist eingelesen.')
+    expect(textarea.value).toBe('Löwe;lion')
+  })
+
+  it('Vorschau schickt den Dateiinhalt als Text', async () => {
+    const calls = stubImport([hundRow])
+    const { input } = await openImportFile()
+    await userEvent.upload(input, csvFile(loeweWindows1252))
+    await userEvent.click(await screen.findByRole('button', { name: 'Vorschau' }))
+    await screen.findByRole('region', { name: 'Vorschau' })
+    expect(calls.previews).toEqual([{ content: 'Löwe;lion' }])
+  })
+
+  it('Datei über 1 MB: Fehlertext, Textfeld bleibt leer', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    await userEvent.upload(input, csvFile(new Uint8Array(1024 * 1024 + 1), 'gross.csv'))
+    expect((await screen.findByRole('alert')).textContent).toBe(fileTooBig)
+    expect(textarea.value).toBe('')
+  })
+
+  it('Datei nicht lesbar: Fehlertext, Textfeld bleibt leer', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    const file = csvFile(loeweUtf8)
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: () => Promise.reject(new DOMException('weg', 'NotReadableError')),
+    })
+    await userEvent.upload(input, file)
+    expect((await screen.findByRole('alert')).textContent).toBe(fileUnreadable)
+    expect(textarea.value).toBe('')
+  })
+
+  it('Leere Datei: wie ein leeres Textfeld, „Vorschau“ gesperrt, keine Meldung', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    await userEvent.click(textarea)
+    await userEvent.paste('Hund;dog')
+    await userEvent.upload(input, csvFile([], 'leer.csv'))
+    await waitFor(() => expect(textarea.value).toBe(''))
+    expect((screen.getByRole('button', { name: 'Vorschau' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('Text geändert: die Dateimeldung verschwindet', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    await userEvent.upload(input, csvFile(loeweUtf8))
+    expect(await screen.findByRole('status')).toBeTruthy()
+    await userEvent.type(textarea, 'x')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+})
