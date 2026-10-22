@@ -5,9 +5,9 @@ current_phase: "03.1"
 current_phase_name: Release Hardening
 status: executing
 stopped_at: Completed 03.1-07-PLAN.md
-last_updated: "2026-10-22T10:30:00.000Z"
+last_updated: "2026-10-22T21:15:00.000Z"
 last_activity: 2026-10-22
-last_activity_desc: Quick 261022-q7a („?“ am Antwortende, UTF-16 im CSV-Import, erster Start ohne fail:); Gate, e2e/axe, Install-Smoke gruen; Tag-Kandidat fe24d8b enthaelt p4z, v4n, fke, cb3 und q7a nicht
+last_activity_desc: Quick 261022-d7w (Start ohne DataProtection-warn:, Distraktoren aus dem ganzen Set, EF 10102); Gate, e2e/axe, Install-Smoke gruen; Tag-Kandidat fe24d8b enthaelt p4z, v4n, fke, cb3, q7a und d7w nicht
 state_head: fe24d8bdba5ba73c7217ebe4a2cb3b33ef1afb7c
 progress:
   total_phases: 4
@@ -185,11 +185,12 @@ Recent decisions affecting current work:
 | 261022-fke | Sichtbare Warteanzeige „Einen Moment …“ auf der Kinder-Anmeldung (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen | [Zusammenfassung](quick/261022-fke-sichtbare-warteanzeige-pin-anmeldung/261022-fke-SUMMARY.md) |
 | 261022-cb3 | CSV-Import: Datei wählen statt Text einfügen (Konzept M2) | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen; Frage zu UTF-16 in 261022-q7a beantwortet | [Zusammenfassung](quick/261022-cb3-csv-datei-waehlen/261022-cb3-SUMMARY.md) |
 | 261022-q7a | „?“ am Antwortende ignorieren (Konzept §6.4), UTF-16 im CSV-Import (M2), erster Start ohne fail:-Zeilen | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen | [Zusammenfassung](quick/261022-q7a-fragezeichen-utf16-migrationslog/261022-q7a-SUMMARY.md) |
+| 261022-d7w | Start ohne warn:-Zeilen von DataProtection (Vorladen entfernt), EF-Warnung 10102: Distraktoren aus dem ganzen Set, Profilauswahl sortiert | Umgesetzt; Gate, e2e/axe, Install-Smoke (STARTLOG ohne warn:) gruen | [Zusammenfassung](quick/261022-d7w-dataprotection-startwarnungen/261022-d7w-SUMMARY.md) |
 
 ### Blockers/Concerns
 
 - [Phase 2]: Only a pure domain test project exists; QUAL-01 needs a new integration test project with real PostgreSQL
-- Quicks 261021-p4z, 261021-v4n, 261022-fke, 261022-cb3 und 261022-q7a aendern Code nach fe24d8b (PIN genau 4 Ziffern, Anmeldung ohne „Los geht’s“, sichtbare Warteanzeige, CSV-Datei waehlen, „?“/UTF-16/Startlog): soll das in 1.0.0, muss der Tag-Kandidat neu bestimmt werden
+- Quicks 261021-p4z, 261021-v4n, 261022-fke, 261022-cb3, 261022-q7a und 261022-d7w aendern Code nach fe24d8b (PIN genau 4 Ziffern, Anmeldung ohne „Los geht’s“, sichtbare Warteanzeige, CSV-Datei waehlen, „?“/UTF-16/Startlog, DataProtection-Startwarnungen/Distraktoren): soll das in 1.0.0, muss der Tag-Kandidat neu bestimmt werden
 - 03.1-07 abgeschlossen: Tag v1.0.0 nur auf fe24d8b (Prod-Stack und volles Gate auf diesem Commit; danach nur .planning/ geaendert); setzt der Orchestrator
 - e2e-Laeufe ueber 15 min scheitern vermutlich am geteilten Refresh-Token aus global-setup.ts (03.1-07-SUMMARY, Offene Punkte); nicht aufgetreten, nicht ausgebaut
 
@@ -203,6 +204,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-22T10:30:00.000Z
-Stopped at: Completed quick 261022-q7a
+Last session: 2026-10-22T21:15:00.000Z
+Stopped at: Completed quick 261022-d7w
 Resume file: None
