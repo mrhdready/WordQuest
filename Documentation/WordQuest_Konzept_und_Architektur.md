@@ -326,7 +326,7 @@ Serverseitig, nicht im Client (der Client kennt die Antwort nicht — sonst ist 
 ```
 1. Normalisieren: trim, Mehrfachleerzeichen, Kleinschreibung,
    Unicode NFKC, typografische Apostrophe → ', Anführungszeichen und
-   Striche vereinheitlicht, abschließende "." und "!" entfernt
+   Striche vereinheitlicht, abschließende ".", "!" und "?" entfernt
 2. Artikel/Partikel optional: führendes "to " (to go),
    "a "/"an "/"the " sowie deutsche Artikel ("der/die/das/den/dem/des",
    "ein/eine/…") und "sich "/"zu " werden entfernt

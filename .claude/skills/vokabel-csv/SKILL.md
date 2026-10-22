@@ -52,5 +52,5 @@ Wie heißt du?;What's your name?;
 
 ## Grenzen
 
-- Die App entfernt am Antwortende nur „.“ und „!“, nicht „?“ — das gilt für beide Seiten, weil beide Richtungen abgefragt werden. Fehlt das „?“, zählt die Antwort als Tippfehler (richtig, aber Bewertung „schwer“); kommt ein echter Tippfehler dazu, ist sie falsch. Redemittel mit „?“ deshalb sparsam einsetzen, bis die App „?“ ebenfalls ignoriert.
+- Die App ignoriert „.“, „!“ und „?“ am Antwortende, auf beiden Seiten (beide Richtungen werden abgefragt). Redemittel wie „What's your name?“ sind deshalb unproblematisch.
 - Der Skill erzeugt nur die CSV. Bilder pro Vokabel lädt ein Elternteil in der App hoch.

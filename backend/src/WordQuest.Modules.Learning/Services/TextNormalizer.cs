@@ -22,7 +22,8 @@ public static class TextNormalizer
 
     /// <summary>
     /// Trimmen, Unicode-Normalform, Kleinschreibung, typografische Zeichen
-    /// vereinheitlichen, Mehrfachleerzeichen zusammenziehen.
+    /// vereinheitlichen, Mehrfachleerzeichen zusammenziehen, Satzzeichen am
+    /// Ende (".", "!", "?") entfernen.
     /// </summary>
     public static string Normalize(string? input)
     {
@@ -61,8 +62,8 @@ public static class TextNormalizer
             sb.Append(char.ToLowerInvariant(c));
         }
 
-        // Ein Schlusspunkt oder Ausrufezeichen ist keine inhaltliche Abweichung.
-        while (sb.Length > 0 && (sb[^1] == '.' || sb[^1] == '!' || sb[^1] == ' '))
+        // Ein Schlusspunkt, Ausrufe- oder Fragezeichen ist keine inhaltliche Abweichung.
+        while (sb.Length > 0 && (sb[^1] == '.' || sb[^1] == '!' || sb[^1] == '?' || sb[^1] == ' '))
         {
             sb.Length--;
         }
