@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { SessionView } from '@/types'
 import { guardianStorageState } from './global-setup'
+import { canvasPicture } from './pictures'
 
 // Nur im seedfreien Install-Smoke (setup-smoke.sh setzt WQ_E2E_FIRST_RUN und die
 // Zugangsdaten des dort angelegten Elternkontos). Gegen den Demo-Stack laeuft sie nie:
@@ -39,6 +40,19 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
   await page.getByLabel('Englisch', { exact: true }).press('Enter')
   await expect(page.getByRole('main').getByText('Hund → dog', { exact: true })).toBeVisible()
 
+  // Eigenes Bild im Dialog: der ganze Weg ueber nginx im Production-Build. Sicherung,
+  // Wiederherstellung und Update im Release-Smoke pruefen genau dieses Bild (D-14).
+  await page.getByRole('button', { name: 'Hund bearbeiten' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 48 })
+  // Im Dialog suchen: Die Seite hat ein zweites Datei-Feld fuer den CSV-Import.
+  await dialog.locator('input[type="file"]').setInputFiles({ name: 'hund.png', mimeType: 'image/png', buffer: png })
+  await expect(dialog.getByRole('status')).toHaveText('Das Bild ist gespeichert.')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  const thumbnail = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..').getByTestId('vokabelbild').locator('img')
+  await expect.poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+
   // Neuer Kontext ohne Eltern-Sitzung: genau eine Kachel, Anmeldung per Tastatur.
   const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } })
   const child = await context.newPage()
@@ -70,6 +84,10 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
   for (const [index, item] of items.entries()) {
     if (index > 0) await child.getByRole('button', { name: 'Weiter' }).click()
     await expect(child.getByRole('textbox')).toHaveValue('')
+    // Jede Karte zeigt das Bild statt des Emojis, dekorativ ohne Alt-Text.
+    const picture = child.getByTestId('vokabelbild').locator('img')
+    await expect(picture).toHaveAttribute('alt', '')
+    await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
     await child.getByRole('textbox').fill(item.prompt === 'Hund' ? 'dog' : 'Hund')
     const [answered] = await Promise.all([
       child.waitForResponse((response) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(response.url())),
