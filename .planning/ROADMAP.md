@@ -137,7 +137,10 @@ Plans:
   3. The server accepts only real images up to a fixed size and rejects everything else with a German 4xx message
   4. Backup, restore and upgrade keep the pictures (release smoke)
   5. Full gate green, axe 0 on touched pages, keyboard and 200 % zoom
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1.1 to break down)
+- [ ] 03.1.1-01-PLAN.md — Bild speichern, ersetzen und ausliefern (Tabelle per dotnet ef, PUT/GET, nur echte Bilder bis 300 KB, Mandantentrennung, Kaskade) und Vorschaubild in der Vokabelliste (D-06 bis D-10, D-12, D-13)
+- [ ] 03.1.1-02-PLAN.md — Abschnitt „Bild“ im Dialog „Vokabel bearbeiten“: wählen, ersetzen, entfernen, Verkleinern ohne EXIF/GPS im Browser, Edge-Case-Matrix, DELETE mit Isolation (D-03 bis D-05, D-07, D-10)
+- [ ] 03.1.1-03-PLAN.md — Bild in der Lernrunde statt des Emojis, auch bei der Wiederholung und ohne Secure Context, axe, 200 % und 320 px (D-11, D-12)
+- [ ] 03.1.1-04-PLAN.md — Bild durch Sicherung, Wiederherstellung und Update im Release-Smoke, Installationsseite und Doku-Schlussprüfung, volles Gate und Klon-Smoke auf END als Kandidat für v1.0.0 (D-01, D-14, D-15)
