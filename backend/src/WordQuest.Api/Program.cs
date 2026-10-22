@@ -101,6 +101,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.MapInboundClaims = false;
     });
 
+// AddAuthentication registriert DataProtection mit, dessen Hintergrunddienst den
+// Schluesselring schon beim Start anlegt. WordQuest schuetzt damit nichts (JWT mit
+// eigenem Schluessel, Refresh-Token als SHA256-Hash). Ohne das Vorladen entfallen
+// die zwei warn:-Zeilen zu Schluesseln im Container. Braucht spaeter etwas
+// DataProtection (z. B. Antiforgery), kommen sie beim ersten Zugriff wieder; dann
+// gehoeren die Schluessel in ein Volume.
+ServiceDescriptor? keyRingPreload = builder.Services.SingleOrDefault(descriptor =>
+    descriptor.ImplementationType?.FullName == "Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService");
+if (keyRingPreload is not null)
+{
+    builder.Services.Remove(keyRingPreload);
+}
+
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("Guardian", policy => policy.RequireRole("Owner", "Guardian"))
     .AddPolicy("Learner", policy => policy.RequireRole("Learner"));

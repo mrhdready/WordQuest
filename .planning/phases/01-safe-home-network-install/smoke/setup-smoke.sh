@@ -75,6 +75,10 @@ docker compose logs --no-color api </dev/null >api-first-start.log 2>&1
 cat api-first-start.log
 [[ "$(grep -cE '(^|\| )(fail|crit): ' api-first-start.log || true)" -eq 0 ]] \
   || fail "API-Log beim ersten Start enthaelt fail:/crit:."
+# DataProtection nutzt WordQuest nicht; seine Warnungen zu Schluesseln im Container
+# wuerden Eltern nur verunsichern.
+[[ "$(grep -cE '(^|\| )warn: Microsoft\.AspNetCore\.DataProtection' api-first-start.log || true)" -eq 0 ]] \
+  || fail "API-Log beim ersten Start enthaelt warn: von DataProtection."
 echo "STARTLOG OK"
 
 code="$(login eltern@example.de geheim-123)"

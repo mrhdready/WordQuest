@@ -12,7 +12,8 @@ namespace WordQuest.Api.Tests;
 /// <summary>
 /// Erster Start wie im Compose-Stack: PostgreSQL hat die Datenbank angelegt,
 /// sie ist aber leer. Dabei darf keine fail:-Zeile im Log stehen, weil sie fuer
-/// Eltern wie ein Fehler aussieht. Echte SQL-Fehler im Betrieb bleiben fail:.
+/// Eltern wie ein Fehler aussieht, und keine warn:-Zeile von DataProtection,
+/// das WordQuest nicht nutzt. Echte SQL-Fehler im Betrieb bleiben fail:.
 /// Eigene Factory ohne InitializeAsync (Isolationsregel ApiFactory).
 /// </summary>
 public sealed class StartupLogTests : IAsyncLifetime
@@ -39,6 +40,15 @@ public sealed class StartupLogTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Erster_Start_loggt_keine_Warnung_von_DataProtection()
+    {
+        _ = _factory.Services;
+
+        Assert.DoesNotContain(_logs.Entries, entry =>
+            entry.Category.StartsWith("Microsoft.AspNetCore.DataProtection", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Fehlerhaftes_SQL_im_Betrieb_wird_weiter_als_Fehler_geloggt()
     {
         await using AsyncServiceScope scope = _factory.Services.CreateAsyncScope();
@@ -54,27 +64,29 @@ public sealed class StartupLogTests : IAsyncLifetime
             && entry.Message.Contains("gibt_es_nicht", StringComparison.Ordinal));
     }
 
-    private sealed record LogEntry(string Category, string Message);
+    private sealed record LogEntry(LogLevel Level, string Category, string Message);
 
-    /// <summary>Sammelt alle Eintraege ab Error (in der Konsole: fail: und crit:).</summary>
+    /// <summary>Sammelt alle Eintraege ab Warning (in der Konsole: warn:, fail: und crit:).</summary>
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
-        private readonly ConcurrentQueue<LogEntry> _errors = new();
+        private readonly ConcurrentQueue<LogEntry> _entries = new();
 
-        public IReadOnlyCollection<LogEntry> Errors => _errors;
+        public IReadOnlyCollection<LogEntry> Entries => _entries;
 
-        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _errors);
+        public IReadOnlyCollection<LogEntry> Errors => [.. _entries.Where(entry => entry.Level >= LogLevel.Error)];
+
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _entries);
 
         public void Dispose()
         {
         }
 
-        private sealed class Logger(string category, ConcurrentQueue<LogEntry> errors) : ILogger
+        private sealed class Logger(string category, ConcurrentQueue<LogEntry> entries) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state)
                 where TState : notnull => null;
 
-            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
 
             public void Log<TState>(
                 LogLevel logLevel, EventId eventId, TState state, Exception? exception,
@@ -82,7 +94,7 @@ public sealed class StartupLogTests : IAsyncLifetime
             {
                 if (IsEnabled(logLevel))
                 {
-                    errors.Enqueue(new LogEntry(category, formatter(state, exception)));
+                    entries.Enqueue(new LogEntry(logLevel, category, formatter(state, exception)));
                 }
             }
         }
