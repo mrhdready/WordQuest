@@ -107,8 +107,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // die zwei warn:-Zeilen zu Schluesseln im Container. Braucht spaeter etwas
 // DataProtection (z. B. Antiforgery), kommen sie beim ersten Zugriff wieder; dann
 // gehoeren die Schluessel in ein Volume.
+// ImplementationType wirft bei Keyed-Registrierungen, deshalb die erste Bedingung.
 ServiceDescriptor? keyRingPreload = builder.Services.SingleOrDefault(descriptor =>
-    descriptor.ImplementationType?.FullName == "Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService");
+    !descriptor.IsKeyedService
+    && descriptor.ImplementationType?.FullName == "Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService");
 if (keyRingPreload is not null)
 {
     builder.Services.Remove(keyRingPreload);

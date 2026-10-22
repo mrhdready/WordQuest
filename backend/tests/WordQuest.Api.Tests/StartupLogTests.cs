@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using WordQuest.Infrastructure;
@@ -46,6 +47,11 @@ public sealed class StartupLogTests : IAsyncLifetime
 
         Assert.DoesNotContain(_logs.Entries, entry =>
             entry.Category.StartsWith("Microsoft.AspNetCore.DataProtection", StringComparison.Ordinal));
+        // Die Warnungen erscheinen nur im Container bzw. bei einem neuen Schluessel.
+        // Der Dienst selbst darf deshalb auch ausserhalb davon nicht laufen; das
+        // faellt zudem auf, wenn sich sein interner Typname aendert.
+        Assert.DoesNotContain(_factory.Services.GetServices<IHostedService>(), service =>
+            service.GetType().Namespace?.StartsWith("Microsoft.AspNetCore.DataProtection", StringComparison.Ordinal) == true);
     }
 
     [Fact]
