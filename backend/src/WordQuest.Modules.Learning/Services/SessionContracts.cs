@@ -15,6 +15,8 @@ public sealed record SessionItemView(
     string ExpectedAnswerType,
     IReadOnlyList<string>? Choices,
     string? Emoji,
+    // Nur die Version: Die Bytes holt der Browser ueber GET /pictures/{version} (IMG-01).
+    Guid? PictureVersion,
     string? ExampleSentence,
     bool IsRetry);
 

@@ -86,6 +86,63 @@ public sealed partial class PictureQueryTests : IAsyncLifetime
         Assert.Contains(_recorder.Commands, SelectsPictureBytes);
     }
 
+    // Rundenstart und Wiederholung brauchen nur die Version; die Bytes holt der Browser (Review MEDIUM).
+    private async Task<(SeededFamily Family, Guid SetId)> SeedSetWithPictureAsync()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        await VersionAsync(await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, Jpeg(MaxBytes), "image/jpeg"));
+        return (family, set.Set.Id);
+    }
+
+    private static Task<HttpResponseMessage> StartSessionAsync(HttpClient child, Guid learnerId, Guid setId) =>
+        child.PostAsJsonAsync("/api/v1/sessions", new { learnerId, setId, gameKey = "classic", size = (int?)null });
+
+    [Fact]
+    public async Task Rundenstart_liest_die_Version_aber_keine_Bildbytes()
+    {
+        (SeededFamily family, Guid setId) = await SeedSetWithPictureAsync();
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        _recorder.Clear();
+        HttpResponseMessage start = await StartSessionAsync(child, family.Child.Id, setId);
+        string[] sql = _recorder.Commands;
+
+        Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+        Assert.Contains(sql, s => s.Contains("vocabulary_picture", StringComparison.Ordinal));
+        Assert.DoesNotContain(sql, SelectsPictureBytes);
+    }
+
+    [Fact]
+    public async Task Wiederholung_liest_die_Version_aber_keine_Bildbytes()
+    {
+        (SeededFamily family, Guid setId) = await SeedSetWithPictureAsync();
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        HttpResponseMessage start = await StartSessionAsync(child, family.Child.Id, setId);
+        Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+        using JsonDocument session = JsonDocument.Parse(await start.Content.ReadAsStringAsync());
+        string sessionId = session.RootElement.GetProperty("sessionId").GetString()!;
+        Guid itemId = session.RootElement.GetProperty("items")[0].GetProperty("itemId").GetGuid();
+
+        _recorder.Clear();
+        HttpResponseMessage answer = await child.PostAsJsonAsync($"/api/v1/sessions/{sessionId}/answers", new
+        {
+            itemId,
+            givenAnswer = "voellig falsch",
+            answerMs = 2000,
+            clientAnswerId = Guid.NewGuid(),
+            hintUsed = false,
+        });
+        string[] sql = _recorder.Commands;
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        using JsonDocument result = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Object, result.RootElement.GetProperty("retryItem").ValueKind);
+        Assert.Contains(sql, s => s.Contains("vocabulary_picture", StringComparison.Ordinal));
+        Assert.DoesNotContain(sql, SelectsPictureBytes);
+    }
+
     // Recherche Pitfall 3: Woerter aendern darf die Version nicht verlieren.
     [Fact]
     public async Task Vokabel_bearbeiten_antwortet_mit_der_gespeicherten_Version()

@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SessionPage } from '@/features/learn/SessionPage'
@@ -13,6 +13,7 @@ const item = {
   expectedAnswerType: 'text',
   choices: null,
   emoji: null,
+  pictureVersion: null,
   exampleSentence: null,
   isRetry: false,
 }
@@ -46,13 +47,23 @@ const summary = {
 const duplicate = 'Diese Antwort ist schon angekommen. Starte eine neue Runde, um weiterzulernen.'
 const foreignCard = 'Diese Karte gehört nicht zu dieser Runde. Starte eine neue Runde.'
 
+// Beliebige Bytes genuegen: jsdom dekodiert nicht, der Typ kommt aus dem Header.
+const png = async () => new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/png' } })
+
 // Zaehlt die Anfragen je Endpunkt. Die Antwort auf /answers haelt der Test
 // selbst zurueck, damit ein zweiter Tipp vor der Antwort ankommt.
-function stubFetch(answer: () => Promise<Response>) {
-  const calls = { answers: 0, complete: 0 }
+function stubFetch(
+  answer: () => Promise<Response>,
+  { items, picture = png }: { items?: object[]; picture?: () => Promise<Response> } = {},
+) {
+  const calls = { answers: 0, complete: 0, pictures: 0 }
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
+      if (url.includes('/pictures/')) {
+        calls.pictures += 1
+        return picture()
+      }
       if (url.endsWith('/answers')) {
         calls.answers += 1
         return answer()
@@ -61,7 +72,7 @@ function stubFetch(answer: () => Promise<Response>) {
         calls.complete += 1
         return Response.json(summary)
       }
-      if (url.endsWith('/sessions')) return Response.json(view)
+      if (url.endsWith('/sessions')) return Response.json(items ? { ...view, totalItems: items.length, items } : view)
       return new Response('', { status: 500 })
     }),
   )
@@ -188,5 +199,61 @@ describe('Lernrunde', () => {
 
     expect(await screen.findByText('/')).toBeTruthy()
     expect(calls.complete).toBe(1)
+  })
+})
+
+describe('Vokabelbild', () => {
+  const withPicture = { ...item, emoji: '🐶', pictureVersion: 'v1' }
+  const frame = () => screen.findByTestId('vokabelbild')
+  const answerField = () => screen.findByRole('textbox', { name: 'Deine Antwort' })
+
+  it('Aufgabe mit Bild: Rahmen sofort, dann Bild mit leerem alt, Fokus im Antwortfeld', async () => {
+    const picture = held()
+    stubFetch(async () => Response.json(result), { items: [withPicture], picture: picture.answer })
+    render()
+
+    const box = await frame()
+    expect(box.querySelector('img')).toBeNull()
+    picture.release(await png())
+
+    await waitFor(() => expect(box.querySelector('img')).not.toBeNull())
+    const image = box.querySelector('img')!
+    expect(image.getAttribute('alt')).toBe('')
+    expect(image.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+    expect(screen.queryByText('🐶')).toBeNull()
+    expect(document.activeElement).toBe(await answerField())
+  })
+
+  it('Bildabruf 404: Emoji im Rahmen, Fokus im Antwortfeld', async () => {
+    stubFetch(async () => Response.json(result), { items: [withPicture], picture: async () => new Response('', { status: 404 }) })
+    render()
+
+    const box = await frame()
+    await waitFor(() => expect(box.textContent).toBe('🐶'))
+    expect(box.querySelector('img')).toBeNull()
+    expect(document.activeElement).toBe(await answerField())
+  })
+
+  it('HTTP 200, Bild nicht dekodierbar: Emoji im Rahmen, Rahmen behält size-40, Fokus im Antwortfeld', async () => {
+    stubFetch(async () => Response.json(result), { items: [withPicture] })
+    render()
+
+    const box = await frame()
+    await waitFor(() => expect(box.querySelector('img')).not.toBeNull())
+    fireEvent.error(box.querySelector('img')!)
+
+    await waitFor(() => expect(box.textContent).toBe('🐶'))
+    expect(box.querySelector('img')).toBeNull()
+    expect(box.className).toContain('size-40')
+    expect(document.activeElement).toBe(await answerField())
+  })
+
+  it('Aufgabe ohne Bild mit Emoji: Emoji wie bisher, kein Rahmen, kein Bildabruf', async () => {
+    const calls = stubFetch(async () => Response.json(result), { items: [{ ...item, emoji: '🐶' }] })
+    render()
+
+    expect(await screen.findByText('🐶')).toBeTruthy()
+    expect(screen.queryByTestId('vokabelbild')).toBeNull()
+    expect(calls.pictures).toBe(0)
   })
 })

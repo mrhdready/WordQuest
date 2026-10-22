@@ -898,4 +898,80 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         int entriesSeen = set.Entries.Count(e => distractors.Contains(e.SourceText) || distractors.Contains(e.TargetText));
         Assert.True(entriesSeen > 41, $"Nur {entriesSeen} von 50 Woertern kamen als falsche Option vor.");
     }
+
+    // ------------------------------------------------------------ IMG-01
+
+    // Roh gelesen statt als SessionView: So misst der Test auch ein fehlendes Feld.
+    private static Guid? PictureVersionOf(JsonElement item) =>
+        item.TryGetProperty("pictureVersion", out JsonElement v) && v.ValueKind != JsonValueKind.Null
+            ? v.GetGuid()
+            : null;
+
+    private static async Task<JsonElement> StartRawAsync(HttpClient client, Guid learnerId, Guid setId)
+    {
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            Sessions, new { learnerId, setId, gameKey = GameCatalog.Classic, size = (int?)null });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return body.RootElement.Clone();
+    }
+
+    private async Task<(SeededFamily Family, SeededSet Set, Guid Version)> SeedSetWithPictureAsync()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory, dailyNewLimit: 10);
+        SeededSet set = await SeedSetAsync(_factory, family);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        Guid version = await PictureTests.VersionAsync(
+            await PictureTests.PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, PictureTests.Png(), "image/png"));
+        return (family, set, version);
+    }
+
+    private static Guid EntryOf(SeededSet set, JsonElement item) =>
+        set.Cards.Single(c => c.Id == item.GetProperty("cardId").GetGuid()).EntryId;
+
+    [Fact]
+    public async Task Runde_nennt_die_Bildversion_nur_bei_der_Vokabel_mit_Bild()
+    {
+        (SeededFamily family, SeededSet set, Guid version) = await SeedSetWithPictureAsync();
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        JsonElement[] items = [.. (await StartRawAsync(child, family.Child.Id, set.Set.Id)).GetProperty("items").EnumerateArray()];
+
+        Assert.Equal(6, items.Length);
+        foreach (JsonElement item in items)
+        {
+            Guid? expected = EntryOf(set, item) == set.Entries[0].Id ? version : null;
+            Assert.Equal(expected, PictureVersionOf(item));
+        }
+
+        // Das Kind darf das Bild seiner Familie laden.
+        HttpResponseMessage picture = await child.GetAsync($"/api/v1/pictures/{version}");
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+    }
+
+    [Fact]
+    public async Task Wiederholung_nach_falscher_Antwort_nennt_die_Bildversion()
+    {
+        (SeededFamily family, SeededSet set, Guid version) = await SeedSetWithPictureAsync();
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        JsonElement session = await StartRawAsync(child, family.Child.Id, set.Set.Id);
+        Guid sessionId = session.GetProperty("sessionId").GetGuid();
+        JsonElement[] items = [.. session.GetProperty("items").EnumerateArray()];
+
+        async Task<JsonElement> RetryAfterWrongAnswerAsync(JsonElement item)
+        {
+            HttpResponseMessage response = await AnswerAsync(child, sessionId, item.GetProperty("itemId").GetGuid(), "voellig falsch");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            JsonElement retry = body.RootElement.GetProperty("retryItem");
+            Assert.Equal(JsonValueKind.Object, retry.ValueKind);
+            return retry.Clone();
+        }
+
+        JsonElement withPicture = await RetryAfterWrongAnswerAsync(items.First(i => EntryOf(set, i) == set.Entries[0].Id));
+        JsonElement withoutPicture = await RetryAfterWrongAnswerAsync(items.First(i => EntryOf(set, i) != set.Entries[0].Id));
+
+        Assert.Equal(version, PictureVersionOf(withPicture));
+        Assert.Null(PictureVersionOf(withoutPicture));
+    }
 }

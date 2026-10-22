@@ -310,7 +310,12 @@ public sealed class LearningService(
             // und schickt ein UPDATE statt eines INSERT.
             db.SessionItems.Add(retry);
 
-            retryView = BuildItemView(retry, card, game, await BuildChoicesAsync(card, game, ct));
+            // Projektion auf die Version, damit die Bildbytes nicht mitgeladen werden.
+            Guid? pictureVersion = await db.VocabularyPictures
+                .Where(p => p.Id == card.EntryId)
+                .Select(p => (Guid?)p.Version)
+                .FirstOrDefaultAsync(ct);
+            retryView = BuildItemView(retry, card, game, await BuildChoicesAsync(card, game, ct), pictureVersion);
         }
 
         // Aufgabe, Lernstand, Protokoll und Gutschrift gehoeren zusammen: Ein
@@ -556,6 +561,14 @@ public sealed class LearningService(
             .Where(c => cardIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, ct);
 
+        // Nur die Version je Vokabel, nie die Bildbytes: Die holt der Browser
+        // ueber GET /pictures/{version} (IMG-01, Recherche Pitfall 4).
+        List<Guid> entryIds = cards.Values.Select(c => c.EntryId).Distinct().ToList();
+        Dictionary<Guid, Guid> pictureVersions = await db.VocabularyPictures
+            .Where(p => entryIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Version })
+            .ToDictionaryAsync(p => p.Id, p => p.Version, ct);
+
         var views = new List<SessionItemView>(items.Count);
         foreach (SessionItem item in items.OrderBy(i => i.Position))
         {
@@ -564,14 +577,15 @@ public sealed class LearningService(
                 continue;
             }
 
-            views.Add(BuildItemView(item, card, game, await BuildChoicesAsync(card, game, ct)));
+            Guid? pictureVersion = pictureVersions.TryGetValue(card.EntryId, out Guid version) ? version : null;
+            views.Add(BuildItemView(item, card, game, await BuildChoicesAsync(card, game, ct), pictureVersion));
         }
 
         return views;
     }
 
     private static SessionItemView BuildItemView(
-        SessionItem item, Card card, GameDefinition game, IReadOnlyList<string>? choices)
+        SessionItem item, Card card, GameDefinition game, IReadOnlyList<string>? choices, Guid? pictureVersion)
     {
         VocabularyEntry entry = card.Entry!;
 
@@ -589,6 +603,7 @@ public sealed class LearningService(
             ExpectedAnswerType: answerType,
             Choices: choices,
             Emoji: entry.Emoji,
+            PictureVersion: pictureVersion,
             ExampleSentence: example,
             IsRetry: item.IsRetry);
     }

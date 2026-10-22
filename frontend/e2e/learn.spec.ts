@@ -1,7 +1,8 @@
-import { expect, test, type Page, type Response } from '@playwright/test'
+import { expect, test, type Browser, type Page, type Response } from '@playwright/test'
 import type { AnswerResult, SessionItem, SessionView } from '@/types'
 import { checkPage, expectGlassContrast, expectNoAxeViolations, expectReflow } from './axe'
 import { guardianStorageState } from './global-setup'
+import { accessToken, canvasPicture, putPicture } from './pictures'
 
 // Demo-Kind aus DemoDataSeeder (Teststack laeuft mit WQ_SEED_DEMO_DATA).
 const childName = 'Max'
@@ -422,5 +423,85 @@ test.describe('ohne Secure Context', () => {
     await page.goto('/lernen')
     await expect(page.getByText('Für heute ist alles erledigt.')).toBeVisible()
     await checkPageWithoutGlass(page)
+  })
+
+  /*
+    IMG-01 (D-11, D-12): eigenes Kind wie in "Abgebrochene Runde", damit das Tagesbudget
+    des Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt, und ein Set mit genau einer
+    Vokabel, damit jede Karte der Runde ein Bild traegt. Der Eltern-Kontext laeuft auf der
+    baseURL des Projekts (dort gilt guardianStorageState) und meldet sich nicht neu an.
+    Anmelde-Budget: je Test zwei Anfragen der Policy "auth" (/ mit GET /auth/profiles,
+    learner-login), wie "Abgebrochene Runde".
+  */
+  async function startWithPicture(
+    page: Page,
+    browser: Browser,
+    entry: { sourceText: string; targetText: string; emoji: string | null },
+  ) {
+    const stamp = Date.now()
+    const name = `Bildkind ${stamp}`
+    const title = `Bildset ${stamp}`
+    const pin = '4711'
+
+    const guardian = await browser.newContext({
+      baseURL: test.info().project.use.baseURL,
+      storageState: guardianStorageState,
+    })
+    const manage = await guardian.newPage()
+    await manage.goto('/verwalten/kinder/neu')
+    await manage.getByLabel('Name', { exact: true }).fill(name)
+    await manage.getByLabel('Neue Karten pro Tag').fill('5')
+    await manage.getByLabel('PIN', { exact: true }).fill(pin)
+    await manage.getByLabel('PIN', { exact: true }).press('Enter')
+    await expect(manage).toHaveURL(/\/verwalten\/kinder$/)
+
+    const headers = { Authorization: `Bearer ${await accessToken(manage)}` }
+    const set = await manage.request.post('/api/v1/sets', {
+      headers,
+      data: { title, description: null, sourceLanguage: null, targetLanguage: null },
+    })
+    expect(set.status()).toBe(201)
+    const setId = ((await set.json()) as { id: string }).id
+    const created = await manage.request.post(`/api/v1/sets/${setId}/entries`, { headers, data: entry })
+    expect(created.status()).toBe(201)
+    const entryId = ((await created.json()) as { id: string }).id
+    const png = await canvasPicture(manage, { type: 'image/png', width: 64, height: 48 })
+    await putPicture(manage, setId, entryId, png, 'image/png')
+    await guardian.close()
+
+    await openPicker(page)
+    expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
+    await page.getByRole('button', { name }).click()
+    await expect(page.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
+    for (const digit of pin.slice(0, -1)) await page.keyboard.press(digit)
+    await sendLogin(page, () => page.keyboard.press(pin.slice(-1)))
+    await expect(page.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
+
+    await page.getByRole('button', { name: title }).click()
+    const [started] = await Promise.all([
+      page.waitForResponse((candidate) => candidate.url().endsWith('/api/v1/sessions')),
+      goButton(page).click(),
+    ])
+    expect(started.status()).toBe(200)
+    return ((await started.json()) as SessionView).items
+  }
+
+  // Bild im Rahmen fester Hoehe (160 px), dekodiert, ohne Alt-Text; Fokus im Antwortfeld.
+  async function expectPictureCard(page: Page) {
+    const frame = page.getByTestId('vokabelbild')
+    const image = frame.locator('img')
+    await expect(image).toHaveAttribute('alt', '')
+    await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/)
+    await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+    // Die Karte skaliert beim Erscheinen (animate-pop); gemessen wird nach der Animation.
+    await expect.poll(async () => (await frame.boundingBox())?.height).toBe(160)
+    await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeFocused()
+  }
+
+  test('Lernen mit Bild über HTTP', async ({ page, browser }) => {
+    const items = await startWithPicture(page, browser, { sourceText: 'Hund', targetText: 'dog', emoji: null })
+    expect(items.length).toBeGreaterThan(0)
+
+    await expectPictureCard(page)
   })
 })

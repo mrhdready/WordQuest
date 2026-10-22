@@ -80,6 +80,7 @@ export interface SessionItem {
   expectedAnswerType: 'text' | 'choice'
   choices: string[] | null
   emoji: string | null
+  pictureVersion: string | null
   exampleSentence: string | null
   isRetry: boolean
 }

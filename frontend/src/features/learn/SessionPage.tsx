@@ -8,6 +8,7 @@ import { Badge, ErrorNote, Progress, Spinner } from '@/components/ui/misc'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { VocabPicture } from '@/lib/picture'
 import { cn } from '@/lib/utils'
 import type { AnswerResult, SessionItem, SessionSummary, SessionView } from '@/types'
 
@@ -181,6 +182,12 @@ export function SessionPage() {
 
   if (!current) return <Spinner />
 
+  const emoji = current.emoji ? (
+    <span className="type-emoji" aria-hidden>
+      {current.emoji}
+    </span>
+  ) : null
+
   return (
     <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
       {/* Quiz-Kopf (DESIGN.md "Quiz"): Schliessen neben der Fortschritts-Kapsel. */}
@@ -209,11 +216,14 @@ export function SessionPage() {
 
       {/* card-quiz */}
       <div className="animate-pop glass mb-6 flex min-h-44 flex-col items-center justify-center gap-4 rounded-xl p-12 text-center">
-        {current.emoji ? (
-          <span className="type-emoji" aria-hidden>
-            {current.emoji}
-          </span>
-        ) : null}
+        {/* Bild statt Emoji (IMG-01). alt="": Das Bild ist Merkhilfe zum Prompt darunter;
+            eine Beschreibung waere in Richtung EN->DE die Loesung (Recherche Muster 7).
+            Laedt oder dekodiert es nicht, steht das Emoji im selben Rahmen. */}
+        {current.pictureVersion ? (
+          <VocabPicture version={current.pictureVersion} variant="large" alt="" fallback={emoji} />
+        ) : (
+          emoji
+        )}
         <p className="w-full break-words type-display">{current.prompt}</p>
         {current.isRetry ? (
           <p className="type-body-md-strong text-warn-text">Noch einmal — du schaffst das!</p>
