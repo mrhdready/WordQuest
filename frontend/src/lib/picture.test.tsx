@@ -234,15 +234,28 @@ describe('shrinkPicture', () => {
     expect(fills).toEqual([{ fillStyle: 'white', composite: 'destination-over', rect: [0, 0, 512, 256] }])
   })
 
-  it('Dekodieren scheitert: abgelehnt', async () => {
+  it('Dekodieren scheitert: abgelehnt, kein zweiter Versuch', async () => {
     stubCanvas(2000, 1000)
-    vi.stubGlobal(
-      'createImageBitmap',
-      vi.fn(async () => {
-        throw new DOMException('The source image could not be decoded.', 'InvalidStateError')
-      }),
-    )
+    const decode = vi.fn(async () => {
+      throw new DOMException('The source image could not be decoded.', 'InvalidStateError')
+    })
+    vi.stubGlobal('createImageBitmap', decode)
     await expect(shrinkPicture(file)).rejects.toThrow()
+    expect(decode).toHaveBeenCalledTimes(1)
+  })
+
+  // Review M-2: Aeltere Browser kennen den Wert 'from-image' nicht und werfen TypeError.
+  it('imageOrientation unbekannt (TypeError): ein Versuch ohne Optionen, Ergebnis WebP', async () => {
+    const { bitmap, encoded } = stubCanvas(2000, 1000)
+    const decode = vi.fn(async (_source: Blob, options?: ImageBitmapOptions) => {
+      if (options) throw new TypeError("The provided value 'from-image' is not a valid enum value")
+      return bitmap
+    })
+    vi.stubGlobal('createImageBitmap', decode)
+    const result = await shrinkPicture(file)
+    expect(decode.mock.calls).toEqual([[file, { imageOrientation: 'from-image' }], [file]])
+    expect(result.type).toBe('image/webp')
+    expect(encoded.map((call) => [call.width, call.height])).toEqual([[512, 256]])
   })
 
   it('toBlob liefert null: abgelehnt', async () => {

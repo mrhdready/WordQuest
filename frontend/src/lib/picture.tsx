@@ -98,8 +98,20 @@ function encode(canvas: HTMLCanvasElement, type: string, quality: number) {
   vorher weiss hinterlegen, sonst wuerden freigestellte Bilder schwarz.
   Scheitert Dekodieren oder Kodieren, wird das Promise abgelehnt.
 */
+async function decode(file: Blob) {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch (error) {
+    // Aeltere Browser kennen den Wert 'from-image' noch nicht und werfen TypeError, statt
+    // zu dekodieren. Dann ohne Option: hochgeladen wird trotzdem, nur die EXIF-Drehung
+    // haengt dort vom Browser ab (Review M-2). Ein nicht dekodierbares Bild wirft keinen TypeError.
+    if (error instanceof TypeError) return createImageBitmap(file)
+    throw error
+  }
+}
+
 export async function shrinkPicture(file: Blob): Promise<Blob> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  const bitmap = await decode(file)
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(bitmap.width * scale))

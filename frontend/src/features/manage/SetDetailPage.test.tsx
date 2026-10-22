@@ -1293,8 +1293,9 @@ describe('Vokabelbild', () => {
           calls.deletes.push(url)
           return respond()
         }
+        // Je Version andere Bytes (die URL selbst): so ist erkennbar, welche Version ein img zeigt.
         if (url.includes('/pictures/')) {
-          return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/png' } })
+          return new Response(new TextEncoder().encode(url), { headers: { 'Content-Type': 'image/png' } })
         }
         if (url.endsWith('/entries')) {
           calls.entryGets += 1
@@ -1338,6 +1339,19 @@ describe('Vokabelbild', () => {
     expect(input.accept).toBe('image/*')
     expect(input.hidden).toBe(true)
     expect(input.hasAttribute('capture')).toBe(false)
+  })
+
+  // Review L-2: Wer per Tab auf die Buttons springt, hoert, dass Bildaenderungen sofort gelten.
+  it('„Bild wählen“ und „Bild entfernen“ nennen den Hinweis als Beschreibung', async () => {
+    stubPicture(async () => Response.json({ pictureVersion: 'pv-1' }), [{ ...hund, pictureVersion: 'pv-alt' }])
+    const { dialog, choose } = await openPicture()
+    const remove = within(dialog).getByRole('button', { name: 'Bild entfernen' })
+    for (const button of [choose, remove]) {
+      const describedBy = button.getAttribute('aria-describedby')
+      expect(describedBy && document.getElementById(describedBy)?.textContent).toBe(
+        'Ein Bild hilft beim Merken. Änderungen am Bild gelten sofort.',
+      )
+    }
   })
 
   const unreadable = 'Diese Datei lässt sich nicht als Bild öffnen. Wähle ein Foto oder ein anderes Bild aus.'
@@ -1447,6 +1461,19 @@ describe('Vokabelbild', () => {
     await waitFor(() => expect(pictureGets()).toContain('/api/v1/pictures/pv-neu'))
     expect(await within(dialog).findByRole('img', { name: 'Bild zu „Hund“' })).toBeTruthy()
     expect(calls.puts).toEqual([{ url: pictureUrl, body: small }])
+  })
+
+  // Review L-1 / Hinweis LOW-2 aus 03.1.1-01: gleichzeitige Ersetzungen bekommen beide 200,
+  // der letzte Upload gewinnt. Die Vorschau zeigt nach dem Neuladen den gespeicherten Stand.
+  it('Gleichzeitig ersetzt: Liste nennt danach eine andere Version → Vorschau zeigt die gespeicherte', async () => {
+    stubPicture(async () => Response.json({ pictureVersion: 'pv-meins' }), [hund], [{ ...hund, pictureVersion: 'pv-anderer' }])
+    const { dialog, input } = await openPicture()
+    pick(input, photo())
+    expect(await within(dialog).findByText('Das Bild ist gespeichert.')).toBeTruthy()
+    const stored = `data:image/png;base64,${btoa('/api/v1/pictures/pv-anderer')}`
+    await waitFor(() =>
+      expect(within(dialog).getByRole('img', { name: 'Bild zu „Hund“' }).getAttribute('src')).toBe(stored),
+    )
   })
 
   it('Neue Auswahl nimmt die alte Meldung weg', async () => {

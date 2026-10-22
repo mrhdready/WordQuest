@@ -266,7 +266,8 @@ export function SetDetailPage() {
         <EditEntry
           key={editing.id}
           setId={setId}
-          entry={editing}
+          // Aktueller Listenstand, sobald neu geladen: der Abschnitt „Bild“ zeigt dann das gespeicherte Bild.
+          entry={entries.data?.find((item) => item.id === editing.id) ?? editing}
           returnFocusRef={rowFocusRef}
           onRowGone={() => {
             rowFocusRef.current = headingRef.current
@@ -591,8 +592,15 @@ function EntryPicture({
   onGone: (caught: unknown) => void
 }) {
   const queryClient = useQueryClient()
-  // Version aus der Antwort, nicht aus dem alten Listenstand.
+  // Zuerst die Version aus der eigenen Antwort, nicht aus dem alten Listenstand. Bringt das
+  // Neuladen der Liste eine andere Version (gleichzeitig ersetzt, der letzte Upload gewinnt),
+  // gilt die gespeicherte.
   const [version, setVersion] = useState(entry.pictureVersion)
+  const [listed, setListed] = useState(entry.pictureVersion)
+  if (entry.pictureVersion !== listed) {
+    setListed(entry.pictureVersion)
+    setVersion(entry.pictureVersion)
+  }
   const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null)
   const [working, setWorking] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -660,7 +668,9 @@ function EntryPicture({
       <h3 id="vokabel-bild" className="type-headline text-ink">
         Bild
       </h3>
-      <p className="type-body-sm text-ink-soft">Ein Bild hilft beim Merken. Änderungen am Bild gelten sofort.</p>
+      <p id="vokabel-bild-hinweis" className="type-body-sm text-ink-soft">
+        Ein Bild hilft beim Merken. Änderungen am Bild gelten sofort.
+      </p>
       {version ? <VocabPicture version={version} alt={`Bild zu „${entry.sourceText}“`} variant="large" /> : null}
       {/* Natives Datei-Feld wie beim CSV-Import, nur fuer Bilder und ohne capture: auf dem Handy
           bietet der Browser Kamera und Galerie an (D-05). Nicht im Tab-Fluss. */}
@@ -672,13 +682,20 @@ function EntryPicture({
           type="button"
           variant="secondary"
           className="flex-auto"
+          aria-describedby="vokabel-bild-hinweis"
           onClick={() => fileRef.current?.click()}
         >
           <ImagePlus className="size-4" aria-hidden />
           Bild wählen
         </Button>
         {version ? (
-          <Button type="button" variant="secondary" className="flex-auto" onClick={() => void remove()}>
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-auto"
+            aria-describedby="vokabel-bild-hinweis"
+            onClick={() => void remove()}
+          >
             <Trash2 className="size-4" aria-hidden />
             Bild entfernen
           </Button>
