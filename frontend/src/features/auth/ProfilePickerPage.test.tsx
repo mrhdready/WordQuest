@@ -110,6 +110,30 @@ describe('PIN-Eingabe', () => {
     expect(logins).toEqual([{ learnerId: 'kind-1', pin: '1789' }])
   })
 
+  // Entscheidung 2026-10-22: Sehende Kinder sehen das Warten, die Ziffernanzahl
+  // bleibt eine reine Screenreader-Ansage (die Punkte zeigen sie schon).
+  it('Warten ist sichtbar in der Statuszeile und verschwindet nach der Antwort', async () => {
+    let release: () => void = () => {}
+    stubLogin(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () =>
+            resolve(Response.json({ title: 'Anmeldung fehlgeschlagen', detail: wrongPin }, { status: 401 }))
+        }),
+    )
+    await openPin()
+    await userEvent.keyboard('123')
+    expect(screen.getByText('3 Ziffern eingegeben').closest('.sr-only')).not.toBeNull()
+    await userEvent.keyboard('4')
+    const waiting = await screen.findByText('Einen Moment …')
+    expect(screen.getByRole('status').contains(waiting)).toBe(true)
+    expect(waiting.closest('.sr-only')).toBeNull()
+    release()
+    expect((await screen.findByRole('alert')).textContent).toBe(wrongPin)
+    expect(screen.queryByText('Einen Moment …')).toBeNull()
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+  })
+
   it('Falsche PIN: Eingabe leer, Meldung bleibt, Fokus auf "1", neuer Versuch sendet wieder', async () => {
     let calls = 0
     const logins = stubLogin(async () =>
