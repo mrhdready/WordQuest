@@ -154,6 +154,8 @@ Wenn etwas schiefgeht:
 
 Der Dienst `backup` sichert die Datenbank jeden Tag in den Ordner `backups/` und hebt 14 tägliche, 8 wöchentliche und 6 monatliche Stände auf. Die Sicherungen enthalten alle Familiendaten, deshalb ist der Ordner nur für dich lesbar.
 
+Auch die Bilder zu den Vokabeln liegen in der Datenbank. Sie stecken deshalb in jeder Sicherung und kommen mit `./restore.sh` zurück. Jedes Bild ist höchstens 300 KB groß. Als Größenordnung: 100 Bilder mit je 50 KB machen eine Sicherung um etwa 6 MB größer.
+
 Eine Sicherung sofort anstoßen:
 
 ```bash
