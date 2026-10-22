@@ -1133,7 +1133,7 @@ describe('CSV-Import: Datei wählen', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('Datei wird gelesen: Textfeld, „Vorschau“ und „Datei wählen“ gesperrt', async () => {
+  it('Datei wird gelesen: Textfeld und „Vorschau“ gesperrt, „Datei wählen“ behält den Fokus', async () => {
     stubImport([hundRow])
     const { input, textarea } = await openImportFile()
     await userEvent.click(textarea)
@@ -1146,7 +1146,8 @@ describe('CSV-Import: Datei wählen', () => {
     await userEvent.upload(input, file)
     // Sonst liefe eine Vorschau des alten Textes, deren Zeilen nach dem Lesen uebernommen wuerden.
     expect((screen.getByRole('button', { name: 'Vorschau' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: 'Datei wählen' }) as HTMLButtonElement).disabled).toBe(true)
+    // Nicht gesperrt: ein gesperrter Button gaebe den Fokus an body ab (gemessen im e2e-Stack).
+    expect((screen.getByRole('button', { name: 'Datei wählen' }) as HTMLButtonElement).disabled).toBe(false)
     expect(textarea.readOnly).toBe(true)
     release(new Uint8Array(loeweUtf8).buffer)
     await waitFor(() => expect(textarea.value).toBe('Löwe;lion'))
