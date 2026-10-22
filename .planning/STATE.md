@@ -5,9 +5,9 @@ current_phase: "03.1"
 current_phase_name: Release Hardening
 status: executing
 stopped_at: Completed 03.1-07-PLAN.md
-last_updated: "2026-10-22T09:25:00.000Z"
+last_updated: "2026-10-22T09:40:00.000Z"
 last_activity: 2026-10-22
-last_activity_desc: Quick 261022-fke (sichtbare Warteanzeige „Einen Moment …“ auf der Kinder-Anmeldung); Gate, e2e/axe, Install-Smoke gruen; Tag-Kandidat fe24d8b enthaelt p4z, v4n und fke nicht
+last_activity_desc: Quick 261022-cb3 (CSV-Import mit „Datei wählen“, gelesen im Browser); Gate, e2e/axe, Install-Smoke gruen; Tag-Kandidat fe24d8b enthaelt p4z, v4n, fke und cb3 nicht
 state_head: fe24d8bdba5ba73c7217ebe4a2cb3b33ef1afb7c
 progress:
   total_phases: 4
@@ -165,6 +165,7 @@ Recent decisions affecting current work:
 - [Quick 261021-p4z]: Kinder-PIN genau 4 Ziffern, vierte Ziffer sendet ab (Dennis, 2026-10-21); Enter auf fokussierter Ziffern-Taste verworfen
 - [Quick 261021-v4n]: „Los geht’s“ auf der Kinder-Anmeldung entfaellt, Statuszeile sagt „Einen Moment …“; PIN-Felder der Eltern maxLength 4 (Dennis, 2026-10-21)
 - [Quick 261022-fke]: „Einen Moment …“ waehrend der Kinder-Anmeldung sichtbar; dieselbe Statuszeile, Ziffernanzahl bleibt sr-only, Zeile reserviert (Dennis, 2026-10-22)
+- [Quick 261022-cb3]: CSV-Import mit „Datei wählen“ (.csv/.txt, hoechstens 1 MB), gelesen im Browser, strikt UTF-8 sonst windows-1252; API unveraendert (Dennis, 2026-10-22)
 
 ### Pending Todos
 
@@ -181,11 +182,12 @@ Recent decisions affecting current work:
 | 261021-p4z | Kinder-PIN genau 4 Ziffern, Anmeldung mit der vierten Ziffer (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install- und Release-Smoke gruen; Frage zu „Los geht’s“ in 261021-v4n beantwortet | [Zusammenfassung](quick/261021-p4z-kinder-pin-genau-4-ziffern/261021-p4z-SUMMARY.md) |
 | 261021-v4n | Kinder-Anmeldung ohne „Los geht’s“, PIN-Felder der Eltern auf 4 Zeichen, Doku ohne Alt-PINs (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install- und Release-Smoke gruen; Frage zu sichtbarer Warteanzeige in 261022-fke beantwortet | [Zusammenfassung](quick/261021-v4n-pin-ohne-los-gehts-button/261021-v4n-SUMMARY.md) |
 | 261022-fke | Sichtbare Warteanzeige „Einen Moment …“ auf der Kinder-Anmeldung (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen | [Zusammenfassung](quick/261022-fke-sichtbare-warteanzeige-pin-anmeldung/261022-fke-SUMMARY.md) |
+| 261022-cb3 | CSV-Import: Datei wählen statt Text einfügen (Konzept M2) | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen; Frage zu UTF-16 offen | [Zusammenfassung](quick/261022-cb3-csv-datei-waehlen/261022-cb3-SUMMARY.md) |
 
 ### Blockers/Concerns
 
 - [Phase 2]: Only a pure domain test project exists; QUAL-01 needs a new integration test project with real PostgreSQL
-- Quicks 261021-p4z, 261021-v4n und 261022-fke aendern Code nach fe24d8b (PIN genau 4 Ziffern, Anmeldung ohne „Los geht’s“, sichtbare Warteanzeige): soll das in 1.0.0, muss der Tag-Kandidat neu bestimmt werden
+- Quicks 261021-p4z, 261021-v4n, 261022-fke und 261022-cb3 aendern Code nach fe24d8b (PIN genau 4 Ziffern, Anmeldung ohne „Los geht’s“, sichtbare Warteanzeige, CSV-Datei waehlen): soll das in 1.0.0, muss der Tag-Kandidat neu bestimmt werden
 - 03.1-07 abgeschlossen: Tag v1.0.0 nur auf fe24d8b (Prod-Stack und volles Gate auf diesem Commit; danach nur .planning/ geaendert); setzt der Orchestrator
 - e2e-Laeufe ueber 15 min scheitern vermutlich am geteilten Refresh-Token aus global-setup.ts (03.1-07-SUMMARY, Offene Punkte); nicht aufgetreten, nicht ausgebaut
 
@@ -199,6 +201,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-22T09:25:00.000Z
-Stopped at: Completed quick 261022-fke
+Last session: 2026-10-22T09:40:00.000Z
+Stopped at: Completed quick 261022-cb3
 Resume file: None
