@@ -513,9 +513,9 @@ test.describe('ohne Secure Context', () => {
     )
     await expectPictureCard(page)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640)
-    await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeInViewport()
+    await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeInViewport({ ratio: 1 })
     if (original) await page.setViewportSize(original)
-    await expectReflow(page)
+    // checkPage enthaelt expectReflow (320 px).
     await checkPage(page)
 
     // Reihenfolge wie im Client: Startliste plus nachgereichte Wiederholungen.

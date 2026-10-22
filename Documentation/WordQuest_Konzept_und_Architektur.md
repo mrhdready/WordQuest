@@ -367,7 +367,8 @@ POST /api/v1/sessions              → Session mit N Items
     itemId, cardId, prompt, promptType: "text"|"audio",
     expectedAnswerType: "choice"|"text",
     choices?: [...],               // vom Server erzeugte Distraktoren (nicht bei "classic")
-    emoji?, exampleSentence?, isRetry
+    emoji?, pictureVersion?,       // nur die Version des Bildes; die Bytes kommen über GET /pictures/{version}
+    exampleSentence?, isRetry
   }
 
 POST /api/v1/sessions/{id}/answers → Ergebnis
