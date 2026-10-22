@@ -24,6 +24,9 @@ export function usePicture(version: string | null) {
     queryFn: async () => toDataUrl(await api<Blob>(`/pictures/${version}`, { blob: true })),
     enabled: version !== null,
     staleTime: Infinity,
+    // Keine Wiederholung: offline pausierte sie (offlineFirst) und der Rahmen bliebe
+    // leer; der Rueckfall ist das Emoji.
+    retry: false,
   })
 }
 

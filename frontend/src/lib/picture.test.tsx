@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -109,6 +109,28 @@ describe('VocabPicture', () => {
     expect(frame.textContent).toBe('🐶')
     expect(frame.className).toContain(size)
     expect(screen.getByTestId('vokabelbild')).toBe(frame)
+  })
+
+  // Review LOW-1: Mit den App-Vorgaben (retry 1, offlineFirst) pausiert die Wiederholung
+  // offline; ohne eigene Regel bliebe der Rahmen leer statt das Emoji zu zeigen.
+  it('offline mit den App-Vorgaben: Netzfehler zeigt den fallback', async () => {
+    stubFetch(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    onlineManager.setOnline(false)
+    try {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: 1, networkMode: 'offlineFirst' } },
+      })
+      render(
+        <QueryClientProvider client={queryClient}>
+          <VocabPicture version="v1" alt="" variant="thumb" fallback={<span>🐶</span>} />
+        </QueryClientProvider>,
+      )
+      await waitFor(() => expect(screen.getByTestId('vokabelbild').textContent).toBe('🐶'))
+    } finally {
+      onlineManager.setOnline(true)
+    }
   })
 
   it('neue Version nach einem Dekodierfehler zeigt wieder ein Bild', async () => {
