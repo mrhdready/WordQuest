@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Pencil, Trash2, Upload } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { ArrowLeft, FileUp, Pencil, Trash2, Upload } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -19,6 +19,21 @@ const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
 const SOURCE_MISSING = 'Bitte gib das deutsche Wort ein.'
 const TARGET_MISSING = 'Bitte gib das englische Wort ein.'
 const WORD_TOO_LONG = 'Das Wort darf höchstens 200 Zeichen lang sein.'
+// Eine Vokabelliste hat Hunderte Zeilen zu je rund 20 Bytes; 1 MB faengt nur Fehlgriffe
+// ab (Foto, PDF), bevor sie gelesen werden und das Textfeld lahmlegen.
+const MAX_FILE_BYTES = 1024 * 1024
+const FILE_TOO_BIG = 'Die Datei ist zu groß. Eine Vokabelliste darf höchstens 1 MB groß sein.'
+const FILE_UNREADABLE = 'Die Datei ließ sich nicht lesen. Wähle sie noch einmal aus oder füge den Text ein.'
+
+// Erst strikt UTF-8 (der Decoder entfernt ein BOM selbst); scheitert das, ist es fast immer
+// eine CSV aus Excel unter Windows, also windows-1252.
+function decodeCsv(bytes: ArrayBuffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes)
+  }
+}
 
 export function SetDetailPage() {
   const { setId = '' } = useParams()
@@ -659,6 +674,9 @@ function DeleteSet({ set, backRef }: { set: VocabularySet; backRef: RefObject<HT
 function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
   const [content, setContent] = useState('')
   const [preview, setPreview] = useState<ImportPreview | null>(null)
+  // Meldung zur gewaehlten Datei; eine neue Eingabe nimmt sie weg.
+  const [fileNote, setFileNote] = useState<{ ok: boolean; message: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const runPreview = useMutation({
     mutationFn: () =>
@@ -682,22 +700,62 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
       }),
     onSuccess: onDone,
   })
+  const busy = runPreview.isPending || confirm.isPending
+
+  function changeContent(text: string) {
+    setContent(text)
+    setFileNote(null)
+    // Vorschau und Fehlertexte gelten fuer den alten Text: sonst uebernaehme der Button nicht das, was da steht.
+    setPreview(null)
+    runPreview.reset()
+    confirm.reset()
+  }
+
+  // Die Datei wird nur im Browser gelesen; zum Server geht wie beim Einfuegen der Text.
+  async function readFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    // Leeren, damit dieselbe Datei nach einer Korrektur erneut ein change ausloest.
+    event.target.value = ''
+    if (!file) return
+    if (file.size > MAX_FILE_BYTES) {
+      setFileNote({ ok: false, message: FILE_TOO_BIG })
+      return
+    }
+    let text: string
+    try {
+      text = decodeCsv(await file.arrayBuffer())
+    } catch {
+      setFileNote({ ok: false, message: FILE_UNREADABLE })
+      return
+    }
+    changeContent(text)
+    // Leere Datei: wie ein leeres Feld, ohne Erfolgsmeldung.
+    if (text.trim()) setFileNote({ ok: true, message: `Die Datei „${file.name}“ ist eingelesen.` })
+  }
 
   return (
     <Card className="flex flex-col gap-4">
+      {/* Natives Datei-Feld, ausgeloest ueber einen Button aus dem Bestand: Name, Fokusring und
+          Mindesthoehe kommen vom Button, das Feld selbst ist nicht im Tab-Fluss. */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv,.txt,text/csv,text/plain"
+        hidden
+        onChange={(event) => void readFile(event)}
+      />
+      <Button variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>
+        <FileUp className="size-4" aria-hidden />
+        Datei wählen
+      </Button>
+
       <Textarea
         rows={6}
         value={content}
-        onChange={(event) => {
-          setContent(event.target.value)
-          // Vorschau und Fehlertexte gelten fuer den alten Text: sonst uebernaehme der Button nicht das, was da steht.
-          setPreview(null)
-          runPreview.reset()
-          confirm.reset()
-        }}
+        onChange={(event) => changeContent(event.target.value)}
         // Waehrend der Anfragen gesperrt: sonst kaeme danach die Auswertung des alten Textes an
         // bzw. liefe der Import mit Zeilen, die nicht mehr im Feld stehen.
-        readOnly={runPreview.isPending || confirm.isPending}
+        readOnly={busy}
         placeholder={'Hund;dog\nHaus;house\ngehen;to go'}
         aria-labelledby="import-hinweis"
         className="font-mono"
@@ -705,8 +763,13 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
 
       <p id="import-hinweis" className="type-body-md text-ink-soft">
         Eine Zeile pro Vokabel: Deutsch, Trennzeichen, Englisch. Semikolon, Komma und Tabulator
-        werden erkannt — eine aus Excel exportierte Datei kannst du direkt hier einfügen.
+        werden erkannt — eine aus Excel exportierte CSV-Datei kannst du mit „Datei wählen“ laden
+        oder ihren Inhalt hier einfügen.
       </p>
+
+      {fileNote ? (
+        fileNote.ok ? <SuccessNote message={fileNote.message} /> : <ErrorNote message={fileNote.message} />
+      ) : null}
 
       {preview ? (
         <>
