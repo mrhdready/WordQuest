@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -39,7 +39,11 @@ const fits = {
 
 /*
   Fester Rahmen schon beim Laden, damit nichts springt (Recherche Pitfall 6).
-  Scheitert der Abruf, steht der fallback (das Emoji) im selben Rahmen.
+  Scheitert der Abruf, steht der fallback (das Emoji) im selben Rahmen. Der
+  Server prueft nur Signatur und Struktur, dekodiert aber nicht (D-16): Scheitert
+  der Browser am Bild, gilt derselbe Rueckfall statt eines kaputten Symbols.
+  Gemerkt wird die gescheiterte data-URL, so zeigt eine neue Version ohne
+  Effekt wieder ein Bild.
 */
 export function VocabPicture({
   version,
@@ -53,15 +57,22 @@ export function VocabPicture({
   fallback?: ReactNode
 }) {
   const picture = usePicture(version)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const broken = picture.isError || (picture.data !== undefined && picture.data === failedSrc)
   return (
     <span
       data-testid="vokabelbild"
       className={cn('flex shrink-0 items-center justify-center overflow-hidden', frames[variant])}
     >
-      {picture.data ? (
-        <img src={picture.data} alt={alt} className={cn('size-full', fits[variant])} />
-      ) : picture.isError ? (
+      {broken ? (
         fallback
+      ) : picture.data ? (
+        <img
+          src={picture.data}
+          alt={alt}
+          className={cn('size-full', fits[variant])}
+          onError={() => setFailedSrc(picture.data ?? null)}
+        />
       ) : null}
     </span>
   )

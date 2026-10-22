@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { checkPage, expectDialogContrast, expectNoAxeViolations } from './axe'
 import { guardianStorageState } from './global-setup'
-import { canvasPicture, entryIdOf, putPicture } from './pictures'
+import { accessToken, canvasPicture, entryIdOf, putPicture } from './pictures'
 
 test.use({ storageState: guardianStorageState })
 
@@ -402,7 +402,7 @@ test('Vorschaubild in der Vokabelliste', async ({ page }) => {
   const setId = page.url().split('/').pop() ?? ''
   const entryId = await entryIdOf(page, setId, 'Hund')
   const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
-  await putPicture(page, setId, entryId, png, 'image/png')
+  const version = await putPicture(page, setId, entryId, png, 'image/png')
 
   await page.reload()
   const row = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..')
@@ -411,6 +411,34 @@ test('Vorschaubild in der Vokabelliste', async ({ page }) => {
   await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/)
   await expect(image).toHaveAttribute('alt', '')
   expect(await image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+
+  // T-03.1.1-03, -05 (D-09): ueber nginx nur mit Anmeldung, Bild-Typ, nosniff und no-store.
+  const url = `/api/v1/pictures/${version}`
+  const withToken = await page.request.get(url, { headers: { Authorization: `Bearer ${await accessToken(page)}` } })
+  expect(withToken.status()).toBe(200)
+  const headers = withToken.headers()
+  expect(headers['content-type']).toBe('image/png')
+  expect(headers['x-content-type-options']).toBe('nosniff')
+  expect(headers['cache-control']).toContain('no-store')
+  expect((await page.request.get(url)).status()).toBe(401)
+
+  await checkPage(page)
+
+  // D-13: Unter Kontrolle des Service Workers liegt das Bild nur in wq-api, das Abmelden leert.
+  if (!(await page.evaluate(() => navigator.serviceWorker.controller !== null))) await page.reload()
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
+  await page.reload()
+  await expect(image).toBeVisible()
+  const cachedIn = () =>
+    page.evaluate(async (path) => {
+      const names: string[] = []
+      for (const name of await caches.keys()) {
+        const keys = await (await caches.open(name)).keys()
+        if (keys.some((request) => new URL(request.url).pathname === path)) names.push(name)
+      }
+      return names
+    }, url)
+  await expect.poll(cachedIn).toEqual(['wq-api'])
 })
 
 // D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.

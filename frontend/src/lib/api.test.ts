@@ -191,6 +191,42 @@ describe('Token-Refresh', () => {
     expect(await api('/probe')).toEqual({ ok: true })
     expect(tokenStore.refresh).toBe('neu-refresh')
   })
+
+  // D-12: Bilder laufen ueber denselben Weg, Bearer und Refresh inklusive.
+  it('blob: true sendet Bearer und liefert die Bytes als Blob', async () => {
+    signIn()
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(bytes, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const blob = await api<Blob>('/x', { blob: true })
+
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization).toBe('Bearer alt-access')
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes)
+  })
+
+  it('blob: true nach 401 und erfolgreichem Refresh: zweite Anfrage liefert das Blob', async () => {
+    signIn()
+    const bytes = new Uint8Array([1, 2, 3])
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        return Response.json({
+          accessToken: 'neu-access',
+          refreshToken: 'neu-refresh',
+          expiresInSeconds: 900,
+          user: { id: 'u1', displayName: 'Kind', role: 'Learner', tenantId: 't1' },
+        })
+      }
+      const auth = (init?.headers as Record<string, string>).Authorization
+      return auth === 'Bearer neu-access' ? new Response(bytes) : new Response(expired, { status: 401 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const blob = await api<Blob>('/x', { blob: true })
+
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes)
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/v1/x')).toHaveLength(2)
+  })
 })
 
 // D-06: Ein Refresh-Fehler leert nur den eigenen Token, nicht den eines anderen Tabs.

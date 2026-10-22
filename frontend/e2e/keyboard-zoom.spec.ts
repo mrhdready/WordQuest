@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { guardianStorageState } from './global-setup'
+import { canvasPicture, entryIdOf, putPicture } from './pictures'
 
 // Ersetzt den manuellen Tastatur-Durchgang bei 200 % Zoom (UI-Review Top 2):
 // 640 x 400 CSS-px entsprechen 1280 x 800 bei 200 %. Je Seite kein waagerechter
@@ -102,6 +103,27 @@ test.describe('Elternbereich', () => {
     await page.getByLabel('Aktuelles Passwort').press('Enter')
     await expect(page.getByText('Bitte gib dein aktuelles Passwort ein.')).toBeVisible()
     await expect(page.getByLabel('Aktuelles Passwort')).toBeFocused()
+  })
+
+  // IMG-01: Set-Seite mit Vorschaubild (eigenes Set "Zz E2E" am Ende der sortierten Liste).
+  test('/verwalten/sets/:id mit Vorschaubild', async ({ page }) => {
+    const title = `Zz E2E Zoom Bild ${Date.now()}`
+    await page.goto('/verwalten?neu=1')
+    await page.getByLabel('Titel').fill(title)
+    await page.getByRole('button', { name: 'Anlegen' }).click()
+    await page.getByRole('link').filter({ hasText: title }).click()
+    await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+    await page.getByLabel('Deutsch', { exact: true }).fill('Hund')
+    await page.getByLabel('Englisch', { exact: true }).fill('dog')
+    await page.getByRole('button', { name: 'Hinzufügen' }).click()
+    await expect(page.getByText('Hund → dog')).toBeVisible()
+    const setId = page.url().split('/').pop() ?? ''
+    const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
+    await putPicture(page, setId, await entryIdOf(page, setId, 'Hund'), png, 'image/png')
+
+    await page.reload()
+    await expect(page.getByTestId('vokabelbild').locator('img')).toBeVisible()
+    await expectKeyboardAtZoom(page, '/verwalten/sets/:id (Vorschaubild)')
   })
 
   test('/verwalten/kinder', async ({ page }) => {

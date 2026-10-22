@@ -1193,3 +1193,65 @@ describe('CSV-Import: Datei wählen', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 })
+
+// D-03, D-16: Vorschaubild statt Emoji; scheitert Abruf oder Dekodieren, steht das Emoji im Rahmen.
+describe('Vorschaubild', () => {
+  const hund = { ...vocab('e-1', 'Hund', 'dog'), emoji: '🐶', pictureVersion: 'pv-1' }
+  const katzeMitEmoji = { ...vocab('e-2', 'Katze', 'cat'), emoji: '🐱', pictureVersion: null }
+
+  function stubPictures(picture: () => Promise<Response>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/entries')) return Response.json([hund, katzeMitEmoji])
+        if (url.includes('/pictures/')) return picture()
+        return Response.json([unit])
+      }),
+    )
+  }
+  const png = async () =>
+    new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/png' } })
+
+  async function hundRow() {
+    const text = await screen.findByText('Hund → dog')
+    const row = text.parentElement as HTMLElement
+    return { text, row, frame: within(row).getByTestId('vokabelbild') }
+  }
+
+  it('Zeile mit Bild: img mit leerem alt vor dem Text, kein Emoji', async () => {
+    stubPictures(png)
+    renderPage()
+    const { text, row, frame } = await hundRow()
+    await waitFor(() => expect(frame.querySelector('img')).not.toBeNull())
+    const image = frame.querySelector('img') as HTMLImageElement
+    expect(image.getAttribute('alt')).toBe('')
+    expect(image.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(row.textContent).not.toContain('🐶')
+  })
+
+  it('Zeile ohne Bild mit Emoji: Emoji wie bisher', async () => {
+    stubPictures(png)
+    renderPage()
+    const row = (await screen.findByText('Katze → cat')).parentElement as HTMLElement
+    expect(within(row).queryByTestId('vokabelbild')).toBeNull()
+    expect(row.textContent).toContain('🐱')
+  })
+
+  it('Bildabruf 500: Emoji als Rückfall im Rahmen', async () => {
+    stubPictures(async () => new Response('', { status: 500 }))
+    renderPage()
+    const { frame } = await hundRow()
+    await waitFor(() => expect(frame.textContent).toBe('🐶'))
+    expect(frame.querySelector('img')).toBeNull()
+  })
+
+  it('Dekodierfehler am img: Emoji im Rahmen', async () => {
+    stubPictures(png)
+    renderPage()
+    const { frame } = await hundRow()
+    await waitFor(() => expect(frame.querySelector('img')).not.toBeNull())
+    fireEvent.error(frame.querySelector('img') as HTMLImageElement)
+    expect(frame.querySelector('img')).toBeNull()
+    expect(frame.textContent).toBe('🐶')
+  })
+})
