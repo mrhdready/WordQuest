@@ -677,6 +677,7 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
   // Meldung zur gewaehlten Datei; eine neue Eingabe nimmt sie weg.
   const [fileNote, setFileNote] = useState<{ ok: boolean; message: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [reading, setReading] = useState(false)
 
   const runPreview = useMutation({
     mutationFn: () =>
@@ -700,7 +701,9 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
       }),
     onSuccess: onDone,
   })
-  const busy = runPreview.isPending || confirm.isPending
+  // Auch waehrend die Datei gelesen wird: sonst liefe eine Vorschau des alten Textes, und
+  // „Übernehmen“ naehme danach deren Zeilen statt der aus der Datei.
+  const busy = reading || runPreview.isPending || confirm.isPending
 
   function changeContent(text: string) {
     setContent(text)
@@ -717,16 +720,22 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
     // Leeren, damit dieselbe Datei nach einer Korrektur erneut ein change ausloest.
     event.target.value = ''
     if (!file) return
+    // Die Meldung gehoert zur letzten Aktion: alte Fehler aus Vorschau und Import gehen weg.
+    runPreview.reset()
+    confirm.reset()
     if (file.size > MAX_FILE_BYTES) {
       setFileNote({ ok: false, message: FILE_TOO_BIG })
       return
     }
     let text: string
+    setReading(true)
     try {
       text = decodeCsv(await file.arrayBuffer())
     } catch {
       setFileNote({ ok: false, message: FILE_UNREADABLE })
       return
+    } finally {
+      setReading(false)
     }
     changeContent(text)
     // Leere Datei: wie ein leeres Feld, ohne Erfolgsmeldung.
@@ -820,13 +829,13 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
       <div className="flex flex-wrap gap-2">
         <Button
           variant="secondary"
-          disabled={content.trim().length === 0 || runPreview.isPending}
+          disabled={content.trim().length === 0 || busy}
           onClick={() => runPreview.mutate()}
         >
           {runPreview.isPending ? 'Einen Moment …' : 'Vorschau'}
         </Button>
         <Button
-          disabled={!preview || preview.validCount === 0 || confirm.isPending}
+          disabled={!preview || preview.validCount === 0 || busy}
           onClick={() => confirm.mutate()}
         >
           {confirm.isPending
