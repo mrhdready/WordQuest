@@ -69,7 +69,8 @@ public sealed record VocabularyEntryDto(
     string? Emoji,
     string? ExampleSource,
     string? ExampleTarget,
-    int Position);
+    int Position,
+    Guid? PictureVersion);
 
 public sealed record CreateEntryRequest(
     string SourceText,

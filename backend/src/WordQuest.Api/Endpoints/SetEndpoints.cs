@@ -150,11 +150,14 @@ public static class SetEndpoints
         List<VocabularyEntryDto> entries = await db.VocabularyEntries
             .Where(e => e.SetId == setId)
             .OrderBy(e => e.Position)
+            // Nur die Bildversion, nie die Bytes: der Browser holt das Bild ueber
+            // GET /pictures/{version} (D-09). Ohne Navigation per Unterabfrage.
             .Select(e => new VocabularyEntryDto(
                 e.Id, e.SourceText, e.TargetText,
                 e.TargetAlternatives, e.SourceAlternatives,
                 e.PartOfSpeech.ToString(), e.Emoji,
-                e.ExampleSource, e.ExampleTarget, e.Position))
+                e.ExampleSource, e.ExampleTarget, e.Position,
+                db.VocabularyPictures.Where(p => p.Id == e.Id).Select(p => (Guid?)p.Version).FirstOrDefault()))
             .ToListAsync(ct);
 
         return Results.Ok(entries);
@@ -192,7 +195,7 @@ public static class SetEndpoints
         db.Cards.AddRange(entry.CreateDefaultCards());
         await db.SaveChangesAsync(ct);
 
-        return Results.Created($"/api/v1/sets/{setId}/entries/{entry.Id}", ToDto(entry));
+        return Results.Created($"/api/v1/sets/{setId}/entries/{entry.Id}", ToDto(entry, pictureVersion: null));
     }
 
     /// <summary>
@@ -219,7 +222,13 @@ public static class SetEndpoints
         entry.SourceText = request.SourceText!.Trim();
         entry.TargetText = request.TargetText!.Trim();
         await db.SaveChangesAsync(ct);
-        return Results.Ok(ToDto(entry));
+
+        // Die Antwort ersetzt die Zeile im Frontend; ohne Version verschwaende das Bild (Recherche Pitfall 3).
+        Guid? pictureVersion = await db.VocabularyPictures
+            .Where(p => p.Id == entry.Id)
+            .Select(p => (Guid?)p.Version)
+            .FirstOrDefaultAsync(ct);
+        return Results.Ok(ToDto(entry, pictureVersion));
     }
 
     // Nach der Leerpruefung bleibt nur die Laenge; laenger endete sonst als Datenbankfehler (500).
@@ -375,7 +384,7 @@ public static class SetEndpoints
             Position = position,
         };
 
-    private static VocabularyEntryDto ToDto(VocabularyEntry e) =>
+    private static VocabularyEntryDto ToDto(VocabularyEntry e, Guid? pictureVersion) =>
         new(e.Id, e.SourceText, e.TargetText, e.TargetAlternatives, e.SourceAlternatives,
-            e.PartOfSpeech.ToString(), e.Emoji, e.ExampleSource, e.ExampleTarget, e.Position);
+            e.PartOfSpeech.ToString(), e.Emoji, e.ExampleSource, e.ExampleTarget, e.Position, pictureVersion);
 }

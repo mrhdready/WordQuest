@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { checkPage, expectDialogContrast, expectNoAxeViolations } from './axe'
 import { guardianStorageState } from './global-setup'
+import { canvasPicture, entryIdOf, putPicture } from './pictures'
 
 test.use({ storageState: guardianStorageState })
 
@@ -392,6 +393,24 @@ test('Vokabel löschen', async ({ page }) => {
   await expect(page.getByText('Hund → dog')).toBeVisible()
   await expect(page.getByRole('status').filter({ hasText: '„Katze“ ist gelöscht.' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: title })).toBeFocused()
+})
+
+// IMG-01, D-03, D-12: Bild per PUT, nach dem Neuladen steht es als data-URL in der Zeile.
+test('Vorschaubild in der Vokabelliste', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Vorschaubild ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+  const entryId = await entryIdOf(page, setId, 'Hund')
+  const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
+  await putPicture(page, setId, entryId, png, 'image/png')
+
+  await page.reload()
+  const row = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..')
+  const image = row.getByTestId('vokabelbild').locator('img')
+  await expect(image).toBeVisible()
+  await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/)
+  await expect(image).toHaveAttribute('alt', '')
+  expect(await image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
 })
 
 // D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.

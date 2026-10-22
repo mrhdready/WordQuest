@@ -11,6 +11,7 @@ import { ListGroup, ListRow } from '@/components/ui/list'
 import { Badge, EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api, ApiError } from '@/lib/api'
 import { useGone } from '@/lib/gone'
+import { VocabPicture } from '@/lib/picture'
 import type { ImportPreview, VocabularyEntry, VocabularySet } from '@/types'
 
 // Spiegelt ContentRules.MaxTextLength (Titel und Woerter); massgeblich bleibt der Server.
@@ -201,7 +202,21 @@ export function SetDetailPage() {
         <ListGroup>
           {entries.data.map((entry) => (
             <ListRow key={entry.id} className="py-2">
-              {entry.emoji ? (
+              {/* Das Vorschaubild ist dekorativ: die Zeile nennt beide Woerter (alt leer). */}
+              {entry.pictureVersion ? (
+                <VocabPicture
+                  version={entry.pictureVersion}
+                  alt=""
+                  variant="thumb"
+                  fallback={
+                    entry.emoji ? (
+                      <span className="type-title" aria-hidden>
+                        {entry.emoji}
+                      </span>
+                    ) : null
+                  }
+                />
+              ) : entry.emoji ? (
                 <span className="type-title" aria-hidden>
                   {entry.emoji}
                 </span>

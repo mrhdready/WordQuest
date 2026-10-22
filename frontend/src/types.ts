@@ -68,6 +68,8 @@ export interface VocabularyEntry {
   exampleSource: string | null
   exampleTarget: string | null
   position: number
+  // Version des eigenen Bildes (Teil der Bild-URL), null ohne Bild.
+  pictureVersion: string | null
 }
 
 export interface SessionItem {

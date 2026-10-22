@@ -207,6 +207,8 @@ interface RequestOptions {
   method?: string
   body?: unknown
   retryOn401?: boolean
+  // Antwort als Blob statt JSON (Vokabelbilder).
+  blob?: boolean
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -240,6 +242,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
 
   if (response.status === 204) return undefined as T
+  if (options.blob) return (await response.blob()) as T
   return (await response.json()) as T
 }
 

@@ -202,6 +202,12 @@ components:
     padding: "{spacing.md}"
   list-separator:
     backgroundColor: "{colors.separator}"
+  vocab-thumb:
+    rounded: "{rounded.full}"
+    size: 48px
+  vocab-picture:
+    rounded: "{rounded.sm}"
+    size: 160px
   input:
     backgroundColor: "{colors.glass}"
     textColor: "{colors.ink}"
@@ -310,6 +316,7 @@ Durchgehend weich: Bedienelemente als Kapsel oder Kreis (`full`), Karten `lg` (3
 - **PIN-Tastatur:** 3×4-Raster aus `keypad-key`, Löschen ohne Glas.
 - **Quiz:** Fortschritt als Glas-Kapsel neben dem Schließen-Button, Wort auf `card-quiz`, Antwortfeld als Kapsel mit rundem Senden-Button. Rückmeldung (richtig, Tippfehler, „Fast!“) als `sheet` von unten.
 - **Listen:** gruppiert in `list-group`, Trennlinien `list-separator`, Zeilen `list-row`.
+- **Vokabelbild:** fester Rahmen, damit beim Laden nichts springt: in der Vokabelliste rund als `vocab-thumb` (48 px, Bild füllt den Kreis), groß als `vocab-picture` (160 px, Bild vollständig sichtbar). Kann der Browser das Bild nicht laden oder dekodieren, steht das Emoji im selben Rahmen.
 - **Formulare:** Felder gruppiert in einer Glasfläche, Beschriftung über dem Feld (`input-label`), sichtbar, nie nur Platzhalter. Jedes Feld hat eine 1-px-Grenze in `border-control` (WCAG 1.4.11), damit die Feldgrenze unabhängig vom durchscheinenden Hintergrund erkennbar bleibt.
 - **Hinweise:** `note-error` (`role="alert"`) und `note-success` (`role="status"`) auf deckender Fläche, unter dem auslösenden Element.
 - **Eltern-Navigation:** `tab-bar` unten mit Vokabeln, Fortschritt, Kinder und Konto, aktiver Tab `tab-active`; bei 320 px bricht sie neben dem „+“ in zwei Zeilen um.
