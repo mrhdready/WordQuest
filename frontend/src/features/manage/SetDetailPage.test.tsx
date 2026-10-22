@@ -1133,6 +1133,38 @@ describe('CSV-Import: Datei wählen', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('Datei wird gelesen: Textfeld, „Vorschau“ und „Datei wählen“ gesperrt', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    await userEvent.click(textarea)
+    await userEvent.paste('Hund;dog')
+    let release: (bytes: ArrayBuffer) => void = () => {}
+    const file = csvFile(loeweUtf8)
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: () => new Promise<ArrayBuffer>((resolve) => (release = resolve)),
+    })
+    await userEvent.upload(input, file)
+    // Sonst liefe eine Vorschau des alten Textes, deren Zeilen nach dem Lesen uebernommen wuerden.
+    expect((screen.getByRole('button', { name: 'Vorschau' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Datei wählen' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(textarea.readOnly).toBe(true)
+    release(new Uint8Array(loeweUtf8).buffer)
+    await waitFor(() => expect(textarea.value).toBe('Löwe;lion'))
+    expect((screen.getByRole('button', { name: 'Vorschau' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(textarea.readOnly).toBe(false)
+  })
+
+  it('Dateifehler nach einem Vorschau-Fehler: nur die neue Meldung steht da', async () => {
+    stubImport([hundRow], { preview: async () => new Response('', { status: 500 }) })
+    const { input, textarea } = await openImportFile()
+    await userEvent.click(textarea)
+    await userEvent.paste('Hund;dog')
+    await userEvent.click(screen.getByRole('button', { name: 'Vorschau' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(generic)
+    await userEvent.upload(input, csvFile(new Uint8Array(1024 * 1024 + 1), 'gross.csv'))
+    await waitFor(() => expect(screen.getAllByRole('alert').map((alert) => alert.textContent)).toEqual([fileTooBig]))
+  })
+
   it('Text geändert: die Dateimeldung verschwindet', async () => {
     stubImport([hundRow])
     const { input, textarea } = await openImportFile()
