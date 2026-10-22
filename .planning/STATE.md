@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: "03.1"
-current_phase_name: Release Hardening
+current_phase: "03.1.1"
+current_phase_name: Vocabulary Pictures
 status: executing
-stopped_at: Completed 03.1-07-PLAN.md
-last_updated: "2026-10-22T21:15:00.000Z"
+stopped_at: Completed 03.1.1-01-PLAN.md
+last_updated: "2026-10-22T21:31:56.510Z"
 last_activity: 2026-10-22
-last_activity_desc: Quick 261022-d7w (Start ohne DataProtection-warn:, Distraktoren aus dem ganzen Set, EF 10102); Gate, e2e/axe, Install-Smoke gruen; Tag-Kandidat fe24d8b enthaelt p4z, v4n, fke, cb3, q7a und d7w nicht
-state_head: fe24d8bdba5ba73c7217ebe4a2cb3b33ef1afb7c
+last_activity_desc: "03.1.1-01 ausgefuehrt (Bild je Vokabel auf dem Server: vocabulary_picture, PUT/GET, Struktur nach D-16, 409); Backend 166 + 299, vitest 267, e2e 56 passed/1 skipped"
+state_head: 396217ded4685a2c18d5ba92df1c734874490247
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 0
-  total_plans: 27
-  completed_plans: 27
+  total_plans: 32
+  completed_plans: 28
 ---
 
 # Project State
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-24)
 
 **Core value:** Parents without special know-how can set up WordQuest in their home network and their children can learn with it safely and reliably.
-**Current focus:** Phase 03.1 — Release Hardening
+**Current focus:** Phase 03.1.1 — Vocabulary Pictures
 
 ## Current Position
 
-Phase: 03.1 (Release Hardening) — EXECUTING
-Plan: 7 of 7 ausgefuehrt (Phase 03.1 automatisch abgeschlossen, manuelle Abnahme offen)
-Status: 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). 03.1-03 fertig (Set-Wahl begrenzt die ganze Runde bei kontoweiter Rueckstandsbremse, offene Runden der letzten 30 Minuten reservieren neue Karten, LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs ohne Migration; HARD-02 komplett; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, LOW 1 behoben). 03.1-04 fertig (Sicherheits-Header aus nginx-security-headers.conf an jeder nginx-Antwort beider Varianten, auch an 404; CSV-Kopfzeile nur bei eindeutiger Zeile; Ladefehler der Set-Liste als ErrorNote mit axe 0; HARD-04 komplett; Plan-Gate gruen, e2e 55 passed, Review ohne BLOCKER/HIGH/MEDIUM, LOW-1/LOW-2 behoben). 03.1-05 fertig (Release-Paket per .github/release-package.sh mit fester Dateiliste und SHA256, CI-Job release nur bei Tags v* mit contents: write, Installation ohne Git per curl | tar xz im Release-Smoke belegt, first-run.spec.ts bis zur Zusammenfassung; HARD-05 erst nach 03.1-06/07; Plan-Gate gruen, Review ohne HIGH, R-03/R-04 behoben, R-01 zurueckgewiesen bis 03.1-06). 03.1-06 fertig (upgrade.sh laedt das neueste Release-Paket, prueft SHA256 sowie Namen und Typen vor dem Entpacken, sichert, ersetzt die sieben Dateien und startet per exec --continue neu; Release-Smoke mit echtem Pull aus registry:2 auf 127.0.0.1:18084, acht Paketfaellen und Klon-Weg; Doku ohne git pull; HARD-05 komplett; Plan-Gate gruen, Review ohne HIGH, R-03/R-05/R-06/R-08/R-09 behoben, R-01/R-02/R-04 zurueckgewiesen; Restore-Rot aus 03.1-05 nicht reproduzierbar, Diagnose eingebaut). 03.1-07 fertig (Dump-Pruefung in restore.sh/upgrade.sh: Endzeile als ganze Zeile unter den letzten 20 Zeilen per grep -c, SIGPIPE-Regression im Smoke gefunden und behoben; Kommentare ohne Repo-Klon; Prod-Stack aus dem Wegwerf-Klon auf fe24d8b mit smoke=0 post=1; volles Gate gruen: Backend 144 + 272, vitest 250, e2e 55 passed/1 skipped, SMOKE OK, PROXY-XFF OK; Befund-Nachweis 11/11 in 03.1-VALIDATION.md; zwei Reviews ohne BLOCKER/HIGH/MEDIUM). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird vom Orchestrator auf den End-Commit fe24d8b versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
-Last activity: 2026-10-20 — 03.1-07 ausgefuehrt (10 Commits, Prod-Stack und volles Gate auf fe24d8b gruen, Befund-Nachweis 11/11)
+Phase: 03.1.1 (Vocabulary Pictures) — EXECUTING
+Plan: 1 of 5 ausgefuehrt (Phase 03.1 davor automatisch abgeschlossen, manuelle Abnahme offen)
+Status: 03.1.1-01 fertig (Tabelle vocabulary_picture per dotnet ef ohne Navigation, Mandantenfilter, Kaskade; PUT /sets/{id}/entries/{entryId}/picture roher Body bis 300 KB, Signatur und Struktur WebP/JPEG/PNG nach D-16, 400/413/404/409; GET /pictures/{version} mit no-store; Konzept §5.2/§12/§13/§15; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, 3 LOW begruendet zurueckgewiesen; IMG-01 offen bis 03.1.1-05). 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). 03.1-03 fertig (Set-Wahl begrenzt die ganze Runde bei kontoweiter Rueckstandsbremse, offene Runden der letzten 30 Minuten reservieren neue Karten, LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs ohne Migration; HARD-02 komplett; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, LOW 1 behoben). 03.1-04 fertig (Sicherheits-Header aus nginx-security-headers.conf an jeder nginx-Antwort beider Varianten, auch an 404; CSV-Kopfzeile nur bei eindeutiger Zeile; Ladefehler der Set-Liste als ErrorNote mit axe 0; HARD-04 komplett; Plan-Gate gruen, e2e 55 passed, Review ohne BLOCKER/HIGH/MEDIUM, LOW-1/LOW-2 behoben). 03.1-05 fertig (Release-Paket per .github/release-package.sh mit fester Dateiliste und SHA256, CI-Job release nur bei Tags v* mit contents: write, Installation ohne Git per curl | tar xz im Release-Smoke belegt, first-run.spec.ts bis zur Zusammenfassung; HARD-05 erst nach 03.1-06/07; Plan-Gate gruen, Review ohne HIGH, R-03/R-04 behoben, R-01 zurueckgewiesen bis 03.1-06). 03.1-06 fertig (upgrade.sh laedt das neueste Release-Paket, prueft SHA256 sowie Namen und Typen vor dem Entpacken, sichert, ersetzt die sieben Dateien und startet per exec --continue neu; Release-Smoke mit echtem Pull aus registry:2 auf 127.0.0.1:18084, acht Paketfaellen und Klon-Weg; Doku ohne git pull; HARD-05 komplett; Plan-Gate gruen, Review ohne HIGH, R-03/R-05/R-06/R-08/R-09 behoben, R-01/R-02/R-04 zurueckgewiesen; Restore-Rot aus 03.1-05 nicht reproduzierbar, Diagnose eingebaut). 03.1-07 fertig (Dump-Pruefung in restore.sh/upgrade.sh: Endzeile als ganze Zeile unter den letzten 20 Zeilen per grep -c, SIGPIPE-Regression im Smoke gefunden und behoben; Kommentare ohne Repo-Klon; Prod-Stack aus dem Wegwerf-Klon auf fe24d8b mit smoke=0 post=1; volles Gate gruen: Backend 144 + 272, vitest 250, e2e 55 passed/1 skipped, SMOKE OK, PROXY-XFF OK; Befund-Nachweis 11/11 in 03.1-VALIDATION.md; zwei Reviews ohne BLOCKER/HIGH/MEDIUM). Unveraendert offen: lokales Tag v1.0.0 (nicht gepusht) wird vom Orchestrator auf den End-Commit fe24d8b versetzt; vor dem Push master auf v1-fertig bringen; manuelle Abnahme Phase 1 (01-UAT.md) und Phase 2 (02-UAT.md) offen; Nach-Release-Abnahme Phase 3 offen (03-UAT.md, 03-VALIDATION.md)
+Last activity: 2026-10-22 — 03.1.1-01 ausgefuehrt (3 Commits, Plan-Gate gruen)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -83,6 +83,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03.1 P05 | 36min | 3 tasks | 8 files |
 | Phase 03.1 P06 | 62min | 3 tasks | 5 files |
 | Phase 03.1 P07 | 40min | 3 tasks | 8 files |
+| Phase 03.1.1 P01 | 15min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,7 @@ Recent decisions affecting current work:
 - [Quick 261022-fke]: „Einen Moment …“ waehrend der Kinder-Anmeldung sichtbar; dieselbe Statuszeile, Ziffernanzahl bleibt sr-only, Zeile reserviert (Dennis, 2026-10-22)
 - [Quick 261022-cb3]: CSV-Import mit „Datei wählen“ (.csv/.txt, hoechstens 1 MB), gelesen im Browser, strikt UTF-8 sonst windows-1252; API unveraendert (Dennis, 2026-10-22)
 - [Quick 261022-q7a]: „?“ am Antwortende zaehlt wie „.“ und „!“ nicht (beide Seiten); CSV-Datei mit UTF-16-BOM wird als UTF-16 gelesen; erster Start legt die Migrationshistorie vor OrphanCleanup/MigrateAsync an, damit keine erwartbaren fail:-Zeilen erscheinen (Dennis, 2026-10-22)
+- [Phase 03.1.1]: 03.1.1-01: Gleichzeitige Ersetzung bleibt last-writer-wins; 409 nur beim gleichzeitigen ersten Upload; Concurrency beim Ersetzen ergibt 409 wie geplant
 
 ### Pending Todos
 
@@ -204,6 +206,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-22T21:15:00.000Z
-Stopped at: Completed quick 261022-d7w
+Last session: 2026-10-22T21:31:56.445Z
+Stopped at: Completed 03.1.1-01-PLAN.md
 Resume file: None
