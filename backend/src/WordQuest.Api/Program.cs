@@ -84,6 +84,7 @@ builder.Services.AddSingleton(sp => new SessionComposer(sp.GetRequiredService<Sc
 builder.Services.AddSingleton(sp => new AnswerEvaluator(sp.GetRequiredService<SchedulerOptions>()));
 
 builder.Services.AddScoped<LearningService>();
+builder.Services.AddScoped<PictureService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddSingleton<JwtTokenService>();
@@ -233,6 +234,7 @@ app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapLearnerEndpoints();
 app.MapSetEndpoints();
+app.MapPictureEndpoints();
 app.MapSessionEndpoints();
 
 // --- Start ------------------------------------------------------------------

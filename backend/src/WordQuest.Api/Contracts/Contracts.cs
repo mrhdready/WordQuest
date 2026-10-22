@@ -83,6 +83,9 @@ public sealed record CreateEntryRequest(
 
 public sealed record UpdateEntryRequest(string? SourceText, string? TargetText);
 
+/// <summary>Antwort auf das Speichern eines Bildes; die Version steht in der Bild-URL.</summary>
+public sealed record PictureDto(Guid PictureVersion);
+
 public sealed record ImportRowDto(int LineNumber, string Source, string Target, string? Emoji, string? Problem);
 
 public sealed record ImportPreviewRequest(string Content);

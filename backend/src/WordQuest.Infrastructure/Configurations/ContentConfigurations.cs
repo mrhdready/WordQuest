@@ -68,3 +68,21 @@ public sealed class CardConfiguration : IEntityTypeConfiguration<Card>
         builder.HasIndex(c => new { c.EntryId, c.Direction }).IsUnique();
     }
 }
+
+public sealed class VocabularyPictureConfiguration : IEntityTypeConfiguration<VocabularyPicture>
+{
+    public void Configure(EntityTypeBuilder<VocabularyPicture> builder)
+    {
+        builder.ToTable("vocabulary_picture");
+        builder.HasKey(p => p.Id);
+
+        // Der GET sucht nach der Version (D-09).
+        builder.HasIndex(p => p.Version).IsUnique();
+        builder.Property(p => p.Data).IsRequired();
+
+        // 1:1 ohne Navigation (Muster gamification_profile): Das Bild geht mit
+        // der Vokabel, und keine Abfrage kann die Bytes per Include mitladen.
+        builder.HasOne<VocabularyEntry>().WithOne().HasForeignKey<VocabularyPicture>(p => p.Id)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}

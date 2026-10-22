@@ -133,6 +133,35 @@ namespace WordQuest.Infrastructure.Migrations
                     b.ToTable("vocabulary_entry", (string)null);
                 });
 
+            modelBuilder.Entity("WordQuest.Modules.Content.Entities.VocabularyPicture", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("data");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("Version")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_vocabulary_picture");
+
+                    b.HasIndex("Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_vocabulary_picture_version");
+
+                    b.ToTable("vocabulary_picture", (string)null);
+                });
+
             modelBuilder.Entity("WordQuest.Modules.Content.Entities.VocabularySet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -592,6 +621,7 @@ namespace WordQuest.Infrastructure.Migrations
                         .HasColumnName("last_grade");
 
                     b.Property<DateTimeOffset?>("LastReviewedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_reviewed_at");
 
@@ -713,6 +743,16 @@ namespace WordQuest.Infrastructure.Migrations
                         .HasConstraintName("fk_vocabulary_entry_vocabulary_set_set_id");
 
                     b.Navigation("Set");
+                });
+
+            modelBuilder.Entity("WordQuest.Modules.Content.Entities.VocabularyPicture", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Content.Entities.VocabularyEntry", null)
+                        .WithOne()
+                        .HasForeignKey("WordQuest.Modules.Content.Entities.VocabularyPicture", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_vocabulary_picture_vocabulary_entry_id");
                 });
 
             modelBuilder.Entity("WordQuest.Modules.Gamification.Entities.GamificationProfile", b =>

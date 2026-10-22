@@ -268,7 +268,7 @@ public static class SetEndpoints
     }
 
     // Mit Text: die Set-Seite zeigt ihn im Dialog, wenn die Vokabel in einem anderen Tab schon geloescht wurde.
-    private static IResult EntryNotFound() =>
+    internal static IResult EntryNotFound() =>
         Results.Problem(
             title: "Nicht gefunden",
             detail: "Diese Vokabel gibt es nicht (mehr).",
