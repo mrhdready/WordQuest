@@ -153,7 +153,7 @@ Später kommt als dritte Kartenart `AUDIO→DE` dazu (Hören und verstehen), ohn
 
 ### 5.2 Kerntabellen (PostgreSQL, Auszug)
 
-Auszug aus der Migration `20260917045557_Initial`. Aufzählungen (Richtung, Zustand, Bewertung, Wortart) werden als Text gespeichert. `tenant_id` hat keinen Fremdschlüssel auf `tenant`; die Trennung erfolgt über den Query-Filter.
+Auszug aus der Migration `20260917045557_Initial`, ergänzt um `vocabulary_picture` aus `VocabularyPictures`. Aufzählungen (Richtung, Zustand, Bewertung, Wortart) werden als Text gespeichert. `tenant_id` hat keinen Fremdschlüssel auf `tenant`; die Trennung erfolgt über den Query-Filter.
 
 ```sql
 CREATE TABLE vocabulary_entry (
@@ -172,6 +172,14 @@ CREATE TABLE vocabulary_entry (
   position            int NOT NULL,
   created_at          timestamptz NOT NULL
 );
+
+CREATE TABLE vocabulary_picture (  -- höchstens ein Bild je Vokabel (IMG-01)
+  id         uuid PRIMARY KEY REFERENCES vocabulary_entry(id) ON DELETE CASCADE,
+  tenant_id  uuid NOT NULL,
+  version    uuid NOT NULL,                    -- neu bei jedem Speichern, steht in der Bild-URL
+  data       bytea NOT NULL                    -- WebP, JPEG oder PNG, höchstens 300 KB
+);
+CREATE UNIQUE INDEX ix_vocabulary_picture_version ON vocabulary_picture (version);
 
 CREATE TABLE card (
   id         uuid PRIMARY KEY,
@@ -213,6 +221,8 @@ CREATE TABLE review_log (          -- append-only, Basis aller Statistiken
   reviewed_at             timestamptz NOT NULL
 );
 ```
+
+Bilder liegen in der Datenbank und nicht im Dateisystem: Sicherung, Wiederherstellung und Update nehmen sie ohne zusätzliches Volume mit. Die Entität `VocabularyPicture` hat keine Navigation an `VocabularyEntry`, damit keine Abfrage die Bytes in Listen oder Runden mitlädt.
 
 `review_log` ist bewusst append-only und wird nie aktualisiert. Alle Auswertungen (Ampel, Wochenreport, Problemwörter) sollen sich daraus ableiten lassen. Das erlaubt, den Lernalgorithmus später zu wechseln und den Fortschritt aus dem Log **neu zu berechnen**, statt ihn zu verlieren. (Die heutige Ampel in §9 liest `review_state`, nicht `review_log`.)
 
@@ -598,6 +608,8 @@ GET    /sets/{id}/entries
 POST   /sets/{id}/entries               sourceText, targetText (je Pflicht, höchstens 200 Zeichen); emoji höchstens 16, exampleSource/exampleTarget höchstens 500 Zeichen; 404 für fremde oder unbekannte Sets
 PUT    /sets/{id}/entries/{entryId}     korrigiert Deutsch und Englisch, IDs und Lernstand bleiben; je Wort Pflicht, höchstens 200 Zeichen; 404 für fremde oder unbekannte Vokabeln
 DELETE /sets/{id}/entries/{entryId}     löscht den Lernstand aller Kinder zu dieser Vokabel; 404 für fremde oder unbekannte Vokabeln
+PUT    /sets/{id}/entries/{entryId}/picture   roher Body (kein Formular), nur Elternkonten; Signatur und Struktur WebP/JPEG/PNG, sonst 400; leer 400; über 300 KB 413; fremde oder unbekannte Vokabel 404; gleichzeitiger erster Upload 409; ersetzt ein vorhandenes Bild → { pictureVersion }
+GET    /pictures/{version}              jede Rolle der Familie; Content-Type aus den Bytes, Cache-Control: no-store; 404 für fremde oder ersetzte Versionen
 POST   /sets/import/preview             CSV-Text als JSON → Vorschau; Zeilen über den Grenzen von /entries (Wort 200, Emoji 16) sind Problemzeilen
 POST   /sets/{id}/import                bestätigte Einträge; Einträge außerhalb der Grenzen von /entries werden übersprungen; 404 für fremde oder unbekannte Sets
 
@@ -620,7 +632,7 @@ Fehlerformat: RFC 9457 (`application/problem+json`). Ein fehlender oder unlesbar
 
 ## 13. PWA und Offline
 
-**Service Worker** (Workbox über `vite-plugin-pwa`): App-Shell und statische Assets werden vorab gecacht; API-Lesezugriffe (`GET /api/…`) `NetworkFirst` mit 5-Sekunden-Timeout; API-Schreibzugriffe werden nicht gecacht. Der Service Worker registriert sich nur über HTTPS (oder `localhost`), im primären HTTP-Heimnetzbetrieb also nicht. Sitzungsende (Abmelden, Refresh 400/401, 409 ohne Nachfolger) und jede neue Anmeldung löschen den Cache `wq-api`, soweit `caches` verfügbar ist (HTTPS oder `localhost`); die Anmeldung löscht, bevor sie speichert (`api.ts`, `HARD-04`). Grenze: Ein GET, der beim Abmelden noch läuft, kann den Cache danach neu anlegen; dieser Eintrag liegt bis zur nächsten Anmeldung im Browser. Ohne Sitzung fragt die App nur die Profilliste (`/auth/profiles`) ab, die Oberfläche zeigt einen solchen Eintrag also nicht.
+**Service Worker** (Workbox über `vite-plugin-pwa`): App-Shell und statische Assets werden vorab gecacht; API-Lesezugriffe (`GET /api/…`) `NetworkFirst` mit 5-Sekunden-Timeout; API-Schreibzugriffe werden nicht gecacht. Der Service Worker registriert sich nur über HTTPS (oder `localhost`), im primären HTTP-Heimnetzbetrieb also nicht. Sitzungsende (Abmelden, Refresh 400/401, 409 ohne Nachfolger) und jede neue Anmeldung löschen den Cache `wq-api`, soweit `caches` verfügbar ist (HTTPS oder `localhost`); die Anmeldung löscht, bevor sie speichert (`api.ts`, `HARD-04`). Grenze: Ein GET, der beim Abmelden noch läuft, kann den Cache danach neu anlegen; dieser Eintrag liegt bis zur nächsten Anmeldung im Browser. Ohne Sitzung fragt die App nur die Profilliste (`/auth/profiles`) ab, die Oberfläche zeigt einen solchen Eintrag also nicht. Bild-Antworten (`GET /pictures/{version}`) fallen unter die API-Lesezugriffe und liegen damit nur in `wq-api`, das beim Abmelden geleert wird.
 
 **Geplant, nicht umgesetzt (v2, `LRN2-02`)** — der Rest dieses Abschnitts beschreibt das Zielbild. Dexie und IndexedDB werden heute nicht verwendet.
 
@@ -663,7 +675,7 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 | Token | Access 15 min, Refresh 30 Tage rotierend, Reuse-Detection; gespeichert wird nur der Hash des Refresh-Tokens. `reset-password` widerruft alle Refresh-Tokens des Kontos, eine neue Kinder-PIN (`PATCH /learners/{id}/settings`) alle Refresh-Tokens des Kindes; bereits ausgegebene Access-Tokens bleiben bis zu ihrem Ablauf gültig (höchstens 15 Minuten, `Auth:AccessTokenMinutes`). Refresh, Abmelden und Widerruf (`reset-password`, neue PIN) laufen je Konto unter einer Zeilensperre auf `app_user` (`TransactionExtensions.LockUserAsync`): Ein laufender Refresh schreibt seinen Nachfolger entweder vor dem Widerruf fest und wird mit widerrufen, oder er sieht danach den widerrufenen Token; der alte Token wird zusätzlich bedingt beansprucht (nur solange `revoked_at` leer ist). Der unmittelbare Vorgänger ergibt bis 10 Sekunden nach seiner Rotation 409 „Die Anmeldung wurde gerade in einem anderen Fenster erneuert.“ ohne neue Tokens, solange sein Nachfolger aktiv ist (zwei Fenster erneuern gleichzeitig); in allen anderen Fällen greift die Reuse-Detection und widerruft alle Refresh-Tokens des Kontos. Restrisiko dieser 10 Sekunden: Hat ein Angreifer einen gestohlenen Token zuerst erneuert und legt das echte Gerät den alten in diesem Fenster vor, bleibt der Diebstahl unerkannt; das Gerät bekommt nur 409, die Kette des Angreifers lebt bis zum nächsten Widerruf (akzeptiert, `HARD-01`). Abmelden liest den Token erst unter der Sperre und widerruft auch einen eben ausgestellten Nachfolger. Jeder Pfad mit dieser Sperre sperrt zuerst `app_user` und schreibt erst danach `refresh_token` bzw. `learner_profile`; die Anmeldungen per Passwort und PIN nehmen die Sperre nicht selbst, warten beim Schreiben aber auf sie (Fremdschlüssel von `refresh_token` und `last_login_at` in `app_user`). Läuft eine Anmeldung dabei in einen Deadlock mit einem PIN-Wechsel, löst PostgreSQL ihn nach `deadlock_timeout` (Standard 1 s) mit 40P01 auf, und die Ausführungsstrategie (`EnableRetryOnFailure`) wiederholt den betroffenen Lauf; das kostet bis etwa eine Sekunde. **Bekannte Lücke:** Eine Anmeldung mit dem alten Passwort bzw. der alten PIN, deren Prüfung schon bestanden ist, wenn `reset-password` oder eine neue PIN läuft, schreibt ihren Refresh-Token erst nach dem Widerruf fest und bleibt angemeldet; dasselbe gilt für die Wiederholung nach einem solchen Deadlock. Das Frontend meldet nur ab, wenn der Refresh mit 400 oder 401 scheitert; bei 429, 5xx oder Netzfehler bleibt die Anmeldung bestehen; die auslösende Aktion zeigt bei 429 und 5xx „Das hat nicht geklappt. Versuche es noch einmal.“, bei einem Netzfehler „Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.“ (`api.ts`, `FIX-01`). Eine Refresh-Antwort übernimmt das Frontend nur, solange im Speicher noch der gesendete Token steht; auch 400/401 meldet nur dann ab, ein inzwischen von einem anderen Fenster gespeicherter Token bleibt. Bei 409 übernimmt das Fenster den Token, den ein anderes Fenster derselben Anmeldung speichert (Abfrage alle 100 ms); kommt binnen 3 Sekunden keiner, meldet es nur sich selbst ab, ohne Widerruf auf dem Server. Eine 401 auf eine Anfrage, deren Access-Token inzwischen ersetzt ist, wiederholt die Anfrage einmal mit dem gespeicherten Token, ohne neuen Refresh. Nach Abmelden oder einer neuen Anmeldung (Kennung `wq.session`, neu bei jeder Anmeldung, gleich bei der Rotation) wird keine Anfrage der alten Anmeldung wiederholt. Grenze: Ein Fenster, das nach einem Update noch den alten Code geladen hat, schreibt und löscht diese Kennung nicht; meldet sich dort ein anderes Profil an, kann ein Fenster mit neuem Code beide Anmeldungen bis zum Neuladen nicht unterscheiden. Die Oberfläche folgt dem Speicher (`useSyncExternalStore` in `auth.tsx`), auch über Fenster hinweg (`storage`-Ereignis). Abmelden leert zuerst lokal und sendet danach den Server-Logout; eine später eintreffende Refresh-Antwort wird verworfen. Grenze: Kommt 409 ohne zweites Fenster (Bestätigung eines erfolgreichen Refresh verloren), meldet sich das Fenster nach 3 Sekunden ab; der Nachfolger bleibt ungenutzt auf dem Server, bis er abläuft (`HARD-01`) |
 | Transport | HSTS außerhalb von Development; TLS nur in der Domain-Variante. Keine Cookies: Tokens liegen im `localStorage` und gehen im `Authorization`-Header (bewusst akzeptiertes Risiko) |
 | Autorisierung | `tenant_id` über einen EF-Core-Global-Query-Filter — nicht pro Query von Hand; zusätzlich darf ein Kind nur für sich selbst lernen (`MayActFor`, Geschwister teilen den Mandanten) |
-| Uploads | Eine gewählte CSV-Datei liest der Browser (höchstens 1 MB); übertragen wird wie beim Einfügen nur Text im JSON-Body, es gibt keinen Datei- oder Bild-Upload. Größenlimit der API: **geplant, nicht umgesetzt** (v2, `OPS2-03`) |
+| Uploads | Eine gewählte CSV-Datei liest der Browser (höchstens 1 MB); übertragen wird wie beim Einfügen nur Text im JSON-Body. Der Bild-Upload (`PUT /sets/{id}/entries/{entryId}/picture`) ist je Endpoint auf 300 KB begrenzt (begrenztes Lesen, nginx mit 1 MB davor) und nimmt nur Dateien mit Signatur und schlüssiger Struktur von WebP, JPEG oder PNG an, kein SVG; der Server dekodiert nicht. Allgemeines Größenlimit der API: **geplant, nicht umgesetzt** (v2, `OPS2-03`) |
 | Headers | CSP, derzeit mit `style-src 'unsafe-inline'`; `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`. Alle mit `always` in `frontend/nginx-security-headers.conf`, eingebunden im server-Block von `frontend/nginx.conf` und in jeder location mit eigenem Cache-Control (`/assets/`, `/sw.js`, `/index.html`); sie gelten damit für jede Antwort, auch HTML, Assets, `sw.js` und Fehlerantworten |
 | Audit | Auditlog für Anmeldungen, Rollenwechsel, Löschungen: **geplant, nicht umgesetzt** |
 
