@@ -1,7 +1,15 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { checkPage, expectDialogContrast, expectNoAxeViolations } from './axe'
 import { guardianStorageState } from './global-setup'
-import { accessToken, canvasPicture, entryIdOf, putPicture } from './pictures'
+import {
+  accessToken,
+  canvasPicture,
+  decodePicture,
+  entryIdOf,
+  putPicture,
+  storedPicture,
+  withExif,
+} from './pictures'
 
 test.use({ storageState: guardianStorageState })
 
@@ -439,6 +447,46 @@ test('Vorschaubild in der Vokabelliste', async ({ page }) => {
       return names
     }, url)
   await expect.poll(cachedIn).toEqual(['wq-api'])
+})
+
+// IMG-01, D-03 bis D-05, T-03.1.1-08: Der Browser dreht nach EXIF, verkleinert und kodiert neu;
+// gespeichert ist ein WebP im Hochformat ohne Kamera-Metadaten.
+test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Liste', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bild wählen ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+
+  // Fixture zuerst pruefen: EXIF ist drin, und der Browser dreht sie ins Hochformat.
+  const photo = withExif(await canvasPicture(page, { type: 'image/jpeg', width: 40, height: 20 }))
+  expect(photo.includes('Exif')).toBe(true)
+  expect(await decodePicture(page, photo)).toMatchObject({ width: 20, height: 40 })
+
+  await page.getByRole('button', { name: 'Hund bearbeiten' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const choose = dialog.getByRole('button', { name: 'Bild wählen' })
+  await choose.focus()
+  const chooser = page.waitForEvent('filechooser')
+  await page.keyboard.press('Enter')
+  await (await chooser).setFiles({ name: 'hund.jpg', mimeType: 'image/jpeg', buffer: photo })
+
+  await expect(dialog.getByRole('status')).toHaveText('Das Bild ist gespeichert.')
+  const preview = dialog.getByRole('img', { name: 'Bild zu „Hund“' })
+  await expect(preview).toBeVisible()
+  expect(await preview.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+  await expect(choose).toBeFocused()
+
+  const stored = await storedPicture(page, setId, 'Hund')
+  expect(stored.subarray(0, 4).toString('latin1')).toBe('RIFF')
+  expect(stored.subarray(8, 15).toString('latin1')).toBe('WEBPVP8')
+  expect(stored.includes('Exif')).toBe(false)
+  expect(await decodePicture(page, stored)).toMatchObject({ width: 20, height: 40 })
+
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  const row = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..')
+  await expect(row.getByTestId('vokabelbild').locator('img')).toBeVisible()
 })
 
 // D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.

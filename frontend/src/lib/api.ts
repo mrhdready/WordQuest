@@ -214,8 +214,10 @@ interface RequestOptions {
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, retryOn401 = true } = options
 
+  // Ein Blob (Vokabelbild) geht roh hinaus; der Server liest den Typ aus den Bytes (D-12).
+  const raw = body instanceof Blob
   const headers: Record<string, string> = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (body !== undefined) headers['Content-Type'] = raw ? body.type : 'application/json'
 
   const access = tokenStore.access
   const session = tokenStore.session
@@ -226,7 +228,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     response = await fetch(`${BASE}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     })
   } catch {
     // fetch wirft nur bei Netzfehlern (auch offline), Status 0 wie bei XHR.

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FileUp, Pencil, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, FileUp, ImagePlus, Pencil, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { ListGroup, ListRow } from '@/components/ui/list'
 import { Badge, EmptyState, ErrorNote, Spinner, SuccessNote } from '@/components/ui/misc'
 import { api, ApiError } from '@/lib/api'
 import { useGone } from '@/lib/gone'
-import { VocabPicture } from '@/lib/picture'
+import { shrinkPicture, VocabPicture } from '@/lib/picture'
 import type { ImportPreview, VocabularyEntry, VocabularySet } from '@/types'
 
 // Spiegelt ContentRules.MaxTextLength (Titel und Woerter); massgeblich bleibt der Server.
@@ -549,7 +549,95 @@ function EditEntry({
           </Button>
         </div>
       </form>
+      <EntryPicture
+        setId={setId}
+        entry={entry}
+        busyRef={busyRef}
+        onGone={(caught) => {
+          if (stale.noteError(caught)) onRowGone()
+        }}
+      />
     </Dialog>
+  )
+}
+
+/*
+  Abschnitt „Bild“ im Dialog „Vokabel bearbeiten“ (D-03, D-05). Ausserhalb des
+  Woerter-Formulars: der Startfokus bleibt auf „Deutsch“, und „Abbrechen“/„Speichern“
+  betreffen nur die Woerter. Bildaenderungen gelten sofort, damit es keinen halben
+  Stand gibt (Woerter gespeichert, Bild nicht). Teilt busyRef mit EditEntry: waehrend
+  einer Anfrage schliessen Esc und „Abbrechen“ nicht, und doppeltes Ausloesen sendet
+  genau eine Anfrage.
+*/
+function EntryPicture({
+  setId,
+  entry,
+  busyRef,
+  onGone,
+}: {
+  setId: string
+  entry: VocabularyEntry
+  busyRef: RefObject<boolean>
+  onGone: (caught: unknown) => void
+}) {
+  const queryClient = useQueryClient()
+  // Version aus der Antwort, nicht aus dem alten Listenstand.
+  const [version, setVersion] = useState(entry.pictureVersion)
+  const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null)
+  const [working, setWorking] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function choose(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    // Leeren, damit dasselbe Foto nach einem Fehler erneut ein change ausloest.
+    event.target.value = ''
+    if (!file || busyRef.current) return
+    busyRef.current = true
+    setWorking(true)
+    // Die Meldung gehoert zur letzten Aktion.
+    setNote(null)
+    try {
+      const picture = await shrinkPicture(file)
+      const saved = await api<{ pictureVersion: string }>(`/sets/${setId}/entries/${entry.id}/picture`, {
+        method: 'PUT',
+        body: picture,
+      })
+      setVersion(saved.pictureVersion)
+      setNote({ ok: true, message: 'Das Bild ist gespeichert.' })
+      // Gleichzeitige Ersetzungen: der letzte Upload gewinnt; die Liste zeigt den gespeicherten Stand.
+      void queryClient.invalidateQueries({ queryKey: ['entries', setId] })
+    } catch (caught) {
+      onGone(caught)
+      setNote({ ok: false, message: caught instanceof ApiError ? caught.message : GENERIC })
+    } finally {
+      busyRef.current = false
+      setWorking(false)
+    }
+  }
+
+  return (
+    <section aria-labelledby="vokabel-bild" className="flex flex-col gap-4">
+      <h3 id="vokabel-bild" className="type-headline text-ink">
+        Bild
+      </h3>
+      <p className="type-body-sm text-ink-soft">Ein Bild hilft beim Merken. Änderungen am Bild gelten sofort.</p>
+      {version ? <VocabPicture version={version} alt={`Bild zu „${entry.sourceText}“`} variant="large" /> : null}
+      {/* Natives Datei-Feld wie beim CSV-Import, nur fuer Bilder und ohne capture: auf dem Handy
+          bietet der Browser Kamera und Galerie an (D-05). Nicht im Tab-Fluss. */}
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={(event) => void choose(event)} />
+      <div className="flex flex-wrap gap-2">
+        {/* Waehrend der Anfrage nicht gesperrt: der fokussierte Button gaebe den Fokus sonst an body ab. */}
+        <Button type="button" variant="secondary" className="flex-auto" onClick={() => fileRef.current?.click()}>
+          <ImagePlus className="size-4" aria-hidden />
+          Bild wählen
+        </Button>
+      </div>
+      {working ? (
+        <Spinner label="Einen Moment …" />
+      ) : note ? (
+        note.ok ? <SuccessNote message={note.message} /> : <ErrorNote message={note.message} />
+      ) : null}
+    </section>
   )
 }
 

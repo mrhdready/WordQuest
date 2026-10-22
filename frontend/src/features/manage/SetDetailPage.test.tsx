@@ -1,8 +1,15 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
+import { shrinkPicture } from '@/lib/picture'
 import { renderWithProviders } from '@/test/render'
+
+// jsdom hat keinen Canvas (Recherche Pitfall 9): Verkleinern ist in picture.test.tsx belegt.
+vi.mock('@/lib/picture', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/picture')>()),
+  shrinkPicture: vi.fn(),
+}))
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -1253,5 +1260,101 @@ describe('Vorschaubild', () => {
     fireEvent.error(frame.querySelector('img') as HTMLImageElement)
     expect(frame.querySelector('img')).toBeNull()
     expect(frame.textContent).toBe('🐶')
+  })
+})
+
+// D-03 bis D-05: Abschnitt „Bild“ im Dialog „Vokabel bearbeiten“; Aenderungen gelten sofort.
+// Hausregel: je Fall genau eine Abweichung, exakte Texte, Tastatur eigener Pfad, Happy Path zuletzt.
+describe('Vokabelbild', () => {
+  const hund = { ...vocab('e-1', 'Hund', 'dog'), pictureVersion: null as string | null }
+  const small = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' })
+  const photo = () => new File([new Uint8Array([0xff, 0xd8, 0xff])], 'hund.jpg', { type: 'image/jpeg' })
+  const pictureUrl = '/api/v1/sets/set-1/entries/e-1/picture'
+
+  /**
+   * fetch-Stub fuer den Abschnitt: PUT und DELETE auf …/picture antworten per
+   * `respond`, Bildabrufe mit einem PNG, die Vokabelliste beim ersten Mal mit
+   * `list`, danach mit `later`.
+   */
+  function stubPicture(
+    respond: () => Promise<Response>,
+    list: unknown[] = [hund],
+    later: unknown[] = list,
+  ) {
+    const calls = { puts: [] as { url: string; body: unknown }[], deletes: [] as string[], entryGets: 0 }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          calls.puts.push({ url, body: init.body })
+          return respond()
+        }
+        if (init?.method === 'DELETE') {
+          calls.deletes.push(url)
+          return respond()
+        }
+        if (url.includes('/pictures/')) {
+          return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { headers: { 'Content-Type': 'image/png' } })
+        }
+        if (url.endsWith('/entries')) {
+          calls.entryGets += 1
+          return Response.json(calls.entryGets === 1 ? list : later)
+        }
+        return Response.json([unit])
+      }),
+    )
+    return calls
+  }
+
+  async function openPicture() {
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: 'Hund bearbeiten' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+    const choose = within(dialog).getByRole('button', { name: 'Bild wählen' })
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement
+    return { dialog, choose, input }
+  }
+
+  // Wie der Browser nach der Dateiauswahl: files gesetzt, dann change. Ohne Datei = abgebrochen.
+  function pick(input: HTMLInputElement, ...files: File[]) {
+    Object.defineProperty(input, 'files', { configurable: true, value: files })
+    fireEvent.change(input)
+  }
+
+  beforeEach(() => {
+    vi.mocked(shrinkPicture).mockReset()
+    vi.mocked(shrinkPicture).mockResolvedValue(small)
+  })
+
+  it('Tastatur: Enter und Leertaste auf „Bild wählen“ öffnen die Dateiauswahl; Datei-Feld nur für Bilder, nicht im Tab-Fluss', async () => {
+    stubPicture(async () => Response.json({ pictureVersion: 'pv-1' }))
+    const { choose, input } = await openPicture()
+    const click = vi.spyOn(input, 'click')
+    choose.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(click).toHaveBeenCalledTimes(1)
+    await userEvent.keyboard(' ')
+    expect(click).toHaveBeenCalledTimes(2)
+    expect(input.accept).toBe('image/*')
+    expect(input.hidden).toBe(true)
+    expect(input.hasAttribute('capture')).toBe(false)
+  })
+
+  it('Happy Path: Bild hinzufügen → PUT mit dem verkleinerten Blob, Vorschau, Meldung, Fokus, Liste neu', async () => {
+    const calls = stubPicture(async () => Response.json({ pictureVersion: 'pv-neu' }))
+    const { dialog, choose, input } = await openPicture()
+    expect(within(dialog).queryByRole('img')).toBeNull()
+    const file = photo()
+    choose.focus()
+    pick(input, file)
+
+    const saved = await within(dialog).findByText('Das Bild ist gespeichert.')
+    expect(saved.getAttribute('role')).toBe('status')
+    expect(await within(dialog).findByRole('img', { name: 'Bild zu „Hund“' })).toBeTruthy()
+    expect(vi.mocked(shrinkPicture)).toHaveBeenCalledWith(file)
+    expect(calls.puts).toEqual([{ url: pictureUrl, body: small }])
+    expect(calls.puts[0]?.body).toBe(small)
+    expect(document.activeElement).toBe(choose)
+    await waitFor(() => expect(calls.entryGets).toBe(2))
   })
 })

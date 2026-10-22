@@ -80,3 +80,42 @@ export function VocabPicture({
     </span>
   )
 }
+
+// Laengste Kante des gespeicherten Bildes (D-04): scharf im 160-px-Rahmen auch bei dreifacher Pixeldichte.
+const MAX_EDGE = 512
+
+function encode(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Bild nicht kodierbar'))), type, quality),
+  )
+}
+
+/*
+  Verkleinern im Browser vor dem Hochladen (D-04). Das Neukodieren ueber den
+  Canvas laesst EXIF/GPS des Fotos zurueck; die Drehung aus EXIF wird vorher
+  angewandt. Safari kodiert kein WebP und liefert still PNG, das bis 900 KB gross
+  wuerde (Recherche Pitfall 1); dann JPEG. JPEG kennt keine Transparenz, deshalb
+  vorher weiss hinterlegen, sonst wuerden freigestellte Bilder schwarz.
+  Scheitert Dekodieren oder Kodieren, wird das Promise abgelehnt.
+*/
+export async function shrinkPicture(file: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+  const context = canvas.getContext('2d')
+  if (!context) {
+    bitmap.close()
+    throw new Error('Kein Canvas')
+  }
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  const webp = await encode(canvas, 'image/webp', 0.8)
+  if (webp.type === 'image/webp') return webp
+  context.globalCompositeOperation = 'destination-over'
+  context.fillStyle = 'white'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  return encode(canvas, 'image/jpeg', 0.85)
+}

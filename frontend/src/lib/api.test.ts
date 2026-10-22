@@ -227,6 +227,46 @@ describe('Token-Refresh', () => {
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes)
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/v1/x')).toHaveLength(2)
   })
+
+  // D-12: Das Vokabelbild geht als roher Body hoch, der Server liest den Typ aus den Bytes.
+  it('Blob als Body: unverändert, Content-Type aus dem Blob, Bearer', async () => {
+    signIn()
+    const picture = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' })
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => Response.json({ pictureVersion: 'v1' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await api('/x', { method: 'PUT', body: picture })).toEqual({ pictureVersion: 'v1' })
+
+    const init = fetchMock.mock.calls[0]?.[1]
+    const headers = init?.headers as Record<string, string>
+    expect(init?.body).toBe(picture)
+    expect(headers['Content-Type']).toBe('image/webp')
+    expect(headers.Authorization).toBe('Bearer alt-access')
+  })
+
+  it('Blob als Body nach 401 und erfolgreichem Refresh: dasselbe Blob noch einmal', async () => {
+    signIn()
+    const picture = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' })
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        return Response.json({
+          accessToken: 'neu-access',
+          refreshToken: 'neu-refresh',
+          expiresInSeconds: 900,
+          user: { id: 'u1', displayName: 'Mama', role: 'Guardian', tenantId: 't1' },
+        })
+      }
+      const auth = (init?.headers as Record<string, string>).Authorization
+      return auth === 'Bearer neu-access' ? Response.json({ pictureVersion: 'v2' }) : new Response(expired, { status: 401 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await api('/x', { method: 'PUT', body: picture })).toEqual({ pictureVersion: 'v2' })
+
+    const sent = fetchMock.mock.calls.filter(([url]) => url === '/api/v1/x').map(([, init]) => init?.body)
+    expect(sent).toHaveLength(2)
+    for (const body of sent) expect(body).toBe(picture)
+  })
 })
 
 // D-06: Ein Refresh-Fehler leert nur den eigenen Token, nicht den eines anderen Tabs.

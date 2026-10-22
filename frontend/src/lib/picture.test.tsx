@@ -3,7 +3,7 @@ import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { tokenStore } from '@/lib/api'
-import { usePicture, VocabPicture } from '@/lib/picture'
+import { shrinkPicture, usePicture, VocabPicture } from '@/lib/picture'
 
 // Beliebige Bytes genuegen: jsdom dekodiert nicht, der Typ kommt aus dem Header.
 const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
@@ -146,5 +146,107 @@ describe('VocabPicture', () => {
     rerender('v2')
     const image = await screen.findByRole('img', { name: 'Bild zu Hund' })
     expect(image.getAttribute('src')).toBe('data:image/webp;base64,AQID')
+  })
+})
+
+// D-04: jsdom hat weder Canvas-Kontext noch createImageBitmap (Recherche Pitfall 9).
+describe('shrinkPicture', () => {
+  interface Encoded {
+    type: string | undefined
+    quality: unknown
+    width: number
+    height: number
+  }
+
+  function stubCanvas(width: number, height: number, answers: (string | null)[] = ['image/webp']) {
+    const bitmap = { width, height, close: vi.fn() }
+    const decode = vi.fn(async (_source: Blob, _options?: ImageBitmapOptions) => bitmap)
+    vi.stubGlobal('createImageBitmap', decode)
+    const fills: { fillStyle: unknown; composite: unknown; rect: number[] }[] = []
+    const context = {
+      imageSmoothingQuality: 'low',
+      fillStyle: 'black',
+      globalCompositeOperation: 'source-over',
+      drawImage: vi.fn(),
+      fillRect: vi.fn((...rect: number[]) => {
+        fills.push({ fillStyle: context.fillStyle, composite: context.globalCompositeOperation, rect })
+      }),
+    }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      context as unknown as CanvasRenderingContext2D,
+    )
+    const encoded: Encoded[] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
+      this: HTMLCanvasElement,
+      callback: BlobCallback,
+      type?: string,
+      quality?: unknown,
+    ) {
+      encoded.push({ type, quality, width: this.width, height: this.height })
+      const answer = answers[encoded.length - 1] ?? null
+      callback(answer ? new Blob([new Uint8Array([1])], { type: answer }) : null)
+    })
+    return { bitmap, decode, context, fills, encoded }
+  }
+
+  const file = new File([new Uint8Array([0xff, 0xd8])], 'foto.jpg', { type: 'image/jpeg' })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    [2000, 1000, 512, 256],
+    [1000, 2000, 256, 512],
+    [300, 200, 300, 200],
+  ])('%i × %i → Canvas %i × %i', async (width, height, outWidth, outHeight) => {
+    const { context, encoded } = stubCanvas(width, height)
+    await shrinkPicture(file)
+    expect(encoded.map((call) => [call.width, call.height])).toEqual([[outWidth, outHeight]])
+    expect(context.drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, outWidth, outHeight)
+  })
+
+  it('dreht nach EXIF, glättet und gibt das Bitmap frei', async () => {
+    const { decode, bitmap, context } = stubCanvas(2000, 1000)
+    await shrinkPicture(file)
+    expect(decode).toHaveBeenCalledWith(file, { imageOrientation: 'from-image' })
+    expect(context.imageSmoothingQuality).toBe('high')
+    expect(bitmap.close).toHaveBeenCalled()
+  })
+
+  it('WebP verfügbar: ein WebP mit Qualität 0.8', async () => {
+    const { encoded, fills } = stubCanvas(2000, 1000)
+    const result = await shrinkPicture(file)
+    expect(result.type).toBe('image/webp')
+    expect(encoded.map(({ type, quality }) => [type, quality])).toEqual([['image/webp', 0.8]])
+    expect(fills).toEqual([])
+  })
+
+  // Safari kodiert kein WebP und liefert PNG (Recherche Pitfall 1); JPEG kennt keine Transparenz (Pitfall 7).
+  it('toBlob liefert PNG: JPEG 0.85 auf Weiß', async () => {
+    const { encoded, fills } = stubCanvas(2000, 1000, ['image/png', 'image/jpeg'])
+    const result = await shrinkPicture(file)
+    expect(result.type).toBe('image/jpeg')
+    expect(encoded.map(({ type, quality }) => [type, quality])).toEqual([
+      ['image/webp', 0.8],
+      ['image/jpeg', 0.85],
+    ])
+    expect(fills).toEqual([{ fillStyle: 'white', composite: 'destination-over', rect: [0, 0, 512, 256] }])
+  })
+
+  it('Dekodieren scheitert: abgelehnt', async () => {
+    stubCanvas(2000, 1000)
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => {
+        throw new DOMException('The source image could not be decoded.', 'InvalidStateError')
+      }),
+    )
+    await expect(shrinkPicture(file)).rejects.toThrow()
+  })
+
+  it('toBlob liefert null: abgelehnt', async () => {
+    stubCanvas(2000, 1000, [null])
+    await expect(shrinkPicture(file)).rejects.toThrow()
   })
 })
