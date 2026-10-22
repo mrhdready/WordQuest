@@ -125,3 +125,19 @@ Plans:
 - [x] 03.1-05-PLAN.md — Release-Paket mit exakt geprüftem Inhalt und Prüfsumme aus der CI, Installation per curl ohne Git, README und Konzept, erste Runde bis zur Zusammenfassung im Smoke (D-16, HARD-05)
 - [x] 03.1-06-PLAN.md — upgrade.sh holt das neueste Release: Paketprüfung vor jeder Änderung, Sicherung, Ersetzen, exec, echter Pull aus lokaler Registry im Release-Smoke, Klon-Weg und Grenzen (D-16, HARD-05)
 - [x] 03.1-07-PLAN.md — Prod-Stack aus dem End-Commit im Wegwerf-Klon, installiert aus dem Release-Paket, mit ganzer Lernrunde und Exit-Code-sicherer Prüfung, volles Phasen-Gate, Befund-Nachweis für alle 11 Befunde (D-03)
+
+### Phase 03.1.1: Vocabulary Pictures (INSERTED)
+
+**Goal:** Eltern können jeder Vokabel ein eigenes Bild geben, und das Kind sieht es in der Lernrunde. Bilder liegen in der Datenbank und sind damit in Sicherung, Wiederherstellung und Update enthalten
+**Requirements**: IMG-01
+**Depends on:** Phase 03.1
+**Success Criteria** (what must be TRUE):
+  1. A parent adds, replaces and removes a picture for a vocabulary entry in the app; the browser shrinks it before upload and drops camera metadata
+  2. A child sees the entry's picture in the learning round (picture before emoji); another family never gets the picture (tenant isolation test)
+  3. The server accepts only real images up to a fixed size and rejects everything else with a German 4xx message
+  4. Backup, restore and upgrade keep the pictures (release smoke)
+  5. Full gate green, axe 0 on touched pages, keyboard and 200 % zoom
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1 to break down)

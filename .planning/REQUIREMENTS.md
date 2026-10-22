@@ -58,6 +58,10 @@
 - [x] **HARD-04**: Security headers and CSP are on every HTML response, the CSV import never drops a valid first word, the set list shows load errors, and logout clears cached API data
 - [x] **HARD-05**: Parents install and update from the published release package and images without git; upgrade.sh fetches the newest release itself
 
+### Pictures (Dennis 2026-10-22)
+
+- [ ] **IMG-01**: Parents can give each vocabulary entry its own picture (add, replace, remove); children see it in the learning round; pictures are stored in the database, isolated per family, and survive backup, restore and upgrade
+
 ## v2 Requirements
 
 ### Parents
@@ -128,10 +132,11 @@
 | HARD-03 | Phase 3.1 | Complete |
 | HARD-04 | Phase 3.1 | Complete |
 | HARD-05 | Phase 3.1 | Complete |
+| IMG-01 | Phase 3.1.1 | Pending |
 
 **Coverage:**
-- v1 requirements: 32 total
-- Mapped to phases: 32
+- v1 requirements: 33 total
+- Mapped to phases: 33
 - Unmapped: 0
 
 ---
