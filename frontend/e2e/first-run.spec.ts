@@ -51,6 +51,7 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
   const thumbnail = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..').getByTestId('vokabelbild').locator('img')
+  await expect(thumbnail).toBeVisible()
   await expect.poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 
   // Neuer Kontext ohne Eltern-Sitzung: genau eine Kachel, Anmeldung per Tastatur.
