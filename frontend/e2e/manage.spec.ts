@@ -8,6 +8,7 @@ import {
   entryIdOf,
   putPicture,
   storedPicture,
+  webpChunks,
   withExif,
 } from './pictures'
 
@@ -449,6 +450,11 @@ test('Vorschaubild in der Vokabelliste', async ({ page }) => {
   await expect.poll(cachedIn).toEqual(['wq-api'])
 })
 
+// Kanaltoleranz 40: WebP und JPEG sind verlustbehaftet.
+function expectColor(actual: number[], expected: number[]) {
+  expected.forEach((channel, index) => expect(Math.abs((actual[index] ?? -999) - channel)).toBeLessThanOrEqual(40))
+}
+
 // IMG-01, D-03 bis D-05, T-03.1.1-08: Der Browser dreht nach EXIF, verkleinert und kodiert neu;
 // gespeichert ist ein WebP im Hochformat ohne Kamera-Metadaten.
 test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Liste', async ({ page }) => {
@@ -456,10 +462,14 @@ test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Li
   await addEntry(page, 'Hund', 'dog')
   const setId = page.url().split('/').pop() ?? ''
 
-  // Fixture zuerst pruefen: EXIF ist drin, und der Browser dreht sie ins Hochformat.
+  // Fixture zuerst pruefen: EXIF ist drin, und der Browser dreht sie um 90 Grad im
+  // Uhrzeigersinn ins Hochformat (Orientierung 6): links Rot wird oben Rot.
   const photo = withExif(await canvasPicture(page, { type: 'image/jpeg', width: 40, height: 20 }))
   expect(photo.includes('Exif')).toBe(true)
-  expect(await decodePicture(page, photo)).toMatchObject({ width: 20, height: 40 })
+  const turned = await decodePicture(page, photo)
+  expect(turned).toMatchObject({ width: 20, height: 40 })
+  expectColor(turned.top, [255, 0, 0])
+  expectColor(turned.bottom, [0, 0, 255])
 
   await page.getByRole('button', { name: 'Hund bearbeiten' }).click()
   const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
@@ -480,11 +490,23 @@ test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Li
   expect(await preview.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
   await expect(choose).toBeFocused()
 
+  // Chromium schreibt das erweiterte Format (VP8X), das EXIF- und XMP-Chunks tragen kann:
+  // deshalb die Chunks selbst und die Flags in VP8X pruefen, nicht nur den Text "Exif".
   const stored = await storedPicture(page, setId, 'Hund')
   expect(stored.subarray(0, 4).toString('latin1')).toBe('RIFF')
   expect(stored.subarray(8, 15).toString('latin1')).toBe('WEBPVP8')
+  const chunks = webpChunks(stored)
+  test.info().annotations.push({ type: 'WebP-Chunks', description: chunks.join(', ') })
+  expect(chunks).not.toContain('EXIF')
+  expect(chunks).not.toContain('XMP ')
+  // VP8X-Flags: 0x08 EXIF, 0x04 XMP.
+  if (chunks[0] === 'VP8X') expect(stored[20]! & 0x0c).toBe(0)
   expect(stored.includes('Exif')).toBe(false)
-  expect(await decodePicture(page, stored)).toMatchObject({ width: 20, height: 40 })
+  // Ohne Auswertung von Metadaten dekodiert: die Drehung steckt in den Pixeln.
+  const raw = await decodePicture(page, stored, 'none')
+  expect(raw).toMatchObject({ width: 20, height: 40 })
+  expectColor(raw.top, [255, 0, 0])
+  expectColor(raw.bottom, [0, 0, 255])
 
   await expectNoAxeViolations(page)
   await expectDialogContrast(page)
@@ -536,10 +558,22 @@ test('Zu großes Bild: 413 von nginx mit deutschem Text', async ({ page }) => {
   await page.unroute(pictureUrl)
 })
 
-// Kanaltoleranz 40: WebP ist verlustbehaftet.
-function expectColor(actual: number[], expected: number[]) {
-  expected.forEach((channel, index) => expect(Math.abs((actual[index] ?? -999) - channel)).toBeLessThanOrEqual(40))
-}
+// Review L-4: der echte Browser lehnt eine PDF beim Dekodieren ab; es geht nichts hoch.
+test('Keine Bilddatei: PDF zeigt deutschen Text, kein Upload', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bild PDF ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const puts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().endsWith('/picture')) puts.push(request.url())
+  })
+  const pdf = Buffer.from('%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n', 'latin1')
+  const { dialog, choose } = await chooseInDialog(page, 'Hund', { name: 'liste.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Diese Datei lässt sich nicht als Bild öffnen. Wähle ein Foto oder ein anderes Bild aus.',
+  )
+  await expect(choose).toBeFocused()
+  expect(puts).toEqual([])
+})
 
 // D-04 (Review MEDIUM, Codex 03.1.1-02): echtes Verkleinern im Browser, nicht nur gemockt.
 test('Großes Foto wird auf 512 px verkleinert', async ({ page }) => {

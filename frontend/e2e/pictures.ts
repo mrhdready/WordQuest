@@ -79,29 +79,60 @@ export async function storedPicture(page: Page, setId: string, sourceText: strin
   return picture.body()
 }
 
+// Chunk-Namen eines WebP (RIFF): nach "RIFF", Laenge und "WEBP" je Name (4), Laenge (LE 4), Daten, ungerade aufgefuellt.
+export function webpChunks(bytes: Buffer): string[] {
+  const names: string[] = []
+  for (let offset = 12; offset + 8 <= bytes.length; ) {
+    const size = bytes.readUInt32LE(offset + 4)
+    names.push(bytes.subarray(offset, offset + 4).toString('latin1'))
+    offset += 8 + size + (size % 2)
+  }
+  return names
+}
+
 export interface DecodedPicture {
   width: number
   height: number
-  // RGB bei einem Viertel und drei Vierteln der Breite, halbe Hoehe.
+  // RGB bei einem Viertel und drei Vierteln der Breite (halbe Hoehe) bzw. der Hoehe (halbe Breite).
   left: number[]
   right: number[]
+  top: number[]
+  bottom: number[]
 }
 
-// Dekodiert im echten Browser, EXIF-Drehung angewandt wie beim Verkleinern.
-export async function decodePicture(page: Page, bytes: Buffer): Promise<DecodedPicture> {
-  return page.evaluate(async (base64) => {
-    const raw = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
-    const bitmap = await createImageBitmap(new Blob([raw]), { imageOrientation: 'from-image' })
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('canvas')
-    context.drawImage(bitmap, 0, 0)
-    const y = Math.floor(bitmap.height / 2)
-    const at = (x: number) => [...context.getImageData(Math.floor(x), y, 1, 1).data.slice(0, 3)]
-    return { width: bitmap.width, height: bitmap.height, left: at(bitmap.width / 4), right: at((bitmap.width * 3) / 4) }
-  }, bytes.toString('base64'))
+/*
+  Dekodiert im echten Browser. 'from-image' wendet die EXIF-Drehung an wie beim
+  Verkleinern; 'none' zeigt die Pixel, wie sie gespeichert sind, und belegt damit,
+  dass eine Drehung in den Pixeln steckt und nicht in Metadaten (Review M-1).
+*/
+export async function decodePicture(
+  page: Page,
+  bytes: Buffer,
+  orientation: 'from-image' | 'none' = 'from-image',
+): Promise<DecodedPicture> {
+  return page.evaluate(
+    async ({ base64, orientation }) => {
+      const raw = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+      const bitmap = await createImageBitmap(new Blob([raw]), { imageOrientation: orientation as ImageOrientation })
+      const canvas = document.createElement('canvas')
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('canvas')
+      context.drawImage(bitmap, 0, 0)
+      const { width, height } = bitmap
+      const at = (x: number, y: number) => [...context.getImageData(Math.floor(x), Math.floor(y), 1, 1).data.slice(0, 3)]
+      return {
+        width,
+        height,
+        left: at(width / 4, height / 2),
+        right: at((width * 3) / 4, height / 2),
+        top: at(width / 2, height / 4),
+        bottom: at(width / 2, (height * 3) / 4),
+      }
+    },
+    { base64: bytes.toString('base64'), orientation },
+  )
 }
 
 export async function putPicture(
