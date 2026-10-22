@@ -218,6 +218,25 @@ test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await expect(page.getByText(`house${stamp}`)).toBeVisible()
 })
 
+// Datei statt Text: Windows-1252 wie aus Excel unter Windows, gelesen nur im Browser.
+test('CSV-Import: Datei wählen, Vorschau', async ({ page }) => {
+  await openFirstSet(page)
+  await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()
+  await expect(page.getByRole('button', { name: 'Datei wählen' })).toBeVisible()
+  const stamp = Date.now()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'vokabeln.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(`L\xf6we${stamp};lion${stamp}`, 'latin1'),
+  })
+  await expect(page.getByRole('status')).toHaveText('Die Datei „vokabeln.csv“ ist eingelesen.')
+  await expect(page.locator('textarea')).toHaveValue(`Löwe${stamp};lion${stamp}`)
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText('1 erkannt')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Vorschau' }).getByText(`Löwe${stamp} → lion${stamp}`)).toBeVisible()
+  await checkPage(page)
+})
+
 // WCAG 1.4.10: die Vorschau-Liste scrollt bei 320 px nur senkrecht. Gueltige Zeile
 // und Problemzeile (201 Zeichen) je mit einem Wort ohne Trennstelle.
 test('CSV-Vorschau bei 320 px mit langem Wort ohne Trennstelle', async ({ page }) => {
