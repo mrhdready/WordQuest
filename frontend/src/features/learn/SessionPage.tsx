@@ -226,7 +226,8 @@ export function SessionPage() {
         )}
         <p className="w-full break-words type-display">{current.prompt}</p>
         {current.isRetry ? (
-          <p className="type-body-md-strong text-warn-text">Noch einmal — du schaffst das!</p>
+          // warn-text nur auf deckender Flaeche (DESIGN.md): auf Glas ueber backdrop-blue 4.45:1.
+          <Badge tone="yellow">Noch einmal — du schaffst das!</Badge>
         ) : null}
       </div>
 
