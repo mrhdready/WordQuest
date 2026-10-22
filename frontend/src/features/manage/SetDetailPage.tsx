@@ -753,7 +753,13 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
         hidden
         onChange={(event) => void readFile(event)}
       />
-      <Button variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>
+      {/* Waehrend des Lesens nicht gesperrt: der fokussierte Button gaebe den Fokus sonst an body ab. */}
+      <Button
+        variant="secondary"
+        className="self-start"
+        disabled={runPreview.isPending || confirm.isPending}
+        onClick={() => fileRef.current?.click()}
+      >
         <FileUp className="size-4" aria-hidden />
         Datei wählen
       </Button>
