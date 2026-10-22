@@ -464,8 +464,13 @@ test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Li
   await page.getByRole('button', { name: 'Hund bearbeiten' }).click()
   const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
   const choose = dialog.getByRole('button', { name: 'Bild wählen' })
-  await choose.focus()
+  // Frueh lauschen: Playwright schaltet das Abfangen der Dateiauswahl asynchron ein, ein
+  // einzelner Tastendruck direkt danach kann es ueberholen (gemessen: 6 von 8 Laeufen).
   const chooser = page.waitForEvent('filechooser')
+  // Tastaturweg ab dem Startfokus: Deutsch, Englisch, Abbrechen, Speichern, Bild wählen.
+  await expect(dialog.getByLabel('Deutsch')).toBeFocused()
+  for (let step = 0; step < 4; step += 1) await page.keyboard.press('Tab')
+  await expect(choose).toBeFocused()
   await page.keyboard.press('Enter')
   await (await chooser).setFiles({ name: 'hund.jpg', mimeType: 'image/jpeg', buffer: photo })
 
