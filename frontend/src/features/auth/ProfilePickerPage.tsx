@@ -213,16 +213,20 @@ export function ProfilePickerPage() {
             </div>
             {/* Leer, solange nach einem Fehler noch nichts eingegeben ist: sonst kaeme
                 "0 Ziffern eingegeben" als zweite Ansage neben der Fehlermeldung.
-                Waehrend der Anmeldung sagt sie das Warten an (kein Button mehr dafuer). */}
-            <span className="sr-only" role="status">
-              {busy
-                ? 'Einen Moment …'
-                : error && pin.length === 0
-                  ? ''
-                  : pin.length === 1
-                    ? '1 Ziffer eingegeben'
-                    : `${pin.length} Ziffern eingegeben`}
-            </span>
+                Waehrend der Anmeldung sagt sie das Warten an und zeigt es auch sehenden
+                Kindern (Entscheidung 2026-10-22); die Ziffernanzahl zeigen die Punkte.
+                min-h-lh haelt die Zeile frei, damit die Tasten nicht springen. */}
+            <p className="min-h-lh text-center type-body-md text-ink" role="status">
+              <span className={busy ? undefined : 'sr-only'}>
+                {busy
+                  ? 'Einen Moment …'
+                  : error && pin.length === 0
+                    ? ''
+                    : pin.length === 1
+                      ? '1 Ziffer eingegeben'
+                      : `${pin.length} Ziffern eingegeben`}
+              </span>
+            </p>
 
             {error ? <ErrorNote message={error} /> : null}
 
