@@ -25,9 +25,13 @@ const MAX_FILE_BYTES = 1024 * 1024
 const FILE_TOO_BIG = 'Die Datei ist zu groß. Eine Vokabelliste darf höchstens 1 MB groß sein.'
 const FILE_UNREADABLE = 'Die Datei ließ sich nicht lesen. Wähle sie noch einmal aus oder füge den Text ein.'
 
-// Erst strikt UTF-8 (der Decoder entfernt ein BOM selbst); scheitert das, ist es fast immer
-// eine CSV aus Excel unter Windows, also windows-1252.
+// UTF-16 nur am BOM erkennbar (Excel „Unicode-Text“ ist UTF-16LE). Sonst erst strikt UTF-8;
+// scheitert das, ist es fast immer eine CSV aus Excel unter Windows, also windows-1252.
+// Den BOM entfernt der jeweilige Decoder selbst.
 function decodeCsv(bytes: ArrayBuffer): string {
+  const [first, second] = new Uint8Array(bytes, 0, Math.min(2, bytes.byteLength))
+  if (first === 0xff && second === 0xfe) return new TextDecoder('utf-16le').decode(bytes)
+  if (first === 0xfe && second === 0xff) return new TextDecoder('utf-16be').decode(bytes)
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {

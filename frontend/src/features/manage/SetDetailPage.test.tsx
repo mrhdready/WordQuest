@@ -1063,6 +1063,14 @@ describe('CSV-Import', () => {
 // „Löwe;lion“ als Bytes: der Umlaut entscheidet, ob die Kodierung stimmt.
 const loeweUtf8 = [...new TextEncoder().encode('Löwe;lion')]
 const loeweWindows1252 = [0x4c, 0xf6, 0x77, 0x65, ...new TextEncoder().encode(';lion')]
+// UTF-16 mit BOM; Excel „Unicode-Text (*.txt)“ speichert so als UTF-16LE.
+const utf16 = (text: string, littleEndian: boolean) => [
+  ...(littleEndian ? [0xff, 0xfe] : [0xfe, 0xff]),
+  ...[...text].flatMap((char) => {
+    const unit = char.charCodeAt(0)
+    return littleEndian ? [unit & 0xff, unit >> 8] : [unit >> 8, unit & 0xff]
+  }),
+]
 const fileTooBig = 'Die Datei ist zu groß. Eine Vokabelliste darf höchstens 1 MB groß sein.'
 const fileUnreadable = 'Die Datei ließ sich nicht lesen. Wähle sie noch einmal aus oder füge den Text ein.'
 
@@ -1084,12 +1092,22 @@ describe('CSV-Import: Datei wählen', () => {
     ['UTF-8', loeweUtf8],
     ['UTF-8 mit BOM', [0xef, 0xbb, 0xbf, ...loeweUtf8]],
     ['Windows-1252', loeweWindows1252],
+    ['UTF-16LE', utf16('Löwe;lion', true)],
+    ['UTF-16BE', utf16('Löwe;lion', false)],
   ])('%s: „Löwe;lion“ im Textfeld, Statusmeldung', async (_name, bytes) => {
     stubImport([hundRow])
     const { input, textarea } = await openImportFile()
     await userEvent.upload(input, csvFile(bytes))
     expect((await screen.findByRole('status')).textContent).toBe('Die Datei „loewe.csv“ ist eingelesen.')
     expect(textarea.value).toBe('Löwe;lion')
+  })
+
+  it('Excel „Unicode-Text“ (UTF-16LE, Tab): Zeilen mit Tab im Textfeld', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    await userEvent.upload(input, csvFile(utf16('Löwe\tlion\r\nHund\tdog\r\n', true), 'vokabeln.txt'))
+    expect((await screen.findByRole('status')).textContent).toBe('Die Datei „vokabeln.txt“ ist eingelesen.')
+    expect(textarea.value).toBe('Löwe\tlion\nHund\tdog\n')
   })
 
   it('Vorschau schickt den Dateiinhalt als Text', async () => {
