@@ -40,6 +40,9 @@ public static class AuthEndpoints
     {
         List<Guid> tenantIds = await db.Tenants
             .IgnoreQueryFilters()
+            // Nur die Anzahl zaehlt (genau einer?); die Sortierung beseitigt
+            // lediglich die EF-Warnung zu Take ohne OrderBy.
+            .OrderBy(t => t.Id)
             .Select(t => t.Id)
             .Take(2)
             .ToListAsync(ct);
