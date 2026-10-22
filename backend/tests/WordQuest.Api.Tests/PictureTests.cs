@@ -378,6 +378,88 @@ public sealed class PictureTests : IClassFixture<ApiFactory>
         Assert.Equal(0, await PictureRowsAsync(entryIds));
     }
 
+    // ------------------------------------------------------------ Entfernen (D-07, D-10)
+
+    private static Task<HttpResponseMessage> DeletePictureAsync(HttpClient client, Guid setId, Guid entryId) =>
+        client.DeleteAsync($"/api/v1/sets/{setId}/entries/{entryId}/picture");
+
+    private static async Task<JsonElement> ListedVersionAsync(HttpClient client, Guid setId, Guid entryId)
+    {
+        using JsonDocument list = JsonDocument.Parse(await client.GetStringAsync($"/api/v1/sets/{setId}/entries"));
+        return list.RootElement.EnumerateArray()
+            .Single(entry => entry.GetProperty("id").GetGuid() == entryId)
+            .GetProperty("pictureVersion")
+            .Clone();
+    }
+
+    [Fact]
+    public async Task Entfernen_ergibt_204_ohne_Bild_in_Liste_und_Abruf_und_zweimal_204()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        Guid entryId = set.Entries[0].Id;
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        Guid version = await VersionAsync(await PutPictureAsync(owner, set.Set.Id, entryId, Jpeg(1000), "image/jpeg"));
+
+        HttpResponseMessage first = await DeletePictureAsync(owner, set.Set.Id, entryId);
+        HttpResponseMessage second = await DeletePictureAsync(owner, set.Set.Id, entryId);
+
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Equal(JsonValueKind.Null, (await ListedVersionAsync(owner, set.Set.Id, entryId)).ValueKind);
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync($"/api/v1/pictures/{version}")).StatusCode);
+        Assert.Equal(0, await PictureRowsAsync(entryId));
+    }
+
+    [Fact]
+    public async Task Entfernen_durch_andere_Familie_ergibt_404_und_das_Bild_bleibt()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        SeededFamily other = await SeedFamilyAsync(_factory);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        using HttpClient stranger = _factory.CreateClientFor(other.Owner);
+        Guid version = await VersionAsync(await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, Jpeg(1000), "image/jpeg"));
+
+        HttpResponseMessage delete = await DeletePictureAsync(stranger, set.Set.Id, set.Entries[0].Id);
+
+        Assert.Equal(EntryGone, await ProblemDetailAsync(delete, HttpStatusCode.NotFound));
+        Assert.Equal(1, await PictureRowsAsync(set.Entries[0].Id));
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync($"/api/v1/pictures/{version}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Entfernen_als_Kind_ergibt_403_und_ohne_Anmeldung_401()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        using HttpClient anonymous = _factory.CreateClient();
+        await VersionAsync(await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, Jpeg(1000), "image/jpeg"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await DeletePictureAsync(child, set.Set.Id, set.Entries[0].Id)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await DeletePictureAsync(anonymous, set.Set.Id, set.Entries[0].Id)).StatusCode);
+        Assert.Equal(1, await PictureRowsAsync(set.Entries[0].Id));
+    }
+
+    [Fact]
+    public async Task Entfernen_mit_falschem_Set_oder_unbekannter_Vokabel_ergibt_404()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        SeededSet otherSet = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        await VersionAsync(await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, Jpeg(1000), "image/jpeg"));
+
+        HttpResponseMessage wrongSet = await DeletePictureAsync(owner, otherSet.Set.Id, set.Entries[0].Id);
+        HttpResponseMessage unknown = await DeletePictureAsync(owner, set.Set.Id, Guid.NewGuid());
+
+        Assert.Equal(EntryGone, await ProblemDetailAsync(wrongSet, HttpStatusCode.NotFound));
+        Assert.Equal(EntryGone, await ProblemDetailAsync(unknown, HttpStatusCode.NotFound));
+        Assert.Equal(1, await PictureRowsAsync(set.Entries[0].Id));
+    }
+
     // ------------------------------------------------------------ Konflikt
 
     [Fact]

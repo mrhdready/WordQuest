@@ -323,7 +323,8 @@ test.describe('Elternbereich', () => {
     const box = await editDialog.boundingBox()
     expect(box!.height).toBeLessThanOrEqual(zoomed.height - 16)
     expect(box!.y).toBeGreaterThanOrEqual(8)
-    for (const name of ['Englisch', 'Abbrechen', 'Speichern']) {
+    // „Bild wählen“ steht im Abschnitt „Bild“ unter dem Woerter-Formular (03.1.1-03).
+    for (const name of ['Englisch', 'Abbrechen', 'Speichern', 'Bild wählen']) {
       await page.keyboard.press('Tab')
       const target = name === 'Englisch' ? english : editDialog.getByRole('button', { name })
       await expect(target).toBeFocused()
@@ -365,6 +366,74 @@ test.describe('Elternbereich', () => {
     await page.keyboard.press('Tab')
     await page.keyboard.press('Enter')
     await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
+  })
+
+  // IMG-01, D-03: Abschnitt „Bild“ mit Vorschau bei 200 %; Entfernen per Tastatur.
+  test('Abschnitt „Bild“ im Dialog bei 200 %', async ({ page }) => {
+    const title = `Zz E2E Zoom Bild entfernen ${Date.now()}`
+    await page.goto('/verwalten?neu=1')
+    await page.getByLabel('Titel').fill(title)
+    await page.getByRole('button', { name: 'Anlegen' }).click()
+    await page.getByRole('link').filter({ hasText: title }).click()
+    await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+    await page.getByLabel('Deutsch', { exact: true }).fill('Hund')
+    await page.getByLabel('Englisch', { exact: true }).fill('dog')
+    await page.getByLabel('Englisch', { exact: true }).press('Enter')
+    await expect(page.getByText('Hund → dog')).toBeVisible()
+    const setId = page.url().split('/').pop() ?? ''
+    const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
+    await putPicture(page, setId, await entryIdOf(page, setId, 'Hund'), png, 'image/png')
+    await page.reload()
+    await expect(page.getByTestId('vokabelbild').locator('img')).toBeVisible()
+
+    const focusVisible = () =>
+      page.evaluate(() => getComputedStyle(document.activeElement as HTMLElement).outlineStyle !== 'none')
+    const notCovered = () =>
+      page.evaluate(() => {
+        const element = document.activeElement as HTMLElement
+        const rect = element.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return hit !== null && element.contains(hit)
+      })
+
+    const edit = page.getByRole('button', { name: 'Hund bearbeiten' })
+    const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+    const choose = dialog.getByRole('button', { name: 'Bild wählen' })
+    await edit.focus()
+    await page.keyboard.press('Enter')
+    await expect(dialog.getByLabel('Deutsch')).toBeFocused()
+    await expect(dialog.getByRole('img', { name: 'Bild zu „Hund“' })).toBeVisible()
+    const sheet = await dialog.boundingBox()
+    expect(sheet!.height).toBeLessThanOrEqual(zoomed.height - 16)
+
+    const names = ['Englisch', 'Abbrechen', 'Speichern', 'Bild wählen', 'Bild entfernen']
+    for (const name of names) {
+      await page.keyboard.press('Tab')
+      const target = name === 'Englisch' ? dialog.getByLabel('Englisch') : dialog.getByRole('button', { name })
+      await expect(target).toBeFocused()
+      await expect(target).toBeInViewport({ ratio: 1 })
+      expect(await notCovered(), `${name} verdeckt`).toBe(true)
+      expect(await focusVisible(), `${name} ohne sichtbaren Fokus`).toBe(true)
+    }
+    test.info().annotations.push({ type: 'Tab-Ziele Dialog „Vokabel bearbeiten“ mit Bild', description: String(names.length + 1) })
+    const width = await page.evaluate(() => {
+      const content = document.querySelector('[aria-modal="true"]') as HTMLElement
+      return {
+        page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        sheet: content.scrollWidth - content.clientWidth,
+      }
+    })
+    expect(width, 'waagerechter Scrollbalken').toEqual({ page: 0, sheet: 0 })
+
+    await page.keyboard.press('Enter')
+    await expect(dialog.getByRole('status')).toHaveText('Das Bild ist entfernt.')
+    await expect(dialog.getByRole('button', { name: 'Bild entfernen' })).toHaveCount(0)
+    await expect(choose).toBeFocused()
+    await expect(choose).toBeInViewport({ ratio: 1 })
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(edit).toBeFocused()
+    await expect(page.getByTestId('vokabelbild')).toHaveCount(0)
   })
 
   // Uebernommen aus manage.spec ("Fokus nicht verdeckt bei 640 px"): die lange Set-Liste

@@ -18,6 +18,7 @@ public static class PictureEndpoints
             .WithTags("Pictures")
             .RequireAuthorization("Guardian");
         write.MapPut("/", PutAsync);
+        write.MapDelete("/", DeleteAsync);
 
         // Lesen darf auch das Kind; der Mandantenfilter macht fremde Bilder zu 404.
         RouteGroupBuilder read = app.MapGroup("/api/v1/pictures")
@@ -83,6 +84,11 @@ public static class PictureEndpoints
             return SetEndpoints.EntryNotFound();
         }
     }
+
+    /// <summary>Idempotent: 204 auch ohne Bild; fremde oder unbekannte Vokabel 404 (D-07).</summary>
+    private static async Task<IResult> DeleteAsync(
+        Guid setId, Guid entryId, PictureService pictures, CancellationToken ct) =>
+        await pictures.RemoveAsync(setId, entryId, ct) ? Results.NoContent() : SetEndpoints.EntryNotFound();
 
     private static bool IsConcurrentWrite(DbUpdateException exception) =>
         exception is DbUpdateConcurrencyException

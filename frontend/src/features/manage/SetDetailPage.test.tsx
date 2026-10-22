@@ -1459,6 +1459,71 @@ describe('Vokabelbild', () => {
     await waitFor(() => expect(within(dialog).queryByRole('alert')).toBeNull())
   })
 
+  describe('Bild entfernen', () => {
+    const withPicture = { ...hund, pictureVersion: 'pv-alt' }
+
+    async function openRemove(respond: () => Promise<Response>, later: unknown[] = [withPicture]) {
+      const calls = stubPicture(respond, [withPicture], later)
+      const opened = await openPicture()
+      const remove = within(opened.dialog).getByRole('button', { name: 'Bild entfernen' })
+      return { ...opened, remove, calls }
+    }
+
+    it('nur mit Bild sichtbar', async () => {
+      stubPicture(async () => new Response(null, { status: 204 }))
+      const { dialog } = await openPicture()
+      expect(within(dialog).queryByRole('button', { name: 'Bild entfernen' })).toBeNull()
+    })
+
+    it('Server 404 → „Diese Vokabel gibt es nicht (mehr).“, Bild bleibt', async () => {
+      const { dialog, remove, calls } = await openRemove(entryNotFound)
+      await userEvent.click(remove)
+      expect((await within(dialog).findByRole('alert')).textContent).toBe(entryGone)
+      expect(calls.deletes).toEqual([pictureUrl])
+      expect(within(dialog).getByRole('button', { name: 'Bild entfernen' })).toBe(remove)
+    })
+
+    it('Server nicht erreichbar → Verbindungstext, Bild bleibt', async () => {
+      const { dialog, remove } = await openRemove(offline)
+      await userEvent.click(remove)
+      expect((await within(dialog).findByRole('alert')).textContent).toBe(unreachable)
+      expect(within(dialog).getByRole('img', { name: 'Bild zu „Hund“' })).toBeTruthy()
+    })
+
+    it('Doppelklick → genau ein DELETE; Esc schließt während der Anfrage nicht', async () => {
+      let release: () => void = () => {}
+      const { dialog, remove, calls } = await openRemove(
+        () =>
+          new Promise<Response>((resolve) => {
+            release = () => resolve(new Response(null, { status: 204 }))
+          }),
+      )
+      fireEvent.click(remove)
+      fireEvent.click(remove)
+      await userEvent.keyboard('{Escape}')
+      expect(screen.getByRole('dialog', { name: 'Vokabel bearbeiten' })).toBeTruthy()
+      release()
+      expect(await within(dialog).findByText('Das Bild ist entfernt.')).toBeTruthy()
+      expect(calls.deletes).toHaveLength(1)
+    })
+
+    it('Klick → ein DELETE, „Das Bild ist entfernt.“, keine Vorschau, Fokus auf „Bild wählen“, Liste neu', async () => {
+      const { dialog, choose, remove, calls } = await openRemove(
+        async () => new Response(null, { status: 204 }),
+        [hund],
+      )
+      expect(await within(dialog).findByRole('img', { name: 'Bild zu „Hund“' })).toBeTruthy()
+      await userEvent.click(remove)
+      const removed = await within(dialog).findByText('Das Bild ist entfernt.')
+      expect(removed.getAttribute('role')).toBe('status')
+      expect(within(dialog).queryByRole('img')).toBeNull()
+      expect(within(dialog).queryByRole('button', { name: 'Bild entfernen' })).toBeNull()
+      expect(document.activeElement).toBe(choose)
+      expect(calls.deletes).toEqual([pictureUrl])
+      await waitFor(() => expect(calls.entryGets).toBe(2))
+    })
+  })
+
   it('Happy Path: Bild hinzufügen → PUT mit dem verkleinerten Blob, Vorschau, Meldung, Fokus, Liste neu', async () => {
     const calls = stubPicture(async () => Response.json({ pictureVersion: 'pv-neu' }))
     const { dialog, choose, input } = await openPicture()

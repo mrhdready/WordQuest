@@ -596,6 +596,7 @@ function EntryPicture({
   const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null)
   const [working, setWorking] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const chooseRef = useRef<HTMLButtonElement>(null)
 
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -632,6 +633,28 @@ function EntryPicture({
     }
   }
 
+  // Ohne Rueckfrage: das Original liegt noch auf dem Geraet, neu waehlen stellt es wieder her.
+  async function remove() {
+    if (busyRef.current) return
+    busyRef.current = true
+    setWorking(true)
+    setNote(null)
+    try {
+      await api<void>(`/sets/${setId}/entries/${entry.id}/picture`, { method: 'DELETE' })
+      // „Bild entfernen“ verschwindet mit dem Bild: der Fokus bleibt im Abschnitt.
+      chooseRef.current?.focus()
+      setVersion(null)
+      setNote({ ok: true, message: 'Das Bild ist entfernt.' })
+      void queryClient.invalidateQueries({ queryKey: ['entries', setId] })
+    } catch (caught) {
+      onGone(caught)
+      setNote({ ok: false, message: pictureError(caught) })
+    } finally {
+      busyRef.current = false
+      setWorking(false)
+    }
+  }
+
   return (
     <section aria-labelledby="vokabel-bild" className="flex flex-col gap-4">
       <h3 id="vokabel-bild" className="type-headline text-ink">
@@ -644,10 +667,22 @@ function EntryPicture({
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={(event) => void choose(event)} />
       <div className="flex flex-wrap gap-2">
         {/* Waehrend der Anfrage nicht gesperrt: der fokussierte Button gaebe den Fokus sonst an body ab. */}
-        <Button type="button" variant="secondary" className="flex-auto" onClick={() => fileRef.current?.click()}>
+        <Button
+          ref={chooseRef}
+          type="button"
+          variant="secondary"
+          className="flex-auto"
+          onClick={() => fileRef.current?.click()}
+        >
           <ImagePlus className="size-4" aria-hidden />
           Bild wählen
         </Button>
+        {version ? (
+          <Button type="button" variant="secondary" className="flex-auto" onClick={() => void remove()}>
+            <Trash2 className="size-4" aria-hidden />
+            Bild entfernen
+          </Button>
+        ) : null}
       </div>
       {working ? (
         <Spinner label="Einen Moment …" />
