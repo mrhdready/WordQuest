@@ -25,6 +25,8 @@ public sealed class PictureTests : IClassFixture<ApiFactory>
     private const string EntryGone = "Diese Vokabel gibt es nicht (mehr).";
     private const string NotAPicture = "Das Bild muss eine vollständige WebP-, JPEG- oder PNG-Datei sein.";
     private const string TooLarge = "Das Bild ist zu groß. Erlaubt sind höchstens 300 KB.";
+    private const string Empty = "Es ist kein Bild angekommen. Wähle das Bild noch einmal aus.";
+    private const string Conflict = "Das Bild wurde gerade gleichzeitig geändert. Versuche es noch einmal.";
 
     private readonly ApiFactory _factory;
 
@@ -179,6 +181,54 @@ public sealed class PictureTests : IClassFixture<ApiFactory>
         Assert.Equal(0, await PictureRowsAsync(set.Entries[0].Id));
     }
 
+    // Gueltiger Kopf, kaputte Struktur (D-16): JPEG ohne FF D9, PNG ohne IEND,
+    // WebP mit falscher RIFF-Laenge, JPEG nur Kopf.
+    public static TheoryData<byte[]> BrokenStructure => new()
+    {
+        Jpeg(1000)[..998],
+        Png()[..^12],
+        BrokenRiffLength(),
+        new byte[] { 0xFF, 0xD8, 0xFF },
+    };
+
+    private static byte[] BrokenRiffLength()
+    {
+        byte[] data = WebP(1000);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4), 1000 - 8 + 1);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(BrokenStructure))]
+    public async Task Kaputte_Struktur_ergibt_400_und_das_vorherige_Bild_bleibt(byte[] data)
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+        byte[] png = Png();
+        Guid version = await VersionAsync(await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, png, "image/png"));
+
+        HttpResponseMessage response = await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, data, "image/png");
+
+        Assert.Equal(NotAPicture, await PictureErrorAsync(response));
+        HttpResponseMessage get = await owner.GetAsync($"/api/v1/pictures/{version}");
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        Assert.Equal(png, await get.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Leerer_Body_ergibt_400_mit_eigenem_Text()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        HttpResponseMessage response = await PutPictureAsync(owner, set.Set.Id, set.Entries[0].Id, [], "image/png");
+
+        Assert.Equal(Empty, await PictureErrorAsync(response));
+        Assert.Equal(0, await PictureRowsAsync(set.Entries[0].Id));
+    }
+
     [Fact]
     public async Task Genau_300_KB_sind_erlaubt()
     {
@@ -326,5 +376,31 @@ public sealed class PictureTests : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
         Assert.Equal(0, await PictureRowsAsync(entryIds));
+    }
+
+    // ------------------------------------------------------------ Konflikt
+
+    [Fact]
+    public async Task Gleichzeitige_erste_Uploads_ergeben_200_und_409()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 1);
+        Guid entryId = set.Entries[0].Id;
+        using HttpClient owner = _factory.CreateClientFor(family.Owner);
+
+        // Beide Anfragen sehen noch kein Bild und fuegen ein. Das INSERT prueft den
+        // Fremdschluessel mit FOR KEY SHARE auf der Vokabelzeile und wartet deshalb
+        // auf die Sperre; die zweite wartet danach auf den Primaerschluessel der ersten.
+        var held = await _factory.LockRowsAsync(("vocabulary_entry", entryId));
+        Task<HttpResponseMessage> one = PutPictureAsync(owner, set.Set.Id, entryId, Jpeg(1000), "image/jpeg");
+        Task<HttpResponseMessage> two = PutPictureAsync(owner, set.Set.Id, entryId, Png(), "image/png");
+        await _factory.WaitForBlockedAsync(2);
+        await ApiFactory.ReleaseAsync(held);
+        HttpResponseMessage[] responses = await Task.WhenAll(one, two);
+
+        Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+        HttpResponseMessage conflict = Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Conflict);
+        Assert.Equal(Conflict, await ProblemDetailAsync(conflict, HttpStatusCode.Conflict));
+        Assert.Equal(1, await PictureRowsAsync(entryId));
     }
 }

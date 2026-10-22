@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using WordQuest.Api.Contracts;
 using WordQuest.Infrastructure;
 using WordQuest.Modules.Content.Services;
@@ -8,6 +10,7 @@ namespace WordQuest.Api.Endpoints;
 public static class PictureEndpoints
 {
     private const string NotAPicture = "Das Bild muss eine vollständige WebP-, JPEG- oder PNG-Datei sein.";
+    private const string Empty = "Es ist kein Bild angekommen. Wähle das Bild noch einmal aus.";
 
     public static void MapPictureEndpoints(this IEndpointRouteBuilder app)
     {
@@ -50,15 +53,40 @@ public static class PictureEndpoints
             return TooLarge();
         }
 
+        if (total == 0)
+        {
+            return PictureError(Empty);
+        }
+
         byte[] data = buffer[..total];
         if (PictureRules.DetectContentType(data) is null)
         {
             return PictureError(NotAPicture);
         }
 
-        Guid? version = await pictures.SaveAsync(setId, entryId, data, ct);
-        return version is null ? SetEndpoints.EntryNotFound() : Results.Ok(new PictureDto(version.Value));
+        try
+        {
+            Guid? version = await pictures.SaveAsync(setId, entryId, data, ct);
+            return version is null ? SetEndpoints.EntryNotFound() : Results.Ok(new PictureDto(version.Value));
+        }
+        catch (DbUpdateException conflict) when (IsConcurrentWrite(conflict))
+        {
+            // Zwei erste Uploads gleichzeitig (z. B. Doppel-Tab): der zweite trifft den Primaerschluessel.
+            return Results.Problem(
+                title: "Konflikt",
+                detail: "Das Bild wurde gerade gleichzeitig geändert. Versuche es noch einmal.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+        catch (DbUpdateException gone) when (gone.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
+        {
+            // Die Vokabel wurde nach der Pruefung geloescht.
+            return SetEndpoints.EntryNotFound();
+        }
     }
+
+    private static bool IsConcurrentWrite(DbUpdateException exception) =>
+        exception is DbUpdateConcurrencyException
+        || exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
     private static async Task<IResult> GetAsync(
         Guid version, PictureService pictures, HttpContext http, CancellationToken ct)
