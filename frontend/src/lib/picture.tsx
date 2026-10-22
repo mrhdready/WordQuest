@@ -3,13 +3,13 @@ import { useState, type ReactNode } from 'react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
-function toDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(blob)
-  })
+// Ohne FileReader: Der nimmt nur Blobs aus seiner eigenen Umgebung an. Unter Node 22
+// (CI) liefert fetch im Test einen Node-Blob, den der FileReader von jsdom ablehnt.
+async function toDataUrl(blob: Blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return `data:${blob.type};base64,${btoa(binary)}`
 }
 
 /*
