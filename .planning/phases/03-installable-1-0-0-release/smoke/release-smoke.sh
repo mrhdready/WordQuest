@@ -331,7 +331,9 @@ gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
 echo "== Wiederherstellung (REL-02)"
 # Fingerabdruck der Fachdaten in einer Zeile, ohne refresh_token (restore.sh
 # leert die Tabelle absichtlich).
-FP_TABLES='tenant app_user learner_profile vocabulary_set vocabulary_entry card review_state review_log gamification_profile learning_session session_item'
+# vocabulary_picture: t::text nimmt die Bildbytes mit, der Abdruck vergleicht also
+# jedes Bild Byte fuer Byte (D-14).
+FP_TABLES='tenant app_user learner_profile vocabulary_set vocabulary_entry vocabulary_picture card review_state review_log gamification_profile learning_session session_item'
 fingerprint() {
   local sql="select concat_ws(' '" table
   for table in $FP_TABLES; do
@@ -388,7 +390,7 @@ WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
   WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD=geheim-123 \
   npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
   || fail "Erstdurchlauf auf der Release-Installation fehlgeschlagen."
-for table in learner_profile vocabulary_entry review_log; do
+for table in learner_profile vocabulary_entry vocabulary_picture review_log; do
   [[ "$(count_rows "$table")" -ge 1 ]] || fail "Nach dem Erstdurchlauf ist $table leer."
 done
 
@@ -412,6 +414,25 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
   -H "Authorization: Bearer $(cat .smoke/access-token)" \
   "http://localhost:${WQ_PORT}/api/v1/learners/$child_id" || true)"
 [[ "$code" == 204 ]] || fail "DELETE des Kindes: HTTP $code statt 204."
+# Auch das Bild entfernen: Sonst bewiese die Wiederherstellung fuer Bilder nichts,
+# es laege ja noch in der Datenbank (D-14).
+code="$(curl -s -o .smoke/sets.json -w '%{http_code}' \
+  -H "Authorization: Bearer $(cat .smoke/access-token)" \
+  "http://localhost:${WQ_PORT}/api/v1/sets" || true)"
+[[ "$code" == 200 ]] || fail "GET /api/v1/sets: HTTP $code statt 200."
+set_id="$(sed -n 's/.*"id":"\([^"]*\)","title":"Erstes Set".*/\1/p' .smoke/sets.json)"
+[[ -n "$set_id" ]] || fail "Erstes Set nicht in /api/v1/sets."
+code="$(curl -s -o .smoke/entries.json -w '%{http_code}' \
+  -H "Authorization: Bearer $(cat .smoke/access-token)" \
+  "http://localhost:${WQ_PORT}/api/v1/sets/$set_id/entries" || true)"
+[[ "$code" == 200 ]] || fail "GET /api/v1/sets/$set_id/entries: HTTP $code statt 200."
+entry_id="$(sed -n 's/.*"id":"\([^"]*\)","sourceText":"Hund".*/\1/p' .smoke/entries.json)"
+[[ -n "$entry_id" ]] || fail "Vokabel Hund nicht im Ersten Set."
+code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+  -H "Authorization: Bearer $(cat .smoke/access-token)" \
+  "http://localhost:${WQ_PORT}/api/v1/sets/$set_id/entries/$entry_id/picture" || true)"
+[[ "$code" == 204 ]] || fail "DELETE des Bildes: HTTP $code statt 204."
+[[ "$(count_rows vocabulary_picture)" == 0 ]] || fail "Nach dem Entfernen ist vocabulary_picture nicht leer."
 [[ "$(fingerprint)" != "$fp_s1" ]] || fail "Fingerabdruck nach dem Loeschen unveraendert."
 
 [[ -x restore.sh ]] || fail "restore.sh fehlt oder ist nicht ausfuehrbar."
@@ -444,6 +465,7 @@ inodes="$(while IFS= read -r path; do ls -1i "$path" | awk '{ print $1 }'; done 
 
 # Vor jeder neuen Anmeldung: Stand der Sicherung, keine erneuerbare Anmeldung.
 [[ "$(fingerprint)" == "$fp_s1" ]] || fail "Fingerabdruck nach restore.sh ungleich S1."
+[[ "$(count_rows vocabulary_picture)" -ge 1 ]] || fail "Das Bild ist nach restore.sh nicht zurueck."
 [[ "$(count_rows refresh_token)" == 0 ]] || fail "refresh_token ist nach restore.sh nicht leer."
 # /auth/refresh hat kein Anmelde-Limit (AuthEndpoints.cs:23).
 code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
@@ -693,7 +715,7 @@ docker compose up -d </dev/null
 wait_api
 wait_web
 [[ "$(image_of api)" == "$OLD_API_TAG" ]] || fail "api laeuft vor dem Update mit '$(image_of api)' statt '$OLD_API_TAG'."
-for table in learner_profile vocabulary_entry review_log; do
+for table in learner_profile vocabulary_entry vocabulary_picture review_log; do
   [[ "$(count_rows "$table")" -ge 1 ]] || fail "Vor dem Update ist $table leer."
 done
 fp_f0="$(fingerprint)"
