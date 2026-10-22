@@ -133,7 +133,7 @@
 | HARD-03 | Phase 3.1 | Complete |
 | HARD-04 | Phase 3.1 | Complete |
 | HARD-05 | Phase 3.1 | Complete |
-| IMG-01 | Phase 3.1.1 | Pending |
+| IMG-01 | Phase 3.1.1 | Pending — automatisch belegt 2026-10-23 (END f70271c), manuelle Abnahme A1–A3 offen |
 
 **Coverage:**
 - v1 requirements: 33 total

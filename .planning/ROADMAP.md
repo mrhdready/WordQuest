@@ -138,11 +138,11 @@ Plans:
   4. Backup, restore and upgrade keep the pictures (release smoke)
   5. Full gate green, axe 0 on touched pages, keyboard and 200 % zoom
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans executed — automatisch belegt, manuelle Abnahme A1–A3 offen
 
 Plans:
 - [x] 03.1.1-01-PLAN.md — Server: Bild speichern, ersetzen und ausliefern (Tabelle per dotnet ef, PUT/GET), nur Dateien mit Bild-Signatur und schlüssiger Struktur bis 300 KB, Konflikt 409 nach rotem Test, Mandantentrennung, Kaskade, Konzept (D-06 bis D-10, D-15, D-16)
 - [x] 03.1.1-02-PLAN.md — Vorschaubild in der Vokabelliste: `pictureVersion` ohne Bildbytes (SQL-Nachweis per Interceptor), `api()` mit Blob-Antwort, `VocabPicture` mit Emoji-Rückfall bei Lade- und Dekodierfehler, DESIGN.md, axe, Tastatur, 200 % (D-03, D-09, D-12, D-13, D-16)
 - [x] 03.1.1-03-PLAN.md — Abschnitt „Bild“ im Dialog „Vokabel bearbeiten“: wählen, ersetzen, entfernen, Verkleinern ohne EXIF/GPS (großes Foto dekodiert geprüft), Edge-Case-Matrix, 413 auch von nginx mit deutschem Text, DELETE mit Isolation (D-03 bis D-05, D-07, D-08, D-10, D-15)
 - [x] 03.1.1-04-PLAN.md — Bild in der Lernrunde statt des Emojis, auch bei der Wiederholung und ohne Secure Context, Runde ohne Bildbytes (SQL-Nachweis), Emoji im selben Rahmen bei Dekodierfehler, axe, 200 % und 320 px (D-11, D-12, D-15, D-16)
-- [ ] 03.1.1-05-PLAN.md — Bild durch Sicherung, Wiederherstellung und Update im Release-Smoke, Installationsseite und Doku-Schlussprüfung, volles Gate und Klon-Smoke auf END unter `/bin/bash`; IMG-01 automatisch belegt, manuelle Abnahme A1–A3 offen; END als Release-Kandidat (D-01, D-14, D-15)
+- [x] 03.1.1-05-PLAN.md — Bild durch Sicherung, Wiederherstellung und Update im Release-Smoke, Installationsseite und Doku-Schlussprüfung, volles Gate und Klon-Smoke auf END unter `/bin/bash`; IMG-01 automatisch belegt, manuelle Abnahme A1–A3 offen; END als Release-Kandidat (D-01, D-14, D-15)
