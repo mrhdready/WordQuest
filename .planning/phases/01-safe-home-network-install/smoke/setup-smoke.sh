@@ -69,6 +69,14 @@ built="$(docker image inspect -f '{{.Id}}' "wq-smoke-api:${WQ_VERSION}")"
 [[ "$running" == "$built" ]] || fail "API läuft nicht mit dem frisch gebauten Image."
 echo "IMAGE OK"
 
+echo "== API-Log beim ersten Start (leere Datenbank)"
+# Eltern lesen fail: als Fehler; erwartbare Meldungen der Migration gehoeren nicht dazu.
+docker compose logs --no-color api </dev/null >api-first-start.log 2>&1
+cat api-first-start.log
+[[ "$(grep -cE '(^|\| )(fail|crit): ' api-first-start.log || true)" -eq 0 ]] \
+  || fail "API-Log beim ersten Start enthaelt fail:/crit:."
+echo "STARTLOG OK"
+
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "Login mit dem neuen Konto: HTTP $code statt 200."
 code="$(login "$demo_email" "$demo_password")"

@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using WordQuest.Api;
 using WordQuest.Api.Auth;
 using WordQuest.Api.Endpoints;
@@ -230,6 +233,16 @@ await using (AsyncServiceScope scope = app.Services.CreateAsyncScope())
     // Fuer Migration und Seed bewusst ein eigener Kontext ohne
     // Mandantenfilter — der Request-Kontext kennt hier noch keinen Mandanten.
     await using var db = new WordQuestDbContext(options, new SystemTenantContext());
+
+    // Erster Start gegen die leere Datenbank aus Compose: Die Migrationshistorie
+    // anlegen, wie es MigrateAsync ohnehin als Erstes tut. Sonst lesen OrphanCleanup
+    // und NpgsqlMigrator.MigrateAsync die noch fehlende Tabelle; Npgsql faengt den
+    // Fehler ab, EF loggt die Abfrage vorher aber als fail:, und das sieht fuer
+    // Eltern nach einem Fehler aus. Fehlt die Datenbank ganz, legt MigrateAsync sie an.
+    if (await db.GetService<IRelationalDatabaseCreator>().ExistsAsync())
+    {
+        await db.GetService<IHistoryRepository>().CreateIfNotExistsAsync();
+    }
 
     // Waisen aus Altinstallationen vor den Fremdschluesseln entfernen (D-18).
     // Die CLI-Verben oben migrieren nicht und brauchen das deshalb nicht.
