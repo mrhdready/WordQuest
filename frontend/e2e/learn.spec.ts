@@ -437,6 +437,7 @@ test.describe('ohne Secure Context', () => {
     page: Page,
     browser: Browser,
     entry: { sourceText: string; targetText: string; emoji: string | null },
+    viewport?: { width: number; height: number },
   ) {
     const stamp = Date.now()
     const name = `Bildkind ${stamp}`
@@ -478,6 +479,7 @@ test.describe('ohne Secure Context', () => {
     await expect(page.getByRole('heading', { name: 'Was möchtest du üben?' })).toBeVisible()
 
     await page.getByRole('button', { name: title }).click()
+    if (viewport) await page.setViewportSize(viewport)
     const [started] = await Promise.all([
       page.waitForResponse((candidate) => candidate.url().endsWith('/api/v1/sessions')),
       goButton(page).click(),
@@ -499,9 +501,66 @@ test.describe('ohne Secure Context', () => {
   }
 
   test('Lernen mit Bild über HTTP', async ({ page, browser }) => {
-    const items = await startWithPicture(page, browser, { sourceText: 'Hund', targetText: 'dog', emoji: null })
-    expect(items.length).toBeGreaterThan(0)
-
+    // Die erste Karte erscheint bei 200 % (640 x 400 CSS-px), wie bei einem Kind mit
+    // Zoom: kein waagerechter Scrollbalken, das Antwortfeld hat den Fokus und ist im
+    // Bild. Der Rahmen steht schon vor dem Bild, der Fokus scrollt also nicht ins Leere.
+    const original = page.viewportSize()
+    const queue = await startWithPicture(
+      page,
+      browser,
+      { sourceText: 'Hund', targetText: 'dog', emoji: null },
+      { width: 640, height: 400 },
+    )
     await expectPictureCard(page)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640)
+    await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeInViewport()
+    if (original) await page.setViewportSize(original)
+    await expectReflow(page)
+    await checkPage(page)
+
+    // Reihenfolge wie im Client: Startliste plus nachgereichte Wiederholungen.
+    const solutions = new Map<string, string>()
+    const record = (item: SessionItem, result: AnswerResult) => {
+      solutions.set(item.cardId, result.correctAnswer)
+      if (result.retryItem) queue.push(result.retryItem)
+    }
+
+    // Ganze Runde per Tastatur: neue Karten falsch, Wiederholungen richtig, jeweils
+    // Enter im Antwortfeld; Enter auf "Weiter" (hat den Fokus) holt die naechste Karte.
+    let retryChecked = false
+    for (let index = 0; index < queue.length; index += 1) {
+      const item = queue[index]!
+      if (index > 0) {
+        await page.keyboard.press('Enter')
+        await expectPictureCard(page)
+        if (item.isRetry && !retryChecked) {
+          await checkPage(page)
+          retryChecked = true
+        }
+      }
+      await page.keyboard.type(solutions.get(item.cardId) ?? 'falsch')
+      record(item, await answer(page, () => page.keyboard.press('Enter')))
+    }
+    expect(retryChecked).toBe(true)
+
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    await checkPage(page)
+  })
+
+  // D-16: Der Server dekodiert nicht; ein Bild, an dem der Browser nach HTTP 200
+  // scheitert, erzeugt deshalb page.route (ohne Service Worker sieht es jede Antwort).
+  test('Bild nicht dekodierbar: Emoji im selben Rahmen', async ({ page, browser }) => {
+    await page.route('**/api/v1/pictures/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: 'kaputt' }),
+    )
+    await startWithPicture(page, browser, { sourceText: 'Katze', targetText: 'cat', emoji: '🐱' })
+
+    const frame = page.getByTestId('vokabelbild')
+    await expect(frame).toHaveText('🐱')
+    await expect(frame.locator('img')).toHaveCount(0)
+    await expect.poll(async () => (await frame.boundingBox())?.height).toBe(160)
+    await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeFocused()
+    await checkPage(page)
   })
 })
