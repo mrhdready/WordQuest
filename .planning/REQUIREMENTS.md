@@ -79,6 +79,7 @@
 
 - **LRN2-01**: Additional game modes in the frontend (backend already defines `wordcatcher`, `memory`, `cram`)
 - **LRN2-02**: Offline learning with outbox + sync
+- **CNT2-01**: Vocabulary library: curated CC0 sets by grade and topic in the repo, checked in CI, offered next to the CSV import ("Aus der Bibliothek", served from the web image); proposal in `.planning/research/VOKABEL-REGISTRY.md`
 
 ### Operations
 
