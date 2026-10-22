@@ -368,7 +368,7 @@ POST /api/v1/sessions/{id}/answers → Ergebnis
 
 Der Spielschlüssel wird beim Start der Session festgelegt, nicht pro Antwort. Ein neues Spiel zu bauen bedeutet damit: eine React-Komponente schreiben, die diese beiden Verträge bedient, plus ein Eintrag im serverseitigen `GameCatalog` (XP-Gewicht, maximale Bewertung, ob die Terminierung beeinflusst wird). Ein unbekannter Schlüssel fällt auf `classic` zurück. Keine Änderung an der Lernengine.
 
-**Distraktoren** (falsche Antwortoptionen) erzeugt der Server, nicht das Spiel — und zwar bevorzugt aus demselben Set und derselben Wortart. „Apfel" gegen `apple / orange / banana / pear` ist eine echte Übung; „Apfel" gegen `apple / school / running / because` ist geraten. Fallback auf die übrigen Wörter desselben Sets, wenn zu wenig gleichartige vorhanden sind. Es gibt höchstens vier Optionen.
+**Distraktoren** (falsche Antwortoptionen) erzeugt der Server, nicht das Spiel — und zwar bevorzugt aus demselben Set und derselben Wortart. „Apfel" gegen `apple / orange / banana / pear` ist eine echte Übung; „Apfel" gegen `apple / school / running / because` ist geraten. Fallback auf die übrigen Wörter desselben Sets, wenn zu wenig gleichartige vorhanden sind. Der Vorrat (höchstens 40 Wörter je Abfrage) wird zufällig aus dem ganzen Set gezogen, damit in großen Sets jedes Wort als falsche Option vorkommen kann. Es gibt höchstens vier Optionen.
 
 ### 7.2 Spielkatalog
 

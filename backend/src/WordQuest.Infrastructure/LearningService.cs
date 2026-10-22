@@ -615,6 +615,9 @@ public sealed class LearningService(
             .Where(e => e.SetId == entry.SetId
                         && e.Id != entry.Id
                         && e.PartOfSpeech == entry.PartOfSpeech)
+            // Zufaellige Auswahl aus dem ganzen Set: Ohne Sortierung kaemen nur die
+            // ersten 40 Woerter in Tabellenreihenfolge als falsche Option vor.
+            .OrderBy(_ => EF.Functions.Random())
             .Select(e => asksForTarget ? e.TargetText : e.SourceText)
             .Take(40)
             .ToListAsync(ct);
@@ -624,6 +627,7 @@ public sealed class LearningService(
             // Zu wenig gleichartige Woerter - mit dem Rest des Sets auffuellen.
             List<string> fallback = await db.VocabularyEntries
                 .Where(e => e.SetId == entry.SetId && e.Id != entry.Id)
+                .OrderBy(_ => EF.Functions.Random())
                 .Select(e => asksForTarget ? e.TargetText : e.SourceText)
                 .Take(40)
                 .ToListAsync(ct);

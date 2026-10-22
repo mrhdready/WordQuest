@@ -871,4 +871,31 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
 
         Assert.True(stored.LastReviewedAt > fixedNow, $"last_reviewed_at {stored.LastReviewedAt:O} liegt nicht nach {fixedNow:O}.");
     }
+
+    // EF-Warnung 10102 (Take ohne OrderBy): Der Vorrat fuer falsche Antwortoptionen
+    // war auf 40 Woerter in Tabellenreihenfolge begrenzt. In groesseren Sets kamen
+    // spaetere Woerter nie als falsche Option vor, eine Option von dort war also
+    // immer die richtige (Konzept §7.1: Uebung, nicht Raten).
+    [Fact]
+    public async Task Falsche_Antwortoptionen_kommen_aus_dem_ganzen_Set()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory, dailyNewLimit: 20);
+        SeededSet set = await SeedSetAsync(_factory, family, entries: 50);
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+
+        var distractors = new HashSet<string>(StringComparer.Ordinal);
+        for (int round = 0; round < 10; round++)
+        {
+            SessionView view = await StartAsync(child, family.Child.Id, set.Set.Id, GameCatalog.WordCatcher);
+            foreach (SessionItemView item in view.Items)
+            {
+                Assert.NotNull(item.Choices);
+                string correct = set.AnswerFor(item.Prompt);
+                distractors.UnionWith(item.Choices.Where(choice => choice != correct));
+            }
+        }
+
+        int entriesSeen = set.Entries.Count(e => distractors.Contains(e.SourceText) || distractors.Contains(e.TargetText));
+        Assert.True(entriesSeen > 41, $"Nur {entriesSeen} von 50 Woertern kamen als falsche Option vor.");
+    }
 }
