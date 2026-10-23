@@ -70,6 +70,27 @@ public sealed class StartupLogTests : IAsyncLifetime
             && entry.Message.Contains("gibt_es_nicht", StringComparison.Ordinal));
     }
 
+    // Ein Request, den der Client waehrend der Transaktion abbricht (Status 499),
+    // ist kein Fehler des Servers: Die Arbeit ist getan, der Commit laeuft zu Ende
+    // (261022-d7w, e2e-Log beim Abmelden).
+    [Fact]
+    public async Task Abgebrochener_Request_beim_Commit_loggt_keinen_Fehler()
+    {
+        await using AsyncServiceScope scope = _factory.Services.CreateAsyncScope();
+        DbContextOptions<WordQuestDbContext> options =
+            scope.ServiceProvider.GetRequiredService<DbContextOptions<WordQuestDbContext>>();
+        await using var db = new WordQuestDbContext(options, new SystemTenantContext());
+        using var aborted = new CancellationTokenSource();
+
+        await db.InTransactionAsync(async () =>
+        {
+            await db.Database.ExecuteSqlRawAsync("SELECT 1");
+            await aborted.CancelAsync();
+        }, aborted.Token);
+
+        Assert.Empty(_logs.Errors);
+    }
+
     private sealed record LogEntry(LogLevel Level, string Category, string Message);
 
     /// <summary>Sammelt alle Eintraege ab Warning (in der Konsole: warn:, fail: und crit:).</summary>
