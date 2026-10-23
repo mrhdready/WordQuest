@@ -31,7 +31,8 @@ const queryClient = new QueryClient({
 export function App() {
   // Neue oder beendete Anmeldung (Abmelden, Refresh 400/401, anderer Tab):
   // Daten der vorigen gehoeren nicht zum naechsten Profil (03.1-02 INFO 8).
-  // Im Ereignis selbst, damit schon das erste Rendern danach nichts Altes zeigt.
+  // Im Ereignis selbst: React rendert erst danach neu (auch nach dem Listener von
+  // useSyncExternalStore), das erste Rendern zeigt so nichts Altes.
   useEffect(() => {
     let session = currentSession()
     return tokenStore.subscribe(() => {

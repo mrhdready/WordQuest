@@ -72,16 +72,22 @@ describe('Sitzungsende zeigt die Anmeldung', () => {
         return Response.json([])
       }),
     )
-    tokenStore.save(learner('kind-a', 'Mia'))
+    await tokenStore.saveLogin(learner('kind-a', 'Mia'))
     renderAppAt('/')
     expect(await screen.findByText('Tiere')).toBeTruthy()
 
     tokenStore.clear()
     sets = [{ id: 's-b', title: 'Farben', entryCount: 5 }]
-    tokenStore.save(learner('kind-b', 'Ben'))
+    await tokenStore.saveLogin(learner('kind-b', 'Ben'))
 
     expect(await screen.findByText('Farben')).toBeTruthy()
     expect(screen.queryByText('Tiere')).toBeNull()
+
+    // Rotation ist dieselbe Anmeldung: der Cache bleibt, kein neues Laden.
+    sets = [{ id: 's-c', title: 'Zahlen', entryCount: 5 }]
+    tokenStore.save({ ...learner('kind-b', 'Ben'), accessToken: 'a3', refreshToken: 'r3' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.getByText('Farben')).toBeTruthy()
   })
 
   it('Anmelden setzt den Nutzer sofort', async () => {
