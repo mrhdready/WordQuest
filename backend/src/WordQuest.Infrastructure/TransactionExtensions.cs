@@ -21,7 +21,10 @@ public static class TransactionExtensions
         {
             await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
             await work();
-            await transaction.CommitAsync(ct);
+            // Ohne ct: Ist die Arbeit getan, wird sie festgeschrieben, auch wenn der
+            // Client inzwischen abgebrochen hat (Status 499). Ein abgebrochener Commit
+            // liesse offen, ob er wirkte, und EF loggte ihn als Fehler (20205).
+            await transaction.CommitAsync(CancellationToken.None);
         });
         db.ChangeTracker.AcceptAllChanges();
     }
