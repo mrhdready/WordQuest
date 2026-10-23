@@ -12,6 +12,7 @@ import { ManageLayout } from '@/features/manage/ManageLayout'
 import { ProgressPage } from '@/features/manage/ProgressPage'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
 import { SetsPage } from '@/features/manage/SetsPage'
+import { retryQuery } from '@/lib/api'
 import { AuthProvider, useAuth } from '@/lib/auth'
 
 const queryClient = new QueryClient({
@@ -20,7 +21,7 @@ const queryClient = new QueryClient({
       // Offline ist der Normalfall, nicht die Ausnahme: lieber veraltete
       // Daten zeigen als eine leere Seite (Konzept §13).
       staleTime: 30_000,
-      retry: 1,
+      retry: retryQuery,
       refetchOnWindowFocus: false,
       networkMode: 'offlineFirst',
     },

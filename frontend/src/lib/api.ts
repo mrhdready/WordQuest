@@ -204,6 +204,16 @@ async function awaitOtherTab(sent: string, session: string | null): Promise<bool
 }
 
 /*
+  Automatische Wiederholung einer Abfrage (TanStack Query), einmal wie bisher,
+  aber nicht nach 409: Sie kaeme nach etwa einer Sekunde, traefe den nach der
+  409-Frist verbrauchten Token und meldete alle Tabs ab, bevor der andere Tab
+  seinen Nachfolger speichern konnte (Review 261023-a8x).
+*/
+export function retryQuery(failureCount: number, error: Error): boolean {
+  return failureCount < 1 && !(error instanceof ApiError && error.status === 409)
+}
+
+/*
   Darf eine Anfrage nach 401 wiederholt werden? Eine verspaetete 401 nach einer
   Rotation darf die Kette nicht weiterdrehen: Der Nachfolger des anderen Tabs
   bliebe sonst nicht aktiv, und dessen verspaeteter Refresh widerriefe alles
