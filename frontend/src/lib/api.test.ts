@@ -4,6 +4,8 @@ import { api, ApiError, tokenStore } from '@/lib/api'
 const unreachable =
   'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
 const generic = 'Das hat nicht geklappt. Versuche es noch einmal.'
+const renewing =
+  'Die Anmeldung wird gerade in einem anderen Fenster erneuert. Versuche es gleich noch einmal.'
 
 // Je Test eigenes fetch-Stub (RESEARCH Pitfall 9).
 function respond(status: number, body: string) {
@@ -353,47 +355,98 @@ describe('Zwei Tabs', () => {
     expect(tokenStore.access).toBe('a2')
   })
 
-  it('409 ohne Nachfolger: nach 3 Sekunden nur dieser Tab abgemeldet', async () => {
+  // Codex-Review 2026-10-23 MEDIUM: Die Frist eines Tabs darf die Anmeldung
+  // aller Tabs nicht loeschen, waehrend die Antwort des anderen noch unterwegs ist.
+  it('409 und Antwort des anderen Tabs erst nach der Frist: Anmeldung bleibt, beide arbeiten weiter', async () => {
     vi.useFakeTimers()
     await tokenStore.saveLogin(first)
+    const tabA = await tab()
+    const tabB = await tab()
+    let answerFirst: (response: Response) => void = () => {}
+    let refreshCalls = 0
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.endsWith('/auth/refresh') ? new Response('', { status: 409 }) : unauthorized(),
-      ),
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.endsWith('/auth/refresh')) {
+          refreshCalls++
+          if (refreshCalls === 1) return new Promise<Response>((resolve) => (answerFirst = resolve))
+          return Promise.resolve(new Response('', { status: 409 }))
+        }
+        return Promise.resolve(bearer(init) === 'Bearer a2' ? ok() : unauthorized())
+      }),
     )
-    const pending = api('/probe').catch((error: unknown) => error)
+
+    const pendingA = tabA.api('/probe')
+    await vi.advanceTimersByTimeAsync(0)
+    const pendingB = tabB.api('/probe').catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(3_100)
+    const error = await pendingB
+    expect(tokenStore.refresh).toBe('r1')
+    expect(error).toBeInstanceOf(tabB.ApiError)
+    expect((error as ApiError).status).toBe(409)
+    expect((error as ApiError).message).toBe(renewing)
+
+    answerFirst(new Response(JSON.stringify(second), { status: 200 }))
+    expect(await pendingA).toEqual({ ok: true })
+    expect(tokenStore.refresh).toBe('r2')
+    expect(await tabB.api('/probe')).toEqual({ ok: true })
+    expect(refreshCalls).toBe(2)
+  })
+
+  // Lieferte den Token nach der Frist niemand nach, wird er nicht noch einmal
+  // gesendet: Nach der Gnadenfrist widerriefe die Reuse-Detection sonst alle
+  // Anmeldungen des Kontos (03.1-01).
+  it('409 ohne Nachfolger: nach 3 Sekunden wiederholbarer Fehler, der nächste Versuch meldet ohne Refresh ab', async () => {
+    vi.useFakeTimers()
+    await tokenStore.saveLogin(first)
+    const tabA = await tab()
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith('/auth/refresh') ? new Response('', { status: 409 }) : unauthorized(),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const pending = tabA.api('/probe').catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(2_900)
     expect(tokenStore.refresh).toBe('r1')
     await vi.advanceTimersByTimeAsync(200)
     const error = await pending
-    expect(error).toBeInstanceOf(ApiError)
-    expect((error as ApiError).status).toBe(401)
+    expect(error).toBeInstanceOf(tabA.ApiError)
+    expect((error as ApiError).status).toBe(409)
+    expect((error as ApiError).message).toBe(renewing)
+    expect(tokenStore.refresh).toBe('r1')
+
+    const next = await tabA.api('/probe').catch((caught: unknown) => caught)
+    expect((next as ApiError).status).toBe(401)
     expect(tokenStore.refresh).toBeNull()
     expect(tokenStore.access).toBeNull()
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/auth/refresh'))).toHaveLength(1)
   })
 
   // Hintergrund-Tabs drosseln Timer: Die Frist misst Zeit, nicht Durchlaeufe (Review LOW 1).
   it('409 ohne Nachfolger: Frist nach Uhrzeit, auch bei gedrosselten Timern', async () => {
     vi.useFakeTimers()
     await tokenStore.saveLogin(first)
+    const tabA = await tab()
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) =>
         url.endsWith('/auth/refresh') ? new Response('', { status: 409 }) : unauthorized(),
       ),
     )
-    const pending = api('/probe').catch((error: unknown) => error)
+    let settled = false
+    const pending = tabA.api('/probe').catch((error: unknown) => {
+      settled = true
+      return error
+    })
     try {
       await vi.advanceTimersByTimeAsync(0)
       vi.setSystemTime(Date.now() + 3_000)
       await vi.advanceTimersByTimeAsync(100)
-      expect(tokenStore.refresh).toBeNull()
+      expect(settled).toBe(true)
     } finally {
       // Wartende Schleife auch im Fehlerfall beenden, sonst haengt refreshInFlight.
       await vi.advanceTimersByTimeAsync(3_000)
     }
-    expect(await pending).toBeInstanceOf(ApiError)
+    expect(((await pending) as ApiError).status).toBe(409)
   })
 
   it('mehrere verspätete 401er nach einer Rotation: genau ein Refresh', async () => {
