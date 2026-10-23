@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { GuardianLoginPage } from '@/features/auth/GuardianLoginPage'
 import { ProfilePickerPage } from '@/features/auth/ProfilePickerPage'
@@ -12,7 +12,7 @@ import { ManageLayout } from '@/features/manage/ManageLayout'
 import { ProgressPage } from '@/features/manage/ProgressPage'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
 import { SetsPage } from '@/features/manage/SetsPage'
-import { retryQuery } from '@/lib/api'
+import { retryQuery, tokenStore } from '@/lib/api'
 import { AuthProvider, useAuth } from '@/lib/auth'
 
 const queryClient = new QueryClient({
@@ -29,6 +29,18 @@ const queryClient = new QueryClient({
 })
 
 export function App() {
+  // Neue oder beendete Anmeldung (Abmelden, Refresh 400/401, anderer Tab):
+  // Daten der vorigen gehoeren nicht zum naechsten Profil (03.1-02 INFO 8).
+  // Im Ereignis selbst, damit schon das erste Rendern danach nichts Altes zeigt.
+  useEffect(() => {
+    let session = currentSession()
+    return tokenStore.subscribe(() => {
+      if (currentSession() === session) return
+      session = currentSession()
+      queryClient.clear()
+    })
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -38,6 +50,12 @@ export function App() {
       </AuthProvider>
     </QueryClientProvider>
   )
+}
+
+// Kennung der Anmeldung, null heisst abgemeldet. Eine Rotation aendert sie nicht.
+// Anmeldungen von vor wq.session haben keine Kennung, sind aber angemeldet.
+function currentSession(): string | null {
+  return tokenStore.refresh ? (tokenStore.session ?? '') : null
 }
 
 function AppRoutes() {
