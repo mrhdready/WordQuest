@@ -249,18 +249,25 @@ public sealed class AuthService(
             return;
         }
 
-        // Abmelden waehrend eines laufenden Refreshes beendet auch den Nachfolger,
-        // den der Server schon ausgestellt hat (D-05). Erst unter der Sperre ist
-        // der Stand des Tokens verlaesslich; deshalb hier neu lesen.
+        // Abmelden beendet die ganze Kette ab dem vorgelegten Token, auch
+        // Nachfolger, die der Server schon ausgestellt oder weitergedreht hat
+        // (D-05; Codex-Review 2026-10-23). Erst unter der Sperre ist der Stand
+        // verlaesslich; deshalb hier lesen. Eine Abfrage fuer alle Tokens des
+        // Kontos statt einer je Glied, weil alte Tokens nicht geloescht werden.
         await db.InTransactionAsync(async () =>
         {
             await db.LockUserAsync(userId.Value, ct);
-            string? successor = await db.RefreshTokens
+            Dictionary<string, string?> successors = await db.RefreshTokens
                 .IgnoreQueryFilters()
-                .Where(t => t.TokenHash == hash)
-                .Select(t => t.ReplacedByTokenHash)
-                .FirstOrDefaultAsync(ct);
-            string[] hashes = successor is null ? [hash] : [hash, successor];
+                .Where(t => t.UserId == userId.Value)
+                .Select(t => new { t.TokenHash, t.ReplacedByTokenHash })
+                .ToDictionaryAsync(t => t.TokenHash, t => t.ReplacedByTokenHash, ct);
+            List<string> hashes = [];
+            for (string? current = hash; current is not null && successors.TryGetValue(current, out string? next); current = next)
+            {
+                hashes.Add(current);
+            }
+
             await db.RefreshTokens
                 .IgnoreQueryFilters()
                 .Where(t => hashes.Contains(t.TokenHash) && t.RevokedAt == null)
