@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, tokenStore } from '@/lib/api'
+import { api, ApiError, retryQuery, tokenStore } from '@/lib/api'
 
 const unreachable =
   'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
@@ -588,5 +588,17 @@ describe('Zwei Tabs', () => {
     expect(await pending).toBeInstanceOf(ApiError)
     expect(refreshCalls).toBe(0)
     expect(probeCalls).toBe(1)
+  })
+})
+
+// Review 261023-a8x MEDIUM: Die automatische Wiederholung einer Abfrage (nach
+// etwa einer Sekunde) waere sonst der "naechste Versuch" und meldete alle Tabs
+// ab, bevor der andere Tab seinen Nachfolger speichern konnte.
+describe('retryQuery', () => {
+  it('wiederholt einmal, aber nicht nach 409', () => {
+    expect(retryQuery(0, new ApiError(renewing, 409))).toBe(false)
+    expect(retryQuery(0, new ApiError(generic, 500))).toBe(true)
+    expect(retryQuery(0, new ApiError(unreachable, 0))).toBe(true)
+    expect(retryQuery(1, new ApiError(generic, 500))).toBe(false)
   })
 })
