@@ -21,6 +21,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginAsGuardian = useCallback(async (email: string, password: string) => {
     const auth = await api<AuthResponse>('/auth/login', {
       method: 'POST',
+      // Eine 401 heisst hier falsche Daten, nicht abgelaufene Sitzung: kein
+      // Refresh und kein zweiter Versuch, der beim Rate-Limit doppelt zaehlte.
+      retryOn401: false,
       body: { email, password },
     })
     await tokenStore.saveLogin(auth)
@@ -29,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginAsLearner = useCallback(async (learnerId: string, pin: string) => {
     const auth = await api<AuthResponse>('/auth/learner-login', {
       method: 'POST',
+      retryOn401: false,
       body: { learnerId, pin },
     })
     await tokenStore.saveLogin(auth)
