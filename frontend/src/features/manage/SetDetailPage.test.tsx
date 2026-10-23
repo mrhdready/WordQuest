@@ -1180,6 +1180,28 @@ describe('CSV-Import: Datei wählen', () => {
     expect(textarea.readOnly).toBe(false)
   })
 
+  // Codex-Review: sonst gaebe die erste Datei die Vorschau frei, waehrend die zweite noch liest.
+  it('Zweite Datei während des Lesens: wird nicht gelesen, die erste gilt', async () => {
+    stubImport([hundRow])
+    const { input, textarea } = await openImportFile()
+    let release: (bytes: ArrayBuffer) => void = () => {}
+    const first = csvFile(loeweUtf8)
+    Object.defineProperty(first, 'arrayBuffer', {
+      value: () => new Promise<ArrayBuffer>((resolve) => (release = resolve)),
+    })
+    const secondRead = vi.fn(() => Promise.resolve(new Uint8Array(new TextEncoder().encode('Hund;dog')).buffer))
+    const second = csvFile([], 'zweite.csv')
+    Object.defineProperty(second, 'arrayBuffer', { value: secondRead })
+
+    await userEvent.upload(input, first)
+    await userEvent.upload(input, second)
+    release(new Uint8Array(loeweUtf8).buffer)
+
+    await waitFor(() => expect(textarea.value).toBe('Löwe;lion'))
+    expect(secondRead).not.toHaveBeenCalled()
+    expect((await screen.findByRole('status')).textContent).toBe('Die Datei „loewe.csv“ ist eingelesen.')
+  })
+
   it('Dateifehler nach einem Vorschau-Fehler: nur die neue Meldung steht da', async () => {
     stubImport([hundRow], { preview: async () => new Response('', { status: 500 }) })
     const { input, textarea } = await openImportFile()
