@@ -200,13 +200,13 @@ Recent decisions affecting current work:
 | 261022-q7a | „?“ am Antwortende ignorieren (Konzept §6.4), UTF-16 im CSV-Import (M2), erster Start ohne fail:-Zeilen | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen | [Zusammenfassung](quick/261022-q7a-fragezeichen-utf16-migrationslog/261022-q7a-SUMMARY.md) |
 | 261022-d7w | Start ohne warn:-Zeilen von DataProtection (Vorladen entfernt), EF-Warnung 10102: Distraktoren aus dem ganzen Set, Profilauswahl sortiert | Umgesetzt; Gate, e2e/axe, Install-Smoke (STARTLOG ohne warn:) gruen | [Zusammenfassung](quick/261022-d7w-dataprotection-startwarnungen/261022-d7w-SUMMARY.md) |
 | 261023-a8x | Abmelden widerruft die ganze Token-Kette; 409-Frist meldet wiederholbaren Fehler statt alle Tabs abzumelden, Abfragen nach 409 ohne Auto-Wiederholung (HARD-01, Codex-Review 2026-10-23) | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen | [Zusammenfassung](quick/261023-a8x-auth-logout-kette/261023-a8x-SUMMARY.md) |
+| 261023-k4m | Login nach 401 ohne Refresh/Wiederholung, Query-Cache beim Anmeldewechsel leeren, CSV-Auswahl waehrend des Lesens sperren, Commit ohne Request-Token (kein fail: bei Abbruch) (HARD-01, 03.1-02 INFO 7/8, Codex-Review) | Umgesetzt; Gate, e2e/axe (API-Log ohne fail:), Install-Smoke gruen | [Zusammenfassung](quick/261023-k4m-login-cache-csv-logoutlog/261023-k4m-SUMMARY.md) |
 
 ### Blockers/Concerns
 
 - Lokales Tag v1.0.0 steht auf f70271c (END 03.1.1, enthaelt alle Quicks bis 261022-d7w); nicht gepusht. Vor dem Push master auf v1-fertig bringen.
-- Offen aus 03.1: `retryOn401` bei `/auth/login` und `/auth/learner-login` (falsches Passwort zaehlt doppelt fuers Rate-Limit), Query-Cache beim Sitzungsende nicht geleert, Refresh-Widerruf aller Tokens wenn Abmelden das Rennen gewinnt (03.1-01/-02-SUMMARY)
+- Offen aus 03.1: Refresh-Widerruf aller Tokens wenn Abmelden das Rennen gewinnt (03.1-01/-02-SUMMARY)
 - Schuld aus 261023-a8x: `LogoutAsync` laedt alle Refresh-Tokens des Kontos (`AuthService.cs:262-264`), alte werden nie geloescht; heute unkritisch, spaeter ab `CreatedAt` filtern oder rekursive CTE
-- Offen aus 261022-d7w: Abbruch durch den Client beim Logout loggt `fail:` (Transaction 20205, Status 499)
 - e2e-Laeufe ueber 15 min scheitern vermutlich am geteilten Refresh-Token aus global-setup.ts (03.1-07-SUMMARY, Offene Punkte); nicht aufgetreten, nicht ausgebaut
 
 ## Deferred Items
