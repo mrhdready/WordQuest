@@ -202,9 +202,9 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- [Phase 2]: Only a pure domain test project exists; QUAL-01 needs a new integration test project with real PostgreSQL
-- Quicks 261021-p4z, 261021-v4n, 261022-fke, 261022-cb3, 261022-q7a und 261022-d7w aendern Code nach fe24d8b (PIN genau 4 Ziffern, Anmeldung ohne „Los geht’s“, sichtbare Warteanzeige, CSV-Datei waehlen, „?“/UTF-16/Startlog, DataProtection-Startwarnungen/Distraktoren): soll das in 1.0.0, muss der Tag-Kandidat neu bestimmt werden
-- 03.1-07 abgeschlossen: Tag v1.0.0 nur auf fe24d8b (Prod-Stack und volles Gate auf diesem Commit; danach nur .planning/ geaendert); setzt der Orchestrator
+- Lokales Tag v1.0.0 steht auf f70271c (END 03.1.1, enthaelt alle Quicks bis 261022-d7w); nicht gepusht. Vor dem Push master auf v1-fertig bringen.
+- Offen aus 03.1: `retryOn401` bei `/auth/login` und `/auth/learner-login` (falsches Passwort zaehlt doppelt fuers Rate-Limit), Query-Cache beim Sitzungsende nicht geleert, Refresh-Widerruf aller Tokens wenn Abmelden das Rennen gewinnt, Abmelden widerruft nur den direkten Nachfolger (03.1-01/-02-SUMMARY)
+- Offen aus 261022-d7w: Abbruch durch den Client beim Logout loggt `fail:` (Transaction 20205, Status 499)
 - e2e-Laeufe ueber 15 min scheitern vermutlich am geteilten Refresh-Token aus global-setup.ts (03.1-07-SUMMARY, Offene Punkte); nicht aufgetreten, nicht ausgebaut
 
 ## Deferred Items
