@@ -854,6 +854,8 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
   const [fileNote, setFileNote] = useState<{ ok: boolean; message: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const [reading, setReading] = useState(false)
+  // Ref statt nur State: eine zweite Auswahl kann vor dem naechsten Rendern ankommen.
+  const readingRef = useRef(false)
 
   const runPreview = useMutation({
     mutationFn: () =>
@@ -895,7 +897,9 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
     const file = event.target.files?.[0]
     // Leeren, damit dieselbe Datei nach einer Korrektur erneut ein change ausloest.
     event.target.value = ''
-    if (!file) return
+    // Waehrend eine Datei gelesen wird, zaehlt keine zweite: sonst gaebe die erste die
+    // Vorschau frei, waehrend die zweite noch liest (Codex-Review).
+    if (!file || readingRef.current) return
     // Die Meldung gehoert zur letzten Aktion: alte Fehler aus Vorschau und Import gehen weg.
     runPreview.reset()
     confirm.reset()
@@ -904,6 +908,7 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
       return
     }
     let text: string
+    readingRef.current = true
     setReading(true)
     try {
       text = decodeCsv(await file.arrayBuffer())
@@ -911,6 +916,7 @@ function ImportPanel({ setId, onDone }: { setId: string; onDone: () => void }) {
       setFileNote({ ok: false, message: FILE_UNREADABLE })
       return
     } finally {
+      readingRef.current = false
       setReading(false)
     }
     changeContent(text)
