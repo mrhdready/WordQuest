@@ -18,6 +18,8 @@ const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
 // Rate-Limit "auth" (Program.cs) antwortet ohne Koerper, das Zeitfenster ist eine
 // Minute. Wortlaut wie die PIN-Sperre in AuthService.
 const TOO_MANY = 'Zu viele Versuche. Bitte in einer Minute nochmal probieren.'
+const RENEWING =
+  'Die Anmeldung wird gerade in einem anderen Fenster erneuert. Versuche es gleich noch einmal.'
 
 export class ApiError extends Error {
   constructor(
@@ -116,10 +118,19 @@ function safeWrite(key: string, value: string) {
 let refreshInFlight: Promise<boolean> | null = null
 // So lange wartet ein Tab nach 409 auf den Token, den der andere Tab speichert.
 const OTHER_TAB_WAIT_MS = 3_000
+// Token, fuer den nach 409 binnen der Frist kein Nachfolger kam (nur dieser Tab).
+let abandoned: string | null = null
 
 async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = tokenStore.refresh
   if (!refreshToken) return false
+  // Steht er beim naechsten Versuch immer noch da, hat ihn niemand ersetzt.
+  // Noch einmal senden hiesse nach der Gnadenfrist Wiederverwendung und
+  // Widerruf aller Anmeldungen des Kontos; deshalb nur lokal abmelden.
+  if (refreshToken === abandoned) {
+    tokenStore.clear()
+    return false
+  }
 
   // Mehrere parallele 401er duerfen nicht mehrere Rotationen ausloesen -
   // die zweite wuerde als Token-Wiederverwendung gewertet und die Sitzung
@@ -181,9 +192,12 @@ async function awaitOtherTab(sent: string, session: string | null): Promise<bool
     if (!current || tokenStore.session !== session) return false
     if (current !== sent) return true
     if (Date.now() >= deadline) {
-      // Kein Nachfolger aufgetaucht: nur diesen Tab abmelden, nichts widerrufen.
-      tokenStore.clear()
-      return false
+      // Kein Nachfolger aufgetaucht. Der Speicher gehoert allen Tabs; die
+      // Antwort an den anderen Tab kann noch unterwegs sein. Deshalb nichts
+      // loeschen, sondern einen wiederholbaren Fehler melden (Codex-Review
+      // 2026-10-23).
+      abandoned = sent
+      throw new ApiError(RENEWING, 409)
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
