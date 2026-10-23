@@ -396,6 +396,23 @@ public sealed class AuthEndpointTests : IAsyncLifetime
         Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, second.RefreshToken), HttpStatusCode.Unauthorized));
     }
 
+    // Codex-Review 2026-10-23 HIGH: Abmelden mit einem Token, das schon zweimal
+    // weitergedreht wurde (R0 -> R1 -> R2), beendet auch das Ende der Kette.
+    [Fact]
+    public async Task Abmelden_mit_mehrfach_rotiertem_Token_widerruft_die_ganze_Kette()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+        using HttpClient client = _factory.CreateClient();
+        AuthResponse r0 = await TokensAsync(await LoginAsync(client, family.Owner, "geheim-123"));
+        AuthResponse r1 = await TokensAsync(await RefreshAsync(client, r0.RefreshToken));
+        AuthResponse r2 = await TokensAsync(await RefreshAsync(client, r1.RefreshToken));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await LogoutAsync(client, r0.RefreshToken)).StatusCode);
+
+        Assert.Equal(0, await ActiveRefreshTokensAsync(family.Owner.Id));
+        Assert.Equal(Expired, await DetailAsync(await RefreshAsync(client, r2.RefreshToken), HttpStatusCode.Unauthorized));
+    }
+
     // Abmelden laeuft, waehrend der Refresh mit demselben Token schreibt
     // (Review 01 HIGH). Die Testsperre liegt auf der Token-Zeile: Der Refresh
     // haelt dann schon die Kontosperre und wartet beim Beanspruchen, das
