@@ -56,6 +56,34 @@ describe('Sitzungsende zeigt die Anmeldung', () => {
     expect(await screen.findByRole('heading', { name: 'Anmelden' })).toBeTruthy()
   })
 
+  // 03.1-02 Review INFO 8: Daten der vorigen Anmeldung bleiben nicht im Speicher von TanStack Query.
+  it('anderes Kind im selben Tab sieht nicht die Sets des vorigen', async () => {
+    const learner = (id: string, displayName: string): AuthResponse => ({
+      ...guardian,
+      user: { id, displayName, role: 'Learner', tenantId: 't1' },
+    })
+    const overview = { displayName: '', level: 1, levelProgress: 0, xpToNextLevel: 10, streak: 0, coins: 0, cardsMastered: 0, cardsTotal: 5, dueToday: 1, newRemainingToday: 0 }
+    let sets = [{ id: 's-a', title: 'Tiere', entryCount: 5 }]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/sets')) return Response.json(sets)
+        if (url.endsWith('/overview')) return Response.json(overview)
+        return Response.json([])
+      }),
+    )
+    tokenStore.save(learner('kind-a', 'Mia'))
+    renderAppAt('/')
+    expect(await screen.findByText('Tiere')).toBeTruthy()
+
+    tokenStore.clear()
+    sets = [{ id: 's-b', title: 'Farben', entryCount: 5 }]
+    tokenStore.save(learner('kind-b', 'Ben'))
+
+    expect(await screen.findByText('Farben')).toBeTruthy()
+    expect(screen.queryByText('Tiere')).toBeNull()
+  })
+
   it('Anmelden setzt den Nutzer sofort', async () => {
     vi.stubGlobal(
       'fetch',
@@ -78,7 +106,7 @@ describe('Sitzungsende zeigt die Anmeldung', () => {
 
 // Pruefkomponente am echten AuthProvider: zeigt den Nutzer und loest Anfragen aus.
 function Probe() {
-  const { user, logout, loginAsGuardian } = useAuth()
+  const { user, logout, loginAsGuardian, loginAsLearner } = useAuth()
   const [loaded, setLoaded] = useState(false)
   return (
     <>
@@ -98,6 +126,9 @@ function Probe() {
         onClick={() => void loginAsGuardian('mama@example.org', 'geheim12345').catch(() => undefined)}
       >
         Anmelden
+      </button>
+      <button onClick={() => void loginAsLearner('kind-1', '1234').catch(() => undefined)}>
+        Kind anmelden
       </button>
     </>
   )
@@ -144,6 +175,30 @@ describe('Abmelden ist endgueltig', () => {
     expect(tokenStore.access).toBeNull()
     expect(tokenStore.rawUser).toBeNull()
     expect(screen.getByText('abgemeldet')).toBeTruthy()
+  })
+})
+
+// 03.1-02 Review INFO 7: Ein falsches Passwort zaehlt beim Rate-Limit einmal,
+// auch wenn noch eine Sitzung im Speicher steht.
+describe('Anmelden mit falschen Daten bei bestehender Sitzung', () => {
+  it.each([
+    ['Eltern', 'Anmelden', '/auth/login'],
+    ['Kind', 'Kind anmelden', '/auth/learner-login'],
+  ])('%s: eine Anfrage, kein Refresh', async (_who, button, path) => {
+    tokenStore.save(guardian)
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith('/auth/refresh')
+        ? new Response(JSON.stringify(rotated), { status: 200 })
+        : new Response(JSON.stringify({ detail: 'Falsch.' }), { status: 401 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const user = renderProbe()
+
+    await user.click(screen.getByRole('button', { name: button }))
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([`/api/v1${path}`])
   })
 })
 
