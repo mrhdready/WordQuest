@@ -87,6 +87,15 @@
 - **OPS2-02**: Off-host backups, CI restore/upgrade tests, Dependabot, pinned infra images
 - **OPS2-03**: Further hardening: service-worker cache allowlist, CSP check on `index.html`, health split, payload limits, no PII in logs, refresh grace window
 
+### Code quality
+
+Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`).
+
+- **QA2-01**: Playwright/axe e2e and the install/release smokes run in CI, not only locally
+- **QA2-02**: Frontend formatter checked in the gate (scope and tool need approval: new dependency)
+- **QA2-03**: Move business logic and direct DB access out of `SetEndpoints.cs` into a service (pattern `LearningService`)
+- **QA2-04**: Split `SetDetailPage.tsx` (about 1040 lines) into smaller components
+
 ## Out of Scope
 
 | Feature | Reason |
@@ -142,4 +151,4 @@
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-19 — HARD-01 bis HARD-04 (Codex-Gesamtreview) und HARD-05 (D-16, Installation und Update ohne Git) für Phase 3.1 ergänzt.*
+*Last updated: 2026-10-24 — v2-Kandidaten QA2-01 bis QA2-04 aus der Codebase-Map ergänzt.*
