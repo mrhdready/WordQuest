@@ -70,9 +70,9 @@ Als Nächstes: Lege unter „Kinder“ das erste Kind an, dann unter „Vokabeln
 Tägliche Sicherungen liegen in: <Ordner>/backups
 ```
 
-Startest du `./setup.sh` ein zweites Mal, steht statt „✓ .env angelegt.“ die Zeile „✓ .env existiert bereits — unverändert.“ und statt „✓ Elternkonto angelegt.“ die Zeile „✓ Elternkonto ist schon angelegt — unverändert.“. Die Zeile „Fertig.“ endet dann mit „Melde dich dort mit deinem Elternkonto an.“
+Startest du `./setup.sh` nach einer fertigen Einrichtung ein zweites Mal, steht statt „✓ .env angelegt.“ die Zeile „✓ .env existiert bereits — unverändert.“ und statt „✓ Elternkonto angelegt.“ die Zeile „✓ Elternkonto ist schon angelegt — unverändert.“. Die Zeile „Fertig.“ endet dann mit „Melde dich dort mit deinem Elternkonto an.“
 
-Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `http://192.168.178.20:8080`, und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. `setup.sh` nimmt dafür den ersten Eintrag, den `hostname -I` ausgibt. Brauchst du die Adresse später wieder, zeigt dir derselbe Befehl sie als ersten Eintrag:
+Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `http://192.168.178.20:8080`, und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. `setup.sh` nimmt dafür den ersten Eintrag, den `hostname -I` ausgibt. Brauchst du die Adresse später wieder, zeigt dir derselbe Befehl sie:
 
 ```bash
 hostname -I
@@ -80,7 +80,7 @@ hostname -I
 
 Der Befehl zeigt oft mehrere Einträge. Die Adresse in deinem Heimnetz beginnt meist mit `192.168.`, die anderen Einträge kannst du ignorieren. Beginnt die Adresse in der Zeile „Fertig.“ nicht mit `192.168.`, nimm die aus `hostname -I`, die damit beginnt, und hänge wie in der Zeile „Fertig.“ den Port an, zum Beispiel `:8080`.
 
-WordQuest nutzt den Port 8080. Ist er schon belegt, bricht `setup.sh` mit „Der Port 8080 ist schon belegt. …“ ab. Dann hängst du im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` eine Zeile an die Datei `.env` an und startest `./setup.sh` noch einmal. Die Datei `.env` beginnt mit einem Punkt und ist deshalb versteckt: `ls` zeigt sie nicht, `ls -a` schon.
+WordQuest nutzt den Port 8080. Ist er schon belegt, bricht `setup.sh` mit „Der Port 8080 ist schon belegt. …“ ab. Dann hängst du im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` eine Zeile an die Datei `.env` an und startest `./setup.sh` noch einmal. Steht in `.env` schon eine Zeile `WQ_PORT=`, änderst du stattdessen deren Wert, zum Beispiel auf `9001`. Die Datei `.env` beginnt mit einem Punkt und ist deshalb versteckt: `ls` zeigt sie nicht, `ls -a` schon.
 
 Ob alles läuft, zeigt dir jederzeit:
 

@@ -85,6 +85,7 @@ describe('Fortschritt', () => {
     const value = await screen.findByText('2/5')
     expect(value.parentElement?.textContent).toBe('2/5Wörter sitzen sicher')
   })
+
   // WCAG 2.2 SC 1.4.1: Die Auswahl darf nicht nur an der Farbe haengen.
   it('Gewähltes Kind trägt einen Haken, nicht nur eine Farbe (WCAG 1.4.1)', async () => {
     const overview = {

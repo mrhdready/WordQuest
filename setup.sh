@@ -96,19 +96,20 @@ compose_file="${COMPOSE_FILE:-$(env_value COMPOSE_FILE)}"
 port="${WQ_PORT:-$(env_value WQ_PORT)}"
 
 say "Starte WordQuest …"
-# Ausgabe fangen: Dockers englische Meldung zum belegten Port laesst Laien ohne Ausweg.
+# Ausgabe mitschreiben: Dockers englische Meldung zum belegten Port laesst Laien ohne Ausweg.
 # Nur in der Heimnetz-Variante hilft WQ_PORT; die Traefik-Variante hat feste Ports 80/443.
+# tee in eine Datei statt Variable: Der Fortschritt bleibt live sichtbar (Warten auf db).
+up_log="$(mktemp)"
 up_status=0
-up_log="$(docker compose up -d </dev/null 2>&1)" || up_status=$?
-if (( up_status == 0 )); then
-  printf '%s\n' "$up_log"
-else
-  printf '%s\n' "$up_log" >&2
-  if [[ -n "$compose_file" && "$compose_file" != docker-compose.yml* ]] \
-    && grep -qE 'port is already allocated|address already in use' <<<"$up_log"; then
+docker compose up -d </dev/null 2>&1 | tee "$up_log" >&2 || up_status=$?
+port_taken=0
+if grep -qE 'port is already allocated|address already in use' "$up_log"; then port_taken=1; fi
+rm -f "$up_log"
+if (( up_status != 0 )); then
+  if [[ "$port_taken" == 1 && -n "$compose_file" && "$compose_file" != docker-compose.yml* ]]; then
     die "Der Port ${port:-8080} ist schon belegt. Trage in .env eine Zeile WQ_PORT=9000 ein (oder ändere die vorhandene Zeile WQ_PORT=) und starte ./setup.sh noch einmal."
   fi
-  exit 1
+  exit "$up_status"
 fi
 
 say ""
