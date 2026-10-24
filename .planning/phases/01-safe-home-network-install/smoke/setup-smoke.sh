@@ -23,6 +23,7 @@ export WQ_VERSION=smoke-$(date +%s)-$$
 fail() { echo "SMOKE FEHLER: $*" >&2; exit 1; }
 
 cleanup() {
+  (cd "$WORK" && COMPOSE_PROJECT_NAME=wq-smoke-port docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) || true
   (cd "$WORK" && docker compose down -v --remove-orphans </dev/null >/dev/null 2>&1) || true
   docker image rm "wq-smoke-api:${WQ_VERSION}" "wq-smoke-web:${WQ_VERSION}" >/dev/null 2>&1 || true
   rm -rf "$WORK"
@@ -63,6 +64,7 @@ grep -qF 'Das Passwort muss mindestens 8 Zeichen lang sein.' run1.log || fail "K
 grep -qF 'Fertig. WordQuest läuft unter: http://' run1.log || fail "Abschlusszeile fehlt."
 if grep -qF "$demo_email" run1.log; then fail "Ausgabe nennt den Demo-Zugang."; fi
 if grep -qF 'geheim-123' run1.log; then fail "Ausgabe enthaelt das Passwort."; fi
+if grep -qF 'ist schon belegt' run1.log; then fail "Lauf 1 meldet einen belegten Port."; fi
 
 running="$(docker inspect -f '{{.Image}}' "$(docker compose ps -q api)")"
 built="$(docker image inspect -f '{{.Id}}' "wq-smoke-api:${WQ_VERSION}")"
@@ -94,6 +96,20 @@ echo "== Lauf 2"
 grep -qF 'Elternkonto ist schon angelegt' run2.log || fail "Lauf 2 meldet kein bestehendes Elternkonto."
 [[ "$(shasum secrets/*.txt .env)" == "$before" ]] || fail "Lauf 2 hat secrets/*.txt oder .env veraendert."
 [[ "$(tenants)" == 1 ]] || fail "Mehr als ein Mandant nach Lauf 2."
+
+echo "== Port belegt (Setup-Hinweis)"
+# Der Stack wq-smoke haelt WQ_PORT; ein zweites Projekt im selben Ordner bekommt den Port nicht.
+status=0
+COMPOSE_PROJECT_NAME=wq-smoke-port ./setup.sh </dev/null >port.log 2>&1 || status=$?
+cat port.log
+[[ "$status" != 0 ]] || fail "setup.sh bei belegtem Port: Exit 0."
+grep -qF "Der Port ${WQ_PORT} ist schon belegt." port.log || fail "Kein deutscher Hinweis auf den belegten Port."
+grep -qF 'WQ_PORT=9000' port.log || fail "Hinweis nennt WQ_PORT=9000 nicht."
+grep -qE 'port is already allocated|address already in use' port.log || fail "Dockers eigene Meldung fehlt."
+COMPOSE_PROJECT_NAME=wq-smoke-port docker compose down -v --remove-orphans </dev/null
+code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WQ_PORT}/")"
+[[ "$code" == 200 ]] || fail "Stack wq-smoke nach dem Port-Test: HTTP $code statt 200."
+echo "PORT-HINWEIS OK"
 
 echo "== Zweites Elternkonto direkt ueber create-owner"
 status=0

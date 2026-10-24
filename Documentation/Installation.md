@@ -42,6 +42,8 @@ curl -fsSL https://github.com/mrhdready/WordQuest/releases/latest/download/wordq
 cd wordquest
 ```
 
+Der Download gibt nichts aus, das ist normal. Danach gibt es den Ordner `wordquest`, und du bist schon darin.
+
 Starte die Einrichtung:
 
 ```bash
@@ -68,13 +70,17 @@ Als Nächstes: Lege unter „Kinder“ das erste Kind an, dann unter „Vokabeln
 Tägliche Sicherungen liegen in: <Ordner>/backups
 ```
 
+Startest du `./setup.sh` ein zweites Mal, steht statt „✓ .env angelegt.“ die Zeile „✓ .env existiert bereits — unverändert.“ und statt „✓ Elternkonto angelegt.“ die Zeile „✓ Elternkonto ist schon angelegt — unverändert.“. Die Zeile „Fertig.“ endet dann mit „Melde dich dort mit deinem Elternkonto an.“
+
 Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `http://192.168.178.20:8080`, und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. `setup.sh` nimmt dafür den ersten Eintrag, den `hostname -I` ausgibt. Brauchst du die Adresse später wieder, zeigt dir derselbe Befehl sie als ersten Eintrag:
 
 ```bash
 hostname -I
 ```
 
-WordQuest nutzt den Port 8080. Ist er schon belegt, trägst du in die Datei `.env` eine Zeile wie `WQ_PORT=9000` ein und startest `./setup.sh` noch einmal.
+Der Befehl zeigt oft mehrere Einträge. Die Adresse in deinem Heimnetz beginnt meist mit `192.168.`, die anderen Einträge kannst du ignorieren. Beginnt die Adresse in der Zeile „Fertig.“ nicht mit `192.168.`, nimm die aus `hostname -I`, die damit beginnt, und hänge wie in der Zeile „Fertig.“ den Port an, zum Beispiel `:8080`.
+
+WordQuest nutzt den Port 8080. Ist er schon belegt, bricht `setup.sh` mit „Der Port 8080 ist schon belegt. …“ ab. Dann hängst du im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` eine Zeile an die Datei `.env` an und startest `./setup.sh` noch einmal. Die Datei `.env` beginnt mit einem Punkt und ist deshalb versteckt: `ls` zeigt sie nicht, `ls -a` schon.
 
 Ob alles läuft, zeigt dir jederzeit:
 
@@ -82,7 +88,7 @@ Ob alles läuft, zeigt dir jederzeit:
 docker compose ps
 ```
 
-Die Liste zeigt die vier Dienste `api`, `backup`, `db` und `web`, jeweils mit `Up` in der Spalte `STATUS`.
+Die Liste zeigt die vier Dienste `api`, `backup`, `db` und `web`. In der Spalte `STATUS` beginnt jeder Eintrag mit `Up`. Steht dahinter `(health: starting)`, ist das in der ersten Minute nach dem Start normal.
 
 Im Ordner `wordquest` sind dabei entstanden:
 
@@ -218,7 +224,11 @@ Nach der Wiederherstellung müssen sich alle Geräte neu anmelden, Kinder wieder
 
 Prüfe die Internetverbindung des Geräts. Hast du beim Präfix etwas anderes als Enter eingegeben, korrigiere den Wert bei `WQ_IMAGE_PREFIX` in der Datei `.env` (Standard `ghcr.io/mrhdready/wordquest`). Starte danach `./setup.sh` noch einmal.
 
-**Der Port ist belegt.** Bricht `setup.sh` beim Start mit einer Meldung ab, die den Port 8080 nennt, zum Beispiel mit `port is already allocated`, nutzt schon etwas anderes diesen Port. Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst trag in `.env` eine Zeile wie `WQ_PORT=9000` ein und starte `./setup.sh` noch einmal. WordQuest läuft dann unter dem neuen Port.
+**Der Port ist belegt.** `setup.sh` bricht dann ab mit:
+
+> Der Port 8080 ist schon belegt. Trage in .env eine Zeile WQ_PORT=9000 ein (oder ändere die vorhandene Zeile WQ_PORT=) und starte ./setup.sh noch einmal.
+
+Dann nutzt schon etwas anderes diesen Port. Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst häng im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` die Zeile an und starte `./setup.sh` noch einmal. Steht in `.env` schon eine Zeile `WQ_PORT=`, ändere stattdessen deren Wert. WordQuest läuft dann unter dem neuen Port.
 
 **Der Ordner `backups` gehört nicht dir.** `setup.sh` bricht dann ab mit:
 
