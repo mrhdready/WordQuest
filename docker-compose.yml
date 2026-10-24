@@ -4,7 +4,7 @@
 # docker-compose.build.yml dazunehmen:
 #     docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 #
-# Zum schnellen Ausprobieren ohne Domain und Zertifikat: docker-compose.quick.yml
+# Heimnetz ohne Domain und Zertifikat (Standard): docker-compose.quick.yml
 
 name: wordquest
 
@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ${WQ_IMAGE_PREFIX:-ghcr.io/example/wordquest}-api:${WQ_VERSION:-master}
+    image: ${WQ_IMAGE_PREFIX:-ghcr.io/mrhdready/wordquest}-api:${WQ_VERSION:-1.0.0}
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
@@ -40,9 +40,8 @@ services:
       WQ_PUBLIC_URL: https://${WQ_HOST:-wordquest.local}
       WQ_TIMEZONE: ${WQ_TIMEZONE:-Europe/Berlin}
       WQ_AI_PROVIDER: none
-      # Seed-Daten beim ersten Start (Demo-Elternkonto, Kind, Beispielset).
-      # Nach der Ersteinrichtung auf "false" setzen.
-      WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-true}
+      # Demo-Daten nur fuer Entwicklung und Tests.
+      WQ_SEED_DEMO_DATA: ${WQ_SEED_DEMO_DATA:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -58,10 +57,16 @@ services:
     restart: unless-stopped
 
   web:
-    image: ${WQ_IMAGE_PREFIX:-ghcr.io/example/wordquest}-web:${WQ_VERSION:-master}
+    image: ${WQ_IMAGE_PREFIX:-ghcr.io/mrhdready/wordquest}-web:${WQ_VERSION:-1.0.0}
     depends_on:
       - api
     restart: unless-stopped
+    volumes:
+      # Nur hier: nginx uebernimmt die Geraeteadresse aus dem Kopf, den Traefik
+      # setzt, damit das Anmelde-Limit pro Geraet zaehlt (FIX-01). Im
+      # Heimnetz-Stack (docker-compose.quick.yml) nie einbinden, dort koennten
+      # Geraete ihre Adresse selbst waehlen.
+      - ./frontend/nginx-traefik-realip.conf:/etc/nginx/conf.d/realip.conf:ro
     labels:
       - traefik.enable=true
       - traefik.http.routers.wq.rule=Host(`${WQ_HOST:-wordquest.local}`)
@@ -71,6 +76,9 @@ services:
 
   proxy:
     image: traefik:v3
+    # Nie forwardedHeaders.trustedIPs oder forwardedHeaders.insecure setzen:
+    # Ohne diese Optionen verwirft Traefik X-Forwarded-For vom Geraet und setzt
+    # dessen Adresse, darauf baut das Anmelde-Limit pro Geraet auf (FIX-01).
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false

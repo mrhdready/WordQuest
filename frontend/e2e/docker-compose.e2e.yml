@@ -1,0 +1,64 @@
+# WordQuest — Teststack fuer die Playwright-/axe-Laeufe.
+#
+# NUR FUER TESTS. Die Passwoerter und Schluessel hier sind reine Testwerte und
+# werden in keiner Betriebsdatei verwendet. Port nur an 127.0.0.1 gebunden.
+# Baut die Images aus dem Arbeitsbaum:
+#   npm --prefix frontend run e2e:stack
+
+name: wordquest-e2e
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wordquest
+      POSTGRES_USER: wordquest
+      POSTGRES_PASSWORD: e2e-db-testpasswort-nicht-fuer-betrieb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wordquest -d wordquest"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  api:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    environment:
+      # Development, weil die Tests das Demo-Konto brauchen: ausserhalb von
+      # Development bricht die API mit Demo-Daten ab (CR-01). Die
+      # Secret-Pruefung fuer Production deckt der Install-Smoke ab.
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      # Schlaegt den localhost-Wert aus appsettings.Development.json.
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=wordquest;Username=wordquest;Password=e2e-db-testpasswort-nicht-fuer-betrieb;GSS Encryption Mode=Disable"
+      WQ_JWT_SIGNING_KEY: e2e-jwt-testschluessel-nur-fuer-playwright-laeufe-0001
+      WQ_TIMEZONE: Europe/Berlin
+      WQ_AI_PROVIDER: none
+      # Demo-Seed bleibt Entwickler-/Test-Option (D-16).
+      WQ_SEED_DEMO_DATA: "true"
+      # NUR FUER DEN TESTSTACK: Playwright schickt alle Anfragen von einer IP, ein
+      # Gesamtlauf aller Specs braucht mehr als 10 Auth-Aufrufe pro Minute. Im Betrieb
+      # hat seit FIX-01 jedes Geraet einen eigenen Topf; docker-compose.quick.yml und
+      # docker-compose.yml bleiben beim Standard 10.
+      Auth__RequestsPerMinute: "1000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      api:
+        condition: service_healthy

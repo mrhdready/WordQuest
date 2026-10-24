@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using WordQuest.Modules.Content.Entities;
 using WordQuest.Modules.Gamification.Entities;
@@ -26,7 +27,12 @@ public sealed class LearningService(
 {
     private const int MaxChoices = 4;
 
-    public async Task<SessionView> StartSessionAsync(
+    // Eine per "Schliessen" verlassene Runde bleibt offen. Ihre neuen Karten
+    // sollen das Tagesbudget nicht den ganzen Tag blockieren (D-18).
+    private static readonly TimeSpan ReservationWindow = TimeSpan.FromMinutes(30);
+
+    /// <summary>Startet eine Runde; <c>null</c>, wenn es das Lernprofil nicht (mehr) gibt.</summary>
+    public async Task<SessionView?> StartSessionAsync(
         Guid learnerId,
         Guid? setId,
         string gameKey,
@@ -36,60 +42,100 @@ public sealed class LearningService(
         DateTimeOffset now = clock.GetUtcNow();
         GameDefinition game = GameCatalog.Get(gameKey);
 
-        LearnerProfile profile = await db.LearnerProfiles
-            .FirstOrDefaultAsync(p => p.Id == learnerId, ct)
-            ?? throw new InvalidOperationException($"Unbekanntes Lernprofil {learnerId}.");
+        LearnerProfile? profile = await db.LearnerProfiles
+            .FirstOrDefaultAsync(p => p.Id == learnerId, ct);
+        if (profile is null)
+        {
+            return null;
+        }
 
         IQueryable<Card> cardsInScope = CardsInScope(setId);
 
+        // Die Set-Wahl begrenzt, welche Karten kommen, auch bei Wiederholung
+        // und Neulernen (D-08). Ohne Set bleibt alles wie bisher.
+        IQueryable<ReviewState> dueInScope = db.ReviewStates.Where(IsDue(learnerId, now));
+        if (setId is not null)
+        {
+            IQueryable<Guid> scopeIds = cardsInScope.Select(c => c.Id);
+            dueInScope = dueInScope.Where(r => scopeIds.Contains(r.CardId));
+        }
+
         // 1. Fehler aus vorherigen Sessions, die noch in Relearning stehen.
-        List<SessionCandidate> relearning = await db.ReviewStates
-            .Where(r => r.LearnerId == learnerId
-                        && r.State == ReviewCardState.Relearning
-                        && r.DueAt <= now)
+        List<SessionCandidate> relearning = await dueInScope
+            .Where(r => r.State == ReviewCardState.Relearning)
             .OrderBy(r => r.DueAt)
             .Select(r => new SessionCandidate(r.CardId, r.State, r.DueAt))
             .Take(50)
             .ToListAsync(ct);
 
         // 2. Faellige Wiederholungen.
-        List<SessionCandidate> due = await db.ReviewStates
-            .Where(r => r.LearnerId == learnerId
-                        && r.State == ReviewCardState.Review
-                        && r.DueAt <= now)
+        List<SessionCandidate> due = await dueInScope
+            .Where(r => r.State == ReviewCardState.Review)
             .OrderBy(r => r.DueAt)
             .Select(r => new SessionCandidate(r.CardId, r.State, r.DueAt))
             .Take(scheduler.Options.MaxDuePerSession * 2)
             .ToListAsync(ct);
 
         // 3. Neue Karten, begrenzt durch das Tagesbudget.
-        DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
-        int introducedToday = await db.ReviewStates
-            .CountAsync(r => r.LearnerId == learnerId && r.FirstSeenAt >= dayStart, ct);
+        int newBudget = await NewBudgetAsync(profile, now, ct);
 
-        int newBudget = Math.Max(0, profile.DailyNewLimit - introducedToday);
+        // Die Rueckstandsbremse gilt fuer das ganze Kind (Konzept §6.3, D-19):
+        // Bei gewaehltem Set sieht der Composer nur dessen faellige Karten,
+        // deshalb zaehlt hier der Rueckstand ueber alle Sets.
+        if (setId is not null
+            && await DueCountAsync(learnerId, now, ct) > scheduler.Options.NewCardBacklogLimit)
+        {
+            newBudget = 0;
+        }
 
         List<SessionCandidate> fresh = [];
         if (newBudget > 0)
         {
+            // Lernstaende im Zustand New sind nie regulaer beantwortet worden
+            // (Altbestand aus dem frueheren Start oder nur im Cram-Modus
+            // geuebt). Sie bleiben neue Karten und kommen wieder (FIX-03).
             IQueryable<Guid> alreadySeen = db.ReviewStates
-                .Where(r => r.LearnerId == learnerId)
+                .Where(r => r.LearnerId == learnerId && r.State != ReviewCardState.New)
                 .Select(r => r.CardId);
 
-            fresh = await cardsInScope
-                .Where(c => !alreadySeen.Contains(c.Id))
-                // Rezeption zuerst: "dog → Hund" wird deutlich frueher
-                // beherrscht als "Hund → dog" und ist der sanftere Einstieg
-                // in ein neues Wort.
-                .OrderBy(c => c.Direction == CardDirection.TargetToSource ? 0 : 1)
-                .ThenBy(c => c.Entry!.Position)
-                .Take(newBudget)
+            // Eine Antwort zaehlt immer (D-09). Der Start rechnet deshalb neue
+            // Karten mit, die gerade unbeantwortet in einer offenen Runde liegen.
+            // Reservierte Karten kommen ohne weiteres Budget wieder, sie sind in
+            // ihrer offenen Runde ohnehin beantwortbar (FIX-03). Grenze: Zwei
+            // Starts in derselben Sekunde sehen die Reservierung des anderen
+            // nicht (D-09, akzeptiert).
+            // Karten mit einer Antwort (auch im Klassenarbeit-Modus, Zustand
+            // bleibt New) haben das Budget schon belastet oder belasten es nie
+            // mehr (FIX-09); sie sind nicht reserviert.
+            IQueryable<Guid> answered = db.ReviewStates
+                .Where(r => r.LearnerId == learnerId && r.LastReviewedAt != null)
+                .Select(r => r.CardId);
+            DateTimeOffset reservedSince = now - ReservationWindow;
+            List<Guid> reserved = await db.SessionItems
+                .Where(i => i.AnsweredAt == null
+                            && i.Session!.LearnerId == learnerId
+                            && i.Session.CompletedAt == null
+                            && i.Session.StartedAt >= reservedSince
+                            && !answered.Contains(i.CardId))
+                .Select(i => i.CardId)
+                .Distinct()
+                .ToListAsync(ct);
+            int free = Math.Max(0, newBudget - reserved.Count);
+
+            // Zwei Abfragen: Eine gemeinsame mit Take verfehlt reservierte Karten
+            // weiter hinten in der Reihenfolge.
+            IQueryable<Card> unseen = cardsInScope.Where(c => !alreadySeen.Contains(c.Id));
+            fresh = await InNewCardOrder(unseen.Where(c => reserved.Contains(c.Id)))
                 .Select(c => new SessionCandidate(c.Id, ReviewCardState.New, now))
                 .ToListAsync(ct);
+            fresh.AddRange(await InNewCardOrder(unseen.Where(c => !reserved.Contains(c.Id)))
+                .Take(free)
+                .Select(c => new SessionCandidate(c.Id, ReviewCardState.New, now))
+                .ToListAsync(ct));
         }
 
         IReadOnlyList<SessionCandidate> selected =
-            composer.Compose(relearning, due, fresh, newBudget, now, size);
+            composer.Compose(relearning, due, fresh, fresh.Count, now, size);
 
         var session = new LearningSession
         {
@@ -112,30 +158,22 @@ public sealed class LearningService(
         }
 
         db.LearningSessions.Add(session);
-
-        // Lernstand fuer neue Karten anlegen, damit das Tagesbudget schon beim
-        // Vorlegen zaehlt - sonst kann ein abgebrochener Start beliebig viele
-        // neue Karten "kostenlos" anschauen.
-        foreach (SessionCandidate candidate in selected.Where(c => c.State == ReviewCardState.New))
-        {
-            db.ReviewStates.Add(new ReviewState
-            {
-                LearnerId = learnerId,
-                CardId = candidate.CardId,
-                EaseFactor = scheduler.Options.InitialEaseFactor,
-                DueAt = now,
-                FirstSeenAt = now,
-                State = ReviewCardState.New,
-            });
-        }
-
         await db.SaveChangesAsync(ct);
 
         List<SessionItemView> views = await BuildItemViewsAsync(session.Items, game, ct);
         return new SessionView(session.Id, game.Key, views.Count, views);
     }
 
-    public async Task<AnswerResult> SubmitAnswerAsync(
+    /// <summary>
+    /// Wertet eine Antwort; <c>null</c>, wenn Runde, Aufgabe oder Karte nicht
+    /// (mehr) existieren; <see cref="SessionCompletedException"/>, wenn die Runde
+    /// schon abgeschlossen ist. Eine gleichzeitige zweite Antwort auf dieselbe
+    /// Aufgabe endet in einer <see cref="DbUpdateException"/> (Concurrency-Token
+    /// AnsweredAt bzw. Unique-Index), ohne dass etwas gespeichert wird. Dasselbe
+    /// gilt fuer eine gleichzeitige Antwort auf dieselbe Karte in einer anderen
+    /// Runde (Concurrency-Token LastReviewedAt, D-10).
+    /// </summary>
+    public async Task<AnswerResult?> SubmitAnswerAsync(
         Guid learnerId,
         Guid sessionId,
         Guid itemId,
@@ -147,19 +185,25 @@ public sealed class LearningService(
     {
         DateTimeOffset now = clock.GetUtcNow();
 
-        LearningSession session = await db.LearningSessions
+        LearningSession? session = await db.LearningSessions
             .Include(s => s.Items)
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct)
-            ?? throw new InvalidOperationException("Session nicht gefunden.");
-
-        SessionItem item = session.Items.FirstOrDefault(i => i.Id == itemId)
-            ?? throw new InvalidOperationException("Aufgabe gehoert nicht zu dieser Session.");
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct);
+        SessionItem? item = session?.Items.FirstOrDefault(i => i.Id == itemId);
+        if (session is null || item is null)
+        {
+            return null;
+        }
 
         GameDefinition game = GameCatalog.Get(session.GameKey);
 
-        Card card = await db.Cards
+        // Die Karte kann waehrend der Runde geloescht worden sein (Eintrag entfernt).
+        Card? card = await db.Cards
             .Include(c => c.Entry)
-            .FirstAsync(c => c.Id == item.CardId, ct);
+            .FirstOrDefaultAsync(c => c.Id == item.CardId, ct);
+        if (card is null)
+        {
+            return null;
+        }
 
         ExpectedAnswer expected = BuildExpectedAnswer(card);
 
@@ -179,6 +223,15 @@ public sealed class LearningService(
                 RetryItem: null);
         }
 
+        // Nach dem Abschluss (auch "Schliessen" mit offenen Aufgaben, D-03) wird
+        // nichts mehr gewertet; eine Wiederholung oben bleibt erlaubt (IN-01).
+        // ponytail: Pruefung beim Lesen, nicht atomar mit dem Abschluss; ein
+        // gleichzeitiger Abschluss kann eine letzte Antwort noch durchlassen.
+        if (session.CompletedAt is not null)
+        {
+            throw new SessionCompletedException();
+        }
+
         AnswerEvaluation evaluation = evaluator.Evaluate(givenAnswer, expected, answerMs, hintUsed);
         Grade grade = GameCatalog.Cap(game.Key, evaluation.Grade);
 
@@ -188,10 +241,23 @@ public sealed class LearningService(
         item.AnswerMs = answerMs;
         item.ClientAnswerId = clientAnswerId;
 
-        ReviewState state = await db.ReviewStates
-            .FirstOrDefaultAsync(r => r.LearnerId == learnerId && r.CardId == card.Id, ct)
-            ?? CreateInitialState(learnerId, card.Id, now);
+        // Die erste Antwort legt den Lernstand an; beim Start entsteht keiner mehr (FIX-03).
+        ReviewState? state = await db.ReviewStates
+            .FirstOrDefaultAsync(r => r.LearnerId == learnerId && r.CardId == card.Id, ct);
+        if (state is null)
+        {
+            state = CreateInitialState(learnerId, card.Id, now);
+            db.ReviewStates.Add(state);
+        }
 
+        // Die erste Antwort ist der Zeitpunkt der Einfuehrung, auch fuer
+        // Altbestaende, die beim frueheren Start angelegt wurden (FIX-09).
+        if (state.LastReviewedAt is null)
+        {
+            state.FirstSeenAt = now;
+        }
+
+        DateTimeOffset? readReviewedAt = state.LastReviewedAt;
         double resultingInterval = state.IntervalDays;
         if (game.AffectsScheduling)
         {
@@ -201,6 +267,15 @@ public sealed class LearningService(
         else
         {
             state.LastReviewedAt = now;
+        }
+
+        // last_reviewed_at ist das Concurrency-Token (D-10) und wirkt nur, wenn
+        // sich der Wert aendert. PostgreSQL speichert Mikrosekunden, und eine
+        // Uhr kann denselben Wert liefern; deshalb mindestens 1 µs ueber dem
+        // gelesenen Wert. Der Scheduler bleibt ohne Wissen ueber die Speicherung.
+        if (readReviewedAt is { } read && state.LastReviewedAt < read.AddTicks(10))
+        {
+            state.LastReviewedAt = read.AddTicks(10);
         }
 
         db.ReviewLogs.Add(new ReviewLog
@@ -217,12 +292,7 @@ public sealed class LearningService(
         });
 
         (int xp, int coins) = XpRules.ForAnswer(grade, game.XpWeight);
-        session.XpAwarded += xp;
-        session.CoinsAwarded += coins;
-
-        GamificationProfile profile = await GetOrCreateProfileAsync(learnerId, ct);
-        profile.Xp += xp;
-        profile.Coins += coins;
+        await GetOrCreateProfileAsync(learnerId, ct);
 
         // Falsch beantwortete Karte in derselben Session nachreichen.
         SessionItemView? retryView = null;
@@ -235,12 +305,26 @@ public sealed class LearningService(
                 Position = session.Items.Count == 0 ? 0 : session.Items.Max(i => i.Position) + 1,
                 IsRetry = true,
             };
-            session.Items.Add(retry);
+            // Ausdruecklich als neu registrieren: Die Id ist schon gesetzt,
+            // ueber die Navigation allein haelt EF die Zeile fuer bestehend
+            // und schickt ein UPDATE statt eines INSERT.
+            db.SessionItems.Add(retry);
 
-            retryView = BuildItemView(retry, card, game, await BuildChoicesAsync(card, game, ct));
+            // Projektion auf die Version, damit die Bildbytes nicht mitgeladen werden.
+            Guid? pictureVersion = await db.VocabularyPictures
+                .Where(p => p.Id == card.EntryId)
+                .Select(p => (Guid?)p.Version)
+                .FirstOrDefaultAsync(ct);
+            retryView = BuildItemView(retry, card, game, await BuildChoicesAsync(card, game, ct), pictureVersion);
         }
 
-        await db.SaveChangesAsync(ct);
+        // Aufgabe, Lernstand, Protokoll und Gutschrift gehoeren zusammen: Ein
+        // Konflikt beim Speichern bricht vor der Gutschrift ab und rollt alles zurueck.
+        await db.InTransactionAsync(async () =>
+        {
+            await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+            await CreditAsync(sessionId, learnerId, xp, coins, ct);
+        }, ct);
 
         return new AnswerResult(
             Correct: evaluation.IsCorrect,
@@ -253,15 +337,19 @@ public sealed class LearningService(
             RetryItem: retryView);
     }
 
-    public async Task<SessionSummary> CompleteSessionAsync(
+    /// <summary>Schliesst eine Runde ab; <c>null</c>, wenn es die Runde nicht (mehr) gibt.</summary>
+    public async Task<SessionSummary?> CompleteSessionAsync(
         Guid learnerId, Guid sessionId, CancellationToken ct = default)
     {
         DateTimeOffset now = clock.GetUtcNow();
 
-        LearningSession session = await db.LearningSessions
+        LearningSession? session = await db.LearningSessions
             .Include(s => s.Items)
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct)
-            ?? throw new InvalidOperationException("Session nicht gefunden.");
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.LearnerId == learnerId, ct);
+        if (session is null)
+        {
+            return null;
+        }
 
         GamificationProfile profile = await GetOrCreateProfileAsync(learnerId, ct);
         int levelBefore = LevelCurve.LevelFor(profile.Xp);
@@ -269,22 +357,35 @@ public sealed class LearningService(
         int answered = session.Items.Count(i => i.AnsweredAt is not null);
         int correct = session.Items.Count(i => i.Grade is not null and not Grade.Again);
 
-        bool alreadyComplete = session.CompletedAt is not null;
         var streak = new StreakResult(profile.CurrentStreak, false, false, false);
+        (int bonusXp, int bonusCoins) = XpRules.ForSessionCompletion(answered, correct);
 
-        if (!alreadyComplete && answered > 0)
+        // Den Abschluss atomar beanspruchen: Von zwei gleichzeitigen
+        // Abschluessen findet nur einer die Runde noch offen; nur er vergibt
+        // Bonus und Serie (Review Runde 1).
+        await db.InTransactionAsync(async () =>
         {
-            (int bonusXp, int bonusCoins) = XpRules.ForSessionCompletion(answered, correct);
-            session.XpAwarded += bonusXp;
-            session.CoinsAwarded += bonusCoins;
-            profile.Xp += bonusXp;
-            profile.Coins += bonusCoins;
+            int claimed = await db.LearningSessions
+                .Where(s => s.Id == sessionId && s.CompletedAt == null)
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.CompletedAt, now), ct);
 
-            streak = StreakRules.RegisterActivity(profile, scheduler.LocalDate(now));
-        }
+            if (claimed == 1)
+            {
+                if (answered > 0)
+                {
+                    // RegisterActivity ist am selben Tag idempotent, ein Wiederholungslauf
+                    // der Ausfuehrungsstrategie zaehlt die Serie also nicht doppelt.
+                    streak = StreakRules.RegisterActivity(profile, scheduler.LocalDate(now));
+                }
 
-        session.CompletedAt ??= now;
-        await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+                await CreditAsync(sessionId, learnerId, bonusXp, bonusCoins, ct);
+            }
+        }, ct);
+
+        // Zaehler stehen nach der Gutschrift nur in der Datenbank richtig.
+        await db.Entry(session).ReloadAsync(ct);
+        await db.Entry(profile).ReloadAsync(ct);
 
         int level = LevelCurve.LevelFor(profile.Xp);
 
@@ -304,7 +405,82 @@ public sealed class LearningService(
             LeveledUp: level > levelBefore);
     }
 
+    /// <summary>Heute faellige Karten: dieselbe Menge, aus der der Rundenstart waehlt.</summary>
+    public Task<int> DueCountAsync(Guid learnerId, DateTimeOffset now, CancellationToken ct = default) =>
+        db.ReviewStates.CountAsync(IsDue(learnerId, now), ct);
+
+    /// <summary>
+    /// Wie viele neue Karten heute noch drankommen. Eingefuehrt ist eine Karte
+    /// erst mit ihrer ersten Antwort (FIX-09, Konzept §6.3): Ansehen ohne
+    /// Antwort kostet nichts. Rundenstart und Uebersicht nutzen diese eine Regel.
+    /// </summary>
+    public async Task<int> NewBudgetAsync(LearnerProfile profile, DateTimeOffset now, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
+        int introducedToday = await db.ReviewStates
+            .CountAsync(r => r.LearnerId == profile.Id
+                             && r.LastReviewedAt != null
+                             && r.FirstSeenAt >= dayStart, ct);
+
+        return Math.Max(0, profile.DailyNewLimit - introducedToday);
+    }
+
+    /// <summary>
+    /// Lernstand je Wort ueber beide Richtungen, fuer Uebersicht und Ampel
+    /// (FIX-06, D-16). Nie beantwortete Lernstaende (Altbestand aus dem
+    /// frueheren Rundenstart) gelten als neu, wie beim Tagesbudget (FIX-09).
+    /// </summary>
+    public async Task<List<WordProgress>> WordProgressAsync(
+        Guid learnerId, Guid? setId, CancellationToken ct = default)
+    {
+        var cards = await db.Cards
+            .Where(c => setId == null || c.Entry!.SetId == setId)
+            .Select(c => new { c.Id, c.EntryId, c.Entry!.SourceText, c.Entry.TargetText })
+            .ToListAsync(ct);
+
+        Dictionary<Guid, ReviewState> states = await db.ReviewStates
+            .AsNoTracking()
+            .Where(r => r.LearnerId == learnerId && r.LastReviewedAt != null)
+            .ToDictionaryAsync(r => r.CardId, ct);
+
+        double initialEase = scheduler.Options.InitialEaseFactor;
+        return cards
+            .GroupBy(c => new { c.EntryId, c.SourceText, c.TargetText })
+            .Select(g =>
+            {
+                List<ReviewState?> directions = g.Select(c => states.GetValueOrDefault(c.Id)).ToList();
+                return new WordProgress(
+                    g.Key.EntryId, g.Key.SourceText, g.Key.TargetText,
+                    MasteryRules.Light(directions),
+                    MasteryRules.IsWordMastered(directions),
+                    directions.Max(r => r?.Lapses ?? 0),
+                    directions.Min(r => r?.EaseFactor ?? initialEase));
+            })
+            .ToList();
+    }
+
     // ------------------------------------------------------------------ Hilfen
+
+    // Faellig sind nur Wiederholung und Neulernen; neue Karten zaehlen ueber das Tagesbudget.
+    private static Expression<Func<ReviewState, bool>> IsDue(Guid learnerId, DateTimeOffset now) =>
+        r => r.LearnerId == learnerId
+             && (r.State == ReviewCardState.Review || r.State == ReviewCardState.Relearning)
+             && r.DueAt <= now;
+
+    private static IQueryable<Card> InNewCardOrder(IQueryable<Card> cards) =>
+        cards
+            // Rezeption zuerst: "dog → Hund" wird deutlich frueher
+            // beherrscht als "Hund → dog" und ist der sanftere Einstieg
+            // in ein neues Wort.
+            .OrderBy(c => c.Direction == CardDirection.TargetToSource ? 0 : 1)
+            .ThenBy(c => c.Entry!.Position)
+            // Eindeutiger Gleichstandsbrecher: Ohne Set teilen sich Karten
+            // verschiedener Sets dieselbe Position, und PostgreSQL garantiert
+            // dann keine feste Reihenfolge. Die naechste Runde soll dieselben
+            // neuen Karten anbieten (FIX-03).
+            .ThenBy(c => c.Id);
 
     private IQueryable<Card> CardsInScope(Guid? setId)
     {
@@ -312,15 +488,42 @@ public sealed class LearningService(
         return setId is null ? query : query.Where(c => c.Entry!.SetId == setId);
     }
 
-    private static ReviewState CreateInitialState(Guid learnerId, Guid cardId, DateTimeOffset now) =>
+    private ReviewState CreateInitialState(Guid learnerId, Guid cardId, DateTimeOffset now) =>
         new()
         {
             LearnerId = learnerId,
             CardId = cardId,
+            EaseFactor = scheduler.Options.InitialEaseFactor,
             DueAt = now,
             FirstSeenAt = now,
             State = ReviewCardState.New,
         };
+
+    /// <summary>
+    /// Schreibt XP und Muenzen als wert = wert + n gut, nie als gelesener Wert
+    /// plus n: Gleichzeitige Antworten auf verschiedene Aufgaben derselben Runde
+    /// schreiben dieselben Zeilen, und Lesen-Addieren-Schreiben verliert dabei
+    /// eine Gutschrift (Review Runde 1).
+    /// </summary>
+    private async Task CreditAsync(Guid sessionId, Guid learnerId, int xp, int coins, CancellationToken ct)
+    {
+        if (xp == 0 && coins == 0)
+        {
+            return;
+        }
+
+        await db.LearningSessions
+            .Where(s => s.Id == sessionId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.XpAwarded, s => s.XpAwarded + xp)
+                .SetProperty(s => s.CoinsAwarded, s => s.CoinsAwarded + coins), ct);
+
+        await db.GamificationProfiles
+            .Where(p => p.Id == learnerId)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(p => p.Xp, p => p.Xp + xp)
+                .SetProperty(p => p.Coins, p => p.Coins + coins), ct);
+    }
 
     private async Task<GamificationProfile> GetOrCreateProfileAsync(Guid learnerId, CancellationToken ct)
     {
@@ -358,6 +561,14 @@ public sealed class LearningService(
             .Where(c => cardIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, ct);
 
+        // Nur die Version je Vokabel, nie die Bildbytes: Die holt der Browser
+        // ueber GET /pictures/{version} (IMG-01, Recherche Pitfall 4).
+        List<Guid> entryIds = cards.Values.Select(c => c.EntryId).Distinct().ToList();
+        Dictionary<Guid, Guid> pictureVersions = await db.VocabularyPictures
+            .Where(p => entryIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Version })
+            .ToDictionaryAsync(p => p.Id, p => p.Version, ct);
+
         var views = new List<SessionItemView>(items.Count);
         foreach (SessionItem item in items.OrderBy(i => i.Position))
         {
@@ -366,14 +577,15 @@ public sealed class LearningService(
                 continue;
             }
 
-            views.Add(BuildItemView(item, card, game, await BuildChoicesAsync(card, game, ct)));
+            Guid? pictureVersion = pictureVersions.TryGetValue(card.EntryId, out Guid version) ? version : null;
+            views.Add(BuildItemView(item, card, game, await BuildChoicesAsync(card, game, ct), pictureVersion));
         }
 
         return views;
     }
 
     private static SessionItemView BuildItemView(
-        SessionItem item, Card card, GameDefinition game, IReadOnlyList<string>? choices)
+        SessionItem item, Card card, GameDefinition game, IReadOnlyList<string>? choices, Guid? pictureVersion)
     {
         VocabularyEntry entry = card.Entry!;
 
@@ -391,6 +603,7 @@ public sealed class LearningService(
             ExpectedAnswerType: answerType,
             Choices: choices,
             Emoji: entry.Emoji,
+            PictureVersion: pictureVersion,
             ExampleSentence: example,
             IsRetry: item.IsRetry);
     }
@@ -417,6 +630,9 @@ public sealed class LearningService(
             .Where(e => e.SetId == entry.SetId
                         && e.Id != entry.Id
                         && e.PartOfSpeech == entry.PartOfSpeech)
+            // Zufaellige Auswahl aus dem ganzen Set: Ohne Sortierung kaemen nur die
+            // ersten 40 Woerter in Tabellenreihenfolge als falsche Option vor.
+            .OrderBy(_ => EF.Functions.Random())
             .Select(e => asksForTarget ? e.TargetText : e.SourceText)
             .Take(40)
             .ToListAsync(ct);
@@ -426,6 +642,7 @@ public sealed class LearningService(
             // Zu wenig gleichartige Woerter - mit dem Rest des Sets auffuellen.
             List<string> fallback = await db.VocabularyEntries
                 .Where(e => e.SetId == entry.SetId && e.Id != entry.Id)
+                .OrderBy(_ => EF.Functions.Random())
                 .Select(e => asksForTarget ? e.TargetText : e.SourceText)
                 .Take(40)
                 .ToListAsync(ct);

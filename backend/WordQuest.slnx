@@ -10,5 +10,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/WordQuest.Learning.Tests/WordQuest.Learning.Tests.csproj" />
+    <Project Path="tests/WordQuest.Api.Tests/WordQuest.Api.Tests.csproj" />
   </Folder>
 </Solution>

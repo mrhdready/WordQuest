@@ -21,6 +21,7 @@ public sealed class WordQuestDbContext(
     public DbSet<VocabularySet> VocabularySets => Set<VocabularySet>();
     public DbSet<VocabularyEntry> VocabularyEntries => Set<VocabularyEntry>();
     public DbSet<Card> Cards => Set<Card>();
+    public DbSet<VocabularyPicture> VocabularyPictures => Set<VocabularyPicture>();
 
     public DbSet<ReviewState> ReviewStates => Set<ReviewState>();
     public DbSet<ReviewLog> ReviewLogs => Set<ReviewLog>();
@@ -47,6 +48,7 @@ public sealed class WordQuestDbContext(
         ApplyTenantFilter<RefreshToken>(modelBuilder);
         ApplyTenantFilter<VocabularySet>(modelBuilder);
         ApplyTenantFilter<VocabularyEntry>(modelBuilder);
+        ApplyTenantFilter<VocabularyPicture>(modelBuilder);
         ApplyTenantFilter<Card>(modelBuilder);
         ApplyTenantFilter<ReviewState>(modelBuilder);
         ApplyTenantFilter<ReviewLog>(modelBuilder);

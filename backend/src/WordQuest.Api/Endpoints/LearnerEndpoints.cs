@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using WordQuest.Api.Auth;
 using WordQuest.Api.Contracts;
@@ -6,7 +7,6 @@ using WordQuest.Modules.Gamification.Entities;
 using WordQuest.Modules.Gamification.Services;
 using WordQuest.Modules.Identity.Entities;
 using WordQuest.Modules.Identity.Services;
-using WordQuest.Modules.Learning.Entities;
 using WordQuest.Modules.Learning.Services;
 
 namespace WordQuest.Api.Endpoints;
@@ -22,6 +22,7 @@ public static class LearnerEndpoints
         group.MapGet("/", ListAsync).RequireAuthorization("Guardian");
         group.MapPost("/", CreateAsync).RequireAuthorization("Guardian");
         group.MapPatch("/{learnerId:guid}/settings", UpdateSettingsAsync).RequireAuthorization("Guardian");
+        group.MapDelete("/{learnerId:guid}", DeleteAsync).RequireAuthorization("Guardian");
 
         group.MapGet("/{learnerId:guid}/overview", OverviewAsync);
         group.MapGet("/{learnerId:guid}/traffic-light", TrafficLightAsync).RequireAuthorization("Guardian");
@@ -45,12 +46,11 @@ public static class LearnerEndpoints
         HttpContext http,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.DisplayName))
+        IReadOnlyList<LearnerProfileProblem> problems = AccountRules.ValidateLearnerProfile(
+            request.DisplayName, nameRequired: true, request.Pin, pinRequired: true, request.AvatarKey);
+        if (problems.Count > 0)
         {
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["displayName"] = ["Wie soll das Kind heissen? Ein Spitzname genuegt."],
-            });
+            return ValidationProblem(problems);
         }
 
         Guid tenantId = http.User.TenantId();
@@ -67,8 +67,12 @@ public static class LearnerEndpoints
             Id = user.Id,
             TenantId = tenantId,
             AvatarKey = string.IsNullOrWhiteSpace(request.AvatarKey) ? "fox" : request.AvatarKey.Trim(),
-            PinHash = string.IsNullOrWhiteSpace(request.Pin) ? null : PasswordHasher.Hash(request.Pin),
+            PinHash = PasswordHasher.Hash(request.Pin!),
         };
+        if (request.DailyNewLimit is { } limit)
+        {
+            profile.DailyNewLimit = AccountRules.ClampDailyNewLimit(limit);
+        }
 
         db.Users.Add(user);
         db.LearnerProfiles.Add(profile);
@@ -86,6 +90,7 @@ public static class LearnerEndpoints
         Guid learnerId,
         UpdateLearnerSettingsRequest request,
         WordQuestDbContext db,
+        AccountService accounts,
         CancellationToken ct)
     {
         LearnerProfile? profile = await db.LearnerProfiles
@@ -94,14 +99,29 @@ public static class LearnerEndpoints
 
         if (profile is null)
         {
-            return Results.NotFound();
+            // Mit Text: die Bearbeiten-Seite eines in einem anderen Tab geloeschten Kindes zeigt ihn an.
+            return Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Kind gibt es nicht (mehr).",
+                statusCode: StatusCodes.Status404NotFound);
+        }
+
+        // Alles pruefen, bevor etwas zugewiesen wird: eine abgelehnte Anfrage aendert nichts.
+        IReadOnlyList<LearnerProfileProblem> problems = AccountRules.ValidateLearnerProfile(
+            request.DisplayName, nameRequired: false, request.Pin, pinRequired: profile.PinHash is null);
+        if (problems.Count > 0)
+        {
+            return ValidationProblem(problems);
+        }
+
+        if (request.DisplayName is not null)
+        {
+            profile.User!.DisplayName = request.DisplayName.Trim();
         }
 
         if (request.DailyNewLimit is { } limit)
         {
-            // Gedeckelt, weil ein zu hoher Wert in den Folgetagen eine
-            // Wiederholungslawine erzeugt (Konzept §6.3).
-            profile.DailyNewLimit = Math.Clamp(limit, 3, 15);
+            profile.DailyNewLimit = AccountRules.ClampDailyNewLimit(limit);
         }
 
         if (request.Speed is not null && Enum.TryParse(request.Speed, true, out GameSpeed speed))
@@ -114,23 +134,66 @@ public static class LearnerEndpoints
             profile.SoundEnabled = sound;
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Pin))
+        // Leer heisst "PIN unveraendert"; eine neue PIN hebt eine Sperre sofort auf
+        // und meldet alle Geraete ab, die sich mit der alten angemeldet haben (WR-01);
+        // gespeichert wird sie zusammen mit dem Widerruf unter der Kontosperre (D-04).
+        if (!string.IsNullOrEmpty(request.Pin))
         {
             profile.PinHash = PasswordHasher.Hash(request.Pin);
             profile.FailedPinAttempts = 0;
             profile.PinLockedUntil = null;
+            await accounts.SaveAndRevokeRefreshTokensAsync(profile.Id, ct);
         }
-
-        await db.SaveChangesAsync(ct);
+        else
+        {
+            await db.SaveChangesAsync(ct);
+        }
 
         return Results.Ok(new LearnerDto(
             profile.Id, profile.User!.DisplayName, profile.AvatarKey, profile.DailyNewLimit,
             profile.Speed.ToString(), profile.SoundEnabled, profile.PinHash != null));
     }
 
+    // Feldtexte fuer POST und PATCH; die Regeln selbst stehen allein in AccountRules.
+    // Je Feld hoechstens ein Befund: Fehlen und Ungueltigkeit schliessen sich aus.
+    private static IResult ValidationProblem(IReadOnlyList<LearnerProfileProblem> problems) =>
+        Results.ValidationProblem(problems
+            .Select(problem => problem switch
+            {
+                LearnerProfileProblem.NameMissing => (Field: "displayName", Message: "Wie soll das Kind heißen? Ein Spitzname genügt."),
+                LearnerProfileProblem.NameTooLong => (Field: "displayName", Message: $"Der Name darf höchstens {AccountRules.MaxDisplayNameLength} Zeichen lang sein."),
+                LearnerProfileProblem.PinMissing => (Field: "pin", Message: "Bitte gib eine PIN mit 4 Ziffern ein."),
+                LearnerProfileProblem.PinInvalid => (Field: "pin", Message: "Die PIN muss aus genau 4 Ziffern bestehen."),
+                LearnerProfileProblem.AvatarKeyTooLong => (Field: "avatarKey", Message: $"Das Bild darf höchstens {AccountRules.MaxAvatarKeyLength} Zeichen lang sein."),
+                _ => throw new UnreachableException($"Unbekannter Befund {problem}."),
+            })
+            .ToDictionary(error => error.Field, error => new[] { error.Message }));
+
+    /// <summary>
+    /// Loescht ein Kind endgueltig (PAR-03, D-07). Der Code loescht nur das
+    /// Konto; Profil, Lernstand, Protokoll, Runden, XP/Serie und Anmeldungen
+    /// entfernt die Datenbank ueber die Fremdschluessel (AGENTS.md, D-06).
+    /// Der Mandantenfilter macht Kinder anderer Familien unsichtbar, die
+    /// Rollenbedingung schuetzt Elternkonten.
+    /// </summary>
+    private static async Task<IResult> DeleteAsync(Guid learnerId, WordQuestDbContext db, CancellationToken ct)
+    {
+        int deleted = await db.Users
+            .Where(u => u.Id == learnerId && u.Role == UserRole.Learner)
+            .ExecuteDeleteAsync(ct);
+
+        return deleted == 0
+            ? Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Kind gibt es nicht (mehr).",
+                statusCode: StatusCodes.Status404NotFound)
+            : Results.NoContent();
+    }
+
     private static async Task<IResult> OverviewAsync(
         Guid learnerId,
         WordQuestDbContext db,
+        LearningService learning,
         Sm2Scheduler scheduler,
         TimeProvider clock,
         HttpContext http,
@@ -147,7 +210,11 @@ public static class LearnerEndpoints
 
         if (profile is null)
         {
-            return Results.NotFound();
+            // Das Kind wurde geloescht, das Geraet ist noch angemeldet (FIX-04, D-11).
+            return Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Profil gibt es nicht mehr. Bitte melde dich ab.",
+                statusCode: StatusCodes.Status404NotFound);
         }
 
         GamificationProfile gamification =
@@ -155,23 +222,9 @@ public static class LearnerEndpoints
             ?? new GamificationProfile { Id = learnerId };
 
         DateTimeOffset now = clock.GetUtcNow();
-        DateTimeOffset dayStart = scheduler.StartOfLocalDay(now);
 
-        int dueToday = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId
-                 && r.State != ReviewCardState.Suspended
-                 && r.DueAt <= now, ct);
-
-        int introducedToday = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId && r.FirstSeenAt >= dayStart, ct);
-
-        int mastered = await db.ReviewStates.CountAsync(
-            r => r.LearnerId == learnerId
-                 && r.Repetitions >= 3
-                 && r.EaseFactor >= 2.1
-                 && r.Lapses <= 1, ct);
-
-        int total = await db.Cards.CountAsync(ct);
+        // Woerter, nicht Karten, mit derselben Regel wie die Ampel (FIX-06, D-16).
+        List<WordProgress> words = await learning.WordProgressAsync(learnerId, setId: null, ct);
 
         return Results.Ok(new LearnerOverviewDto(
             LearnerId: learnerId,
@@ -181,11 +234,12 @@ public static class LearnerEndpoints
             LevelProgress: LevelCurve.ProgressInLevel(gamification.Xp),
             XpToNextLevel: LevelCurve.XpToNextLevel(gamification.Xp),
             Coins: gamification.Coins,
-            Streak: gamification.CurrentStreak,
-            DueToday: dueToday,
-            NewRemainingToday: Math.Max(0, profile.DailyNewLimit - introducedToday),
-            CardsMastered: mastered,
-            CardsTotal: total));
+            Streak: StreakRules.CurrentStreak(gamification, scheduler.LocalDate(now)),
+            DueToday: await learning.DueCountAsync(learnerId, now, ct),
+            NewRemainingToday: await learning.NewBudgetAsync(profile, now, ct),
+            // Die Feldnamen bleiben (U7), gezaehlt werden Woerter.
+            CardsMastered: words.Count(w => w.Mastered),
+            CardsTotal: words.Count));
     }
 
     /// <summary>
@@ -197,46 +251,24 @@ public static class LearnerEndpoints
         Guid learnerId,
         Guid? setId,
         WordQuestDbContext db,
+        LearningService learning,
         CancellationToken ct)
     {
-        var rows = await db.Cards
-            .Where(c => setId == null || c.Entry!.SetId == setId)
-            .Select(c => new
-            {
-                c.EntryId,
-                c.Entry!.SourceText,
-                c.Entry.TargetText,
-                State = db.ReviewStates
-                    .Where(r => r.LearnerId == learnerId && r.CardId == c.Id)
-                    .Select(r => new { r.Repetitions, r.EaseFactor, r.Lapses })
-                    .FirstOrDefault(),
-            })
-            .ToListAsync(ct);
+        // Ohne Kind waere jedes Wort "neu", als waere der Lernstand zurueckgesetzt (WR-05).
+        if (!await db.LearnerProfiles.AnyAsync(p => p.Id == learnerId, ct))
+        {
+            return Results.Problem(
+                title: "Nicht gefunden",
+                detail: "Dieses Kind gibt es nicht (mehr).",
+                statusCode: StatusCodes.Status404NotFound);
+        }
 
-        List<TrafficLightDto> result = rows
-            .GroupBy(r => new { r.EntryId, r.SourceText, r.TargetText })
-            .Select(g =>
-            {
-                bool anySeen = g.Any(x => x.State is not null);
-                int lapses = g.Max(x => x.State?.Lapses ?? 0);
-                double worstEase = g.Min(x => x.State?.EaseFactor ?? 2.5);
-                bool allMastered = g.All(x =>
-                    x.State is not null
-                    && x.State.Repetitions >= 3
-                    && x.State.EaseFactor >= 2.1
-                    && x.State.Lapses <= 1);
-
-                string status =
-                    !anySeen ? "new"
-                    : lapses >= 3 || worstEase < 1.8 ? "red"
-                    : allMastered ? "green"
-                    : "yellow";
-
-                return new TrafficLightDto(
-                    g.Key.EntryId, g.Key.SourceText, g.Key.TargetText, status, lapses, worstEase);
-            })
-            .OrderBy(r => r.Status switch { "red" => 0, "yellow" => 1, "new" => 2, _ => 3 })
-            .ThenBy(r => r.SourceText)
+        // Sorgenkinder zuerst: Die Ampelstufen stehen in Anzeigereihenfolge.
+        List<TrafficLightDto> result = (await learning.WordProgressAsync(learnerId, setId, ct))
+            .OrderBy(w => w.Light)
+            .ThenBy(w => w.SourceText)
+            .Select(w => new TrafficLightDto(
+                w.EntryId, w.SourceText, w.TargetText, w.Light.ToString().ToLowerInvariant(), w.Lapses, w.WorstEase))
             .ToList();
 
         return Results.Ok(result);

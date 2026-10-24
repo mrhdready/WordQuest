@@ -1,14 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { GuardianLoginPage } from '@/features/auth/GuardianLoginPage'
 import { ProfilePickerPage } from '@/features/auth/ProfilePickerPage'
 import { LearnHomePage } from '@/features/learn/LearnHomePage'
 import { SessionPage } from '@/features/learn/SessionPage'
+import { AccountPage } from '@/features/manage/AccountPage'
+import { ChildFormPage } from '@/features/manage/ChildFormPage'
+import { ChildrenPage } from '@/features/manage/ChildrenPage'
 import { ManageLayout } from '@/features/manage/ManageLayout'
 import { ProgressPage } from '@/features/manage/ProgressPage'
 import { SetDetailPage } from '@/features/manage/SetDetailPage'
 import { SetsPage } from '@/features/manage/SetsPage'
+import { retryQuery, tokenStore } from '@/lib/api'
 import { AuthProvider, useAuth } from '@/lib/auth'
 
 const queryClient = new QueryClient({
@@ -17,7 +21,7 @@ const queryClient = new QueryClient({
       // Offline ist der Normalfall, nicht die Ausnahme: lieber veraltete
       // Daten zeigen als eine leere Seite (Konzept §13).
       staleTime: 30_000,
-      retry: 1,
+      retry: retryQuery,
       refetchOnWindowFocus: false,
       networkMode: 'offlineFirst',
     },
@@ -25,6 +29,19 @@ const queryClient = new QueryClient({
 })
 
 export function App() {
+  // Neue oder beendete Anmeldung (Abmelden, Refresh 400/401, anderer Tab):
+  // Daten der vorigen gehoeren nicht zum naechsten Profil (03.1-02 INFO 8).
+  // Im Ereignis selbst: React rendert erst danach neu (auch nach dem Listener von
+  // useSyncExternalStore), das erste Rendern zeigt so nichts Altes.
+  useEffect(() => {
+    let session = currentSession()
+    return tokenStore.subscribe(() => {
+      if (currentSession() === session) return
+      session = currentSession()
+      queryClient.clear()
+    })
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -34,6 +51,12 @@ export function App() {
       </AuthProvider>
     </QueryClientProvider>
   )
+}
+
+// Kennung der Anmeldung, null heisst abgemeldet. Eine Rotation aendert sie nicht.
+// Anmeldungen von vor wq.session haben keine Kennung, sind aber angemeldet.
+function currentSession(): string | null {
+  return tokenStore.refresh ? (tokenStore.session ?? '') : null
 }
 
 function AppRoutes() {
@@ -78,6 +101,10 @@ function AppRoutes() {
         <Route index element={<SetsPage />} />
         <Route path="sets/:setId" element={<SetDetailPage />} />
         <Route path="fortschritt" element={<ProgressPage />} />
+        <Route path="kinder" element={<ChildrenPage />} />
+        <Route path="kinder/neu" element={<ChildFormPage mode="create" />} />
+        <Route path="kinder/:learnerId" element={<ChildFormPage mode="edit" />} />
+        <Route path="konto" element={<AccountPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

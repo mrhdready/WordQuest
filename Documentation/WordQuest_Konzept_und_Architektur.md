@@ -79,7 +79,7 @@ Fünf Leitplanken, an denen jede spätere Feature-Entscheidung gemessen wird:
 
 Im Code haben `Owner` und `Guardian` dieselben Rechte (Policy `Guardian` = Rollen `Owner` oder `Guardian`, `Program.cs`).
 
-**Zum Kinder-Login:** Ein Kind soll kein Passwort tippen müssen — das ist die häufigste Abbruchstelle bei Lern-Apps. Stattdessen: Startbildschirm zeigt Avatar-Kacheln, ein Tipp auf den eigenen Avatar, dann eine PIN über ein großes Ziffernfeld. Die PIN schützt nicht gegen Angreifer, sondern gegen das Geschwisterkind — das ist das realistische Bedrohungsmodell im Wohnzimmer. Technisch wird für das Kind ein Refresh-Token (30 Tage, rotierend) auf dem Gerät hinterlegt, sodass die PIN nur bei Profilwechsel oder nach 30 Tagen ohne Nutzung nötig ist. Das PIN-Format wird serverseitig derzeit nicht geprüft; **geplant** für v1.0 sind 4–6 Ziffern (`PAR-02`).
+**Zum Kinder-Login:** Ein Kind soll kein Passwort tippen müssen — das ist die häufigste Abbruchstelle bei Lern-Apps. Stattdessen: Startbildschirm zeigt Avatar-Kacheln, ein Tipp auf den eigenen Avatar, dann eine PIN mit genau 4 Ziffern über ein großes Ziffernfeld (Tippen oder Tastatur); die vierte Ziffer meldet an, ohne weiteren Tipp und ohne Absende-Button; während der Anmeldung steht „Einen Moment …“ sichtbar unter den Punkten, und dieselbe Statuszeile sagt es Screenreadern an (die Ziffernanzahl sagt sie nur an, sichtbar zeigen sie die Punkte). Bei falscher PIN wird die Eingabe geleert, die Meldung bleibt stehen und der Fokus liegt auf der Taste 1. Enter auf einer fokussierten Ziffern-Taste bleibt wirkungslos, damit ein Enter aus Gewohnheit keine Ziffer anhängt; die Leertaste bedient sie. Die PIN schützt nicht gegen Angreifer, sondern gegen das Geschwisterkind — das ist das realistische Bedrohungsmodell im Wohnzimmer. Technisch wird für das Kind ein Refresh-Token (30 Tage, rotierend) auf dem Gerät hinterlegt, sodass die PIN nur bei Profilwechsel oder nach 30 Tagen ohne Nutzung nötig ist. Beim Anlegen eines Kindes ist die PIN Pflicht; das Feld nimmt höchstens 4 Zeichen an, und der Server prüft sie auf genau 4 Ziffern 0–9 (`PAR-02`); dieselbe Prüfung gilt beim Ändern über `PATCH /learners/{id}/settings` (`PAR-01`). Dort bleibt die PIN bei leerer Eingabe unverändert; hat das Kind noch keine PIN, ist sie auch beim Ändern Pflicht. Eine neue PIN hebt eine Sperre nach Fehlversuchen sofort auf und meldet alle Geräte ab, auf denen das Kind noch angemeldet ist (Widerruf seiner Refresh-Tokens).
 
 Auf einem Familientablet ist „Gerät ist vertrauenswürdig" die richtige Annahme. Auf einem Schul-Tablet später nicht — dort würde die PIN pro Session erzwungen. Das Feld `Tenant.RequirePinEverySession` existiert im Code, wird aber nicht ausgewertet (**geplant, nicht umgesetzt**; Schulen außer Scope).
 
@@ -93,8 +93,8 @@ Priorisierung nach MoSCoW, bezogen auf das MVP (= „ein Kind kann damit für di
 
 | # | Feature | Anmerkung |
 |---|---|---|
-| M1 | Vokabelsets anlegen, Vokabeln manuell erfassen | Schnellerfassung: eine Zeile `Hund = dog`, Tab springt weiter |
-| M2 | CSV-Import | Feste Spaltenreihenfolge Quelle; Ziel; [Emoji], Trennzeichen-Erkennung (`;`, `,`, Tab), Vorschau vor dem Import |
+| M1 | Vokabelsets anlegen, Vokabeln manuell erfassen | Schnellerfassung: eine Zeile `Hund = dog`, Tab springt weiter. Eigenes Bild je Vokabel im Dialog „Vokabel bearbeiten“; das Kind sieht es in der Lernrunde statt des Emojis |
+| M2 | CSV-Import | Text einfügen oder eine Datei wählen (`.csv`/`.txt`, höchstens 1 MB); die Datei liest der Browser ins Textfeld: mit UTF-16-BOM als UTF-16 (LE oder BE, z. B. Excel „Unicode-Text“), sonst erst strikt als UTF-8, sonst als Windows-1252; ein BOM wird entfernt. Während eine Datei gelesen wird, zählt keine weitere Auswahl. Feste Spaltenreihenfolge Quelle; Ziel; [Emoji], Trennzeichen-Erkennung (`;`, `,`, Tab), Vorschau vor dem Import. Die erste Zeile gilt nur als Kopfzeile, wenn jedes belegte Feld ein Kopfwort ist und jedes aus einer anderen Gruppe stammt (Quelle: `Deutsch`, `German`, `Quelle`, `Source`; Ziel: `Englisch`, `English`, `Ziel`, `Target`; Emoji: `Emoji`, `Bild`). `Quelle;source` oder `Bild;picture` sind Vokabeln; im Zweifel wird die erste Zeile importiert und erscheint in der Vorschau |
 | M3 | Spaced Repetition Engine | → §6, das Herzstück |
 | M4 | Antwortbewertung mit Tippfehlertoleranz | → §6.4 |
 | M5 | Lernsession („Quest") mit definiertem Ende | höchstens 15 Items (ein Zeitlimit gibt es nicht) |
@@ -153,7 +153,7 @@ Später kommt als dritte Kartenart `AUDIO→DE` dazu (Hören und verstehen), ohn
 
 ### 5.2 Kerntabellen (PostgreSQL, Auszug)
 
-Auszug aus der Migration `20260917045557_Initial`. Aufzählungen (Richtung, Zustand, Bewertung, Wortart) werden als Text gespeichert. `tenant_id` hat keinen Fremdschlüssel auf `tenant`; die Trennung erfolgt über den Query-Filter.
+Auszug aus der Migration `20260917045557_Initial`, ergänzt um `vocabulary_picture` aus `VocabularyPictures`. Aufzählungen (Richtung, Zustand, Bewertung, Wortart) werden als Text gespeichert. `tenant_id` hat keinen Fremdschlüssel auf `tenant`; die Trennung erfolgt über den Query-Filter.
 
 ```sql
 CREATE TABLE vocabulary_entry (
@@ -173,6 +173,14 @@ CREATE TABLE vocabulary_entry (
   created_at          timestamptz NOT NULL
 );
 
+CREATE TABLE vocabulary_picture (  -- höchstens ein Bild je Vokabel (IMG-01)
+  id         uuid PRIMARY KEY REFERENCES vocabulary_entry(id) ON DELETE CASCADE,
+  tenant_id  uuid NOT NULL,
+  version    uuid NOT NULL,                    -- neu bei jedem Speichern, steht in der Bild-URL
+  data       bytea NOT NULL                    -- WebP, JPEG oder PNG, höchstens 300 KB
+);
+CREATE UNIQUE INDEX ix_vocabulary_picture_version ON vocabulary_picture (version);
+
 CREATE TABLE card (
   id         uuid PRIMARY KEY,
   tenant_id  uuid NOT NULL,
@@ -191,7 +199,7 @@ CREATE TABLE review_state (
   lapses           int NOT NULL,
   due_at           timestamptz NOT NULL,
   first_seen_at    timestamptz NOT NULL,       -- Basis des Tagesbudgets
-  last_reviewed_at timestamptz,
+  last_reviewed_at timestamptz,                -- Concurrency-Token (D-10)
   last_grade       varchar(10),
   state            varchar(20) NOT NULL,       -- New|Learning|Review|Relearning|Suspended
   PRIMARY KEY (learner_id, card_id)
@@ -214,9 +222,13 @@ CREATE TABLE review_log (          -- append-only, Basis aller Statistiken
 );
 ```
 
+Bilder liegen in der Datenbank und nicht im Dateisystem: Sicherung, Wiederherstellung und Update nehmen sie ohne zusätzliches Volume mit. Die Entität `VocabularyPicture` hat keine Navigation an `VocabularyEntry`, damit keine Abfrage die Bytes in Listen oder Runden mitlädt.
+
 `review_log` ist bewusst append-only und wird nie aktualisiert. Alle Auswertungen (Ampel, Wochenreport, Problemwörter) sollen sich daraus ableiten lassen. Das erlaubt, den Lernalgorithmus später zu wechseln und den Fortschritt aus dem Log **neu zu berechnen**, statt ihn zu verlieren. (Die heutige Ampel in §9 liest `review_state`, nicht `review_log`.)
 
-Weil `review_state` und `review_log` keine Fremdschlüssel auf `card` bzw. Lernprofil haben, bleiben beim Löschen eines Sets oder Eintrags Lerndaten zurück. Die Bereinigung ist für v1.0 geplant (`FIX-02`, `PAR-03`).
+Lerndaten hängen über Fremdschlüssel mit `ON DELETE CASCADE` an Karte und Kind: `review_state`, `review_log`, `learning_session`, `session_item` und `gamification_profile` gehen mit der Karte bzw. dem Kind, `refresh_token` mit dem Konto. Der Sitzungsbezug des Protokolls (`review_log.session_id`) und der Set-Bezug einer Runde (`learning_session.set_id`) werden `SET NULL` (`FIX-02`, `PAR-03`). Verwaiste Zeilen aus Altinstallationen räumt die API beim Start vor der Migration auf (`OrphanCleanup`); danach ist der Schritt wirkungslos.
+
+`review_state.last_reviewed_at` ist das Concurrency-Token des Lernstands (`HARD-02`): Jede Antwort schreibt den Wert, das UPDATE prüft den gelesenen. Antworten zwei Geräte gleichzeitig auf dieselbe Karte in zwei Runden, schreibt nur die erste den Lernstand fort; die zweite trifft keine Zeile mehr, und Aufgabe, Protokoll und XP werden zurückgerollt. Damit das auch bei einer Uhr greift, die denselben Wert liefert, liegt der neue Wert mindestens 1 µs über dem gelesenen (PostgreSQL speichert Mikrosekunden, `LearningService`).
 
 ---
 
@@ -273,17 +285,30 @@ Beim Vergessen fällt das Intervall auf **null** zurück, nicht nur die Zähler.
 
 Eine Quest enthält maximal 15 Items, zusammengestellt in dieser Reihenfolge:
 
-1. Alle Karten in `Relearning` mit `due_at <= now` (Fehler, auch aus früheren Sessions)
-2. Fällige `Review`-Karten, älteste `due_at` zuerst — **maximal 10**
+1. Alle Karten in `Relearning` mit `due_at <= now` (Fehler, auch aus früheren Sessions), bei gewähltem Set nur aus diesem Set
+2. Fällige `Review`-Karten, älteste `due_at` zuerst — **maximal 10**, bei gewähltem Set nur aus diesem Set
 3. Auffüllen mit `New`-Karten aus dem aktiven Set (Rezeptionsrichtung EN→DE zuerst) — **maximal 5 neue pro Tag und Lernendem**
 
 Zusätzlich wird eine falsch beantwortete Karte sofort als Wiederholungs-Item an die laufende Session angehängt.
+
+**Wann eine neue Karte zählt.** Neue Karten zählen für das Tageslimit erst mit der ersten Antwort. Der Start einer Runde legt keinen Lernstand an; die erste Antwort legt ihn an und setzt `first_seen_at` auf den Antwortzeitpunkt. Eine gezeigte, nicht beantwortete Karte kommt deshalb in der nächsten Runde wieder, und ein Abbruch kostet kein Tageslimit (`FIX-03`, `FIX-09`). Rundenstart und Übersicht (`newRemainingToday`) zählen dieselbe Menge: beantwortete Lernstände mit `first_seen_at` ab Beginn des lokalen Tages.
+
+Der Rundenstart rechnet zusätzlich neue Karten mit, die unbeantwortet in einer offenen Runde desselben Kindes liegen, die vor höchstens 30 Minuten gestartet wurde. Je Karte zählt das einmal, auch wenn sie in zwei Runden liegt; eine Karte mit einer Antwort (auch im Klassenarbeit-Modus) zählt nicht als reserviert. Für weitere neue Karten bleibt nur der Rest des Tageslimits. Mehrere offene Runden bieten so zusammen nicht mehr neue Wörter an, als das Limit erlaubt. Reservierte Karten aus dem gewählten Umfang kommen in der nächsten Runde ohne weiteres Budget wieder, solange heute noch neue Karten erlaubt sind und die Rückstandsbremse nicht greift; sie sind in ihrer offenen Runde ohnehin beantwortbar. Eine abgeschlossene Runde reserviert nichts. Eine per „Schließen“ verlassene Runde bleibt offen und blockiert das Budget höchstens 30 Minuten. Die Übersicht zählt weiter nur Antworten.
+
+Bewusste Grenzen:
+
+- Ansehen ohne Antwort kostet weiter nichts. Ohne Antwort kommen dieselben neuen Karten immer wieder. Über den Rest des Tageslimits hinaus deckt ein Kind ohne Antwort neue Karten aus einem anderen Set erst auf, wenn seine Runden abgeschlossen oder vor mehr als 30 Minuten gestartet sind.
+- Zwei Starts in derselben Sekunde sehen die Reservierung des anderen nicht und bieten beide das volle Budget an.
+- Wird eine Runde erst nach mehr als 30 Minuten beantwortet und ist inzwischen eine zweite gestartet, kann das Kind über dem Limit landen.
+- Eine Antwort auf ein neues Wort über dem Limit wird nie abgelehnt; eine Antwort zählt immer.
 
 Die Deckelung bei 5 neuen Karten pro Tag ist der wichtigste Parameter des ganzen Systems. Wer 40 neue Vokabeln an einem Abend einspeist, erzeugt in den Folgetagen eine Wiederholungslawine, die das Kind sicher zum Abbruch bringt. Der Wert ist pro Lernendem konfigurierbar (`daily_new_limit`, Default 5, Bereich 3–15) und wird im Eltern-Dashboard erklärt, nicht nur als Zahl angeboten.
 
 **Rückstandsbremse.** Das Tagesbudget allein genügt nicht. Es begrenzt den Zufluss, aber nicht das Verhältnis von Zufluss zu Abfluss: Wer nur eine Einheit am Tag schafft, bekommt trotzdem jeden Tag fünf neue Wörter dazu, und der Berg fälliger Wiederholungen wächst über Monate. Deshalb gilt zusätzlich:
 
 > Neue Karten werden nur eingeführt, solange der Rückstand an fälligen Karten in **eine Session** passt (≤ 15).
+
+Die Bremse zählt alle fälligen Karten des Kindes, auch wenn ein Set gewählt ist. Wer in einem Set hinterherhängt, bekommt auch in einem anderen keine neuen Wörter.
 
 Das ist keine Feinabstimmung, sondern die Bedingung dafür, dass das System überhaupt funktioniert. Eine Simulation über ein Schuljahr (600 Karten, realistisches Antwortverhalten) zeigte den Unterschied:
 
@@ -311,7 +336,7 @@ Serverseitig, nicht im Client (der Client kennt die Antwort nicht — sonst ist 
 ```
 1. Normalisieren: trim, Mehrfachleerzeichen, Kleinschreibung,
    Unicode NFKC, typografische Apostrophe → ', Anführungszeichen und
-   Striche vereinheitlicht, abschließende "." und "!" entfernt
+   Striche vereinheitlicht, abschließende ".", "!" und "?" entfernt
 2. Artikel/Partikel optional: führendes "to " (to go),
    "a "/"an "/"the " sowie deutsche Artikel ("der/die/das/den/dem/des",
    "ein/eine/…") und "sich "/"zu " werden entfernt
@@ -342,7 +367,8 @@ POST /api/v1/sessions              → Session mit N Items
     itemId, cardId, prompt, promptType: "text"|"audio",
     expectedAnswerType: "choice"|"text",
     choices?: [...],               // vom Server erzeugte Distraktoren (nicht bei "classic")
-    emoji?, exampleSentence?, isRetry
+    emoji?, pictureVersion?,       // nur die Version des Bildes; die Bytes kommen über GET /pictures/{version}
+    exampleSentence?, isRetry
   }
 
 POST /api/v1/sessions/{id}/answers → Ergebnis
@@ -353,13 +379,13 @@ POST /api/v1/sessions/{id}/answers → Ergebnis
 
 Der Spielschlüssel wird beim Start der Session festgelegt, nicht pro Antwort. Ein neues Spiel zu bauen bedeutet damit: eine React-Komponente schreiben, die diese beiden Verträge bedient, plus ein Eintrag im serverseitigen `GameCatalog` (XP-Gewicht, maximale Bewertung, ob die Terminierung beeinflusst wird). Ein unbekannter Schlüssel fällt auf `classic` zurück. Keine Änderung an der Lernengine.
 
-**Distraktoren** (falsche Antwortoptionen) erzeugt der Server, nicht das Spiel — und zwar bevorzugt aus demselben Set und derselben Wortart. „Apfel" gegen `apple / orange / banana / pear` ist eine echte Übung; „Apfel" gegen `apple / school / running / because` ist geraten. Fallback auf die übrigen Wörter desselben Sets, wenn zu wenig gleichartige vorhanden sind. Es gibt höchstens vier Optionen.
+**Distraktoren** (falsche Antwortoptionen) erzeugt der Server, nicht das Spiel — und zwar bevorzugt aus demselben Set und derselben Wortart. „Apfel" gegen `apple / orange / banana / pear` ist eine echte Übung; „Apfel" gegen `apple / school / running / because` ist geraten. Fallback auf die übrigen Wörter desselben Sets, wenn zu wenig gleichartige vorhanden sind. Der Vorrat (höchstens 40 Wörter je Abfrage) wird zufällig aus dem ganzen Set gezogen, damit in großen Sets jedes Wort als falsche Option vorkommen kann. Es gibt höchstens vier Optionen.
 
 ### 7.2 Spielkatalog
 
 | Key | Spiel | Antworttyp | Grade-Ableitung | Stand |
 |---|---|---|---|---|
-| `classic` | **Karteikarte** — Wort, umdrehen, tippen | text | Zeit + Damerau-Levenshtein | umgesetzt |
+| `classic` | **Karteikarte** — Wort mit Bild der Vokabel (sonst Emoji), umdrehen, tippen | text | Zeit + Damerau-Levenshtein | umgesetzt |
 | `wordcatcher` | **Wort-Fänger** — Wörter fallen, richtiges antippen | choice | Zeit bis Treffer | nur Backend (`GameCatalog`); Frontend v2 (`LRN2-01`) |
 | `memory` | **Memory** — Emoji/Bild ↔ Wort | match | Anzahl Fehlversuche | nur Backend (`GameCatalog`); Frontend v2 (`LRN2-01`) |
 | `monsterduel` | **Monster-Duell** — richtige Antwort = Schaden | choice/text/order | gemischt | Idee |
@@ -427,7 +453,7 @@ Level 100 ist absichtlich unerreichbar — ein erreichtes Maximum beendet die Mo
 
 **Münzen:** 1 Münze pro korrekter Antwort, 20 pro abgeschlossener Session. Ausgabe für Avatar-Items (50–300) und Schatzkisten (100) — **geplant, nicht umgesetzt**; Münzen werden derzeit nur gesammelt.
 
-**Streaks:** Zählt ein Tag mit ≥ 1 abgeschlossener Session. **Zwei „Streak-Retter" pro Monat** kompensieren automatisch genau einen verpassten Tag — ohne Rückfrage, ohne Kaufmöglichkeit. Ein an Tag 40 gerissener Streak ist ein realer Abbruchgrund, und ein krankes oder verreistes Kind hat den Ausfall nicht verschuldet. Kein Streak-Zähler auf dem Startbildschirm vor Tag 3 — **geplant, nicht umgesetzt**: `LearnHomePage.tsx` zeigt den Zähler immer. Bekannter Fehler: Eine gerissene Serie wird bis zur nächsten abgeschlossenen Session als laufend angezeigt (`FIX-05`).
+**Streaks:** Zählt ein Tag mit ≥ 1 abgeschlossener Session. **Zwei „Streak-Retter" pro Monat** kompensieren automatisch genau einen verpassten Tag — ohne Rückfrage, ohne Kaufmöglichkeit. Ein an Tag 40 gerissener Streak ist ein realer Abbruchgrund, und ein krankes oder verreistes Kind hat den Ausfall nicht verschuldet. Kein Streak-Zähler auf dem Startbildschirm vor Tag 3 — **geplant, nicht umgesetzt**: `LearnHomePage.tsx` zeigt den Zähler immer. Angezeigt wird die aktuelle Serie (`StreakRules.CurrentStreak`, `FIX-05`): Nach einer Pause ohne verfügbaren Retter ist sie 0, die Startseite zeigt dann „Starte heute deine Serie!“, die Eltern-Ansicht „Keine laufende Serie“. Die Übersicht berechnet sie beim Lesen aus dem letzten aktiven Tag (Ortszeit) und ändert nichts; gespeichert wird die Serie nur beim Abschluss einer Runde.
 
 **Sammelkarten (geplant, nicht umgesetzt):** Eine Karte je 20 **neu gefestigter** Vokabeln — nicht je 20 beantworteter Vokabeln, sonst lässt sich die Sammlung durch stumpfes Wiederholen derselben leichten Wörter farmen. „Gefestigt" folgt derselben Regel wie die grüne Ampel in §9 (`repetitions ≥ 3 && ease ≥ 2.1 && lapses ≤ 1`). Serien zu je 12 Karten (Tiere, Drachen, Ritter, Fahrzeuge), Raritäten 70 / 25 / 5 %. **Keine lizenzierten Inhalte** (im Ursprungskonzept standen Fußballstars) — Bildrechte an realen Personen sind für ein Open-Source-Projekt nicht handhabbar. Im Code existiert nur der Zähler `GamificationProfile.MasteredSinceLastCard`, er wird nicht fortgeschrieben.
 
@@ -442,13 +468,13 @@ Ampeleinstufung pro Vokabel (`VocabularyEntry`, aggregiert über beide Richtunge
 | Ampel | Kriterium |
 |---|---|
 | 🟢 sicher | beide Karten `repetitions ≥ 3` und `ease ≥ 2.1` und `lapses ≤ 1` |
-| 🟡 unsicher | mindestens eine Karte schon vorgelegt, aber weder 🟢 noch 🔴 erfüllt |
+| 🟡 unsicher | mindestens eine Karte schon beantwortet, aber weder 🟢 noch 🔴 erfüllt |
 | 🔴 schwierig | `lapses ≥ 3` oder `ease < 1.8` (bei einer der beiden Karten) |
-| ⚪ neu | noch nie vorgelegt |
+| ⚪ neu | noch nie beantwortet |
 
-Dieselbe Schwelle (`ease ≥ 2.1`) gilt für „gefestigte Karten" in der Übersicht. Heute steht die Regel an zwei Stellen in `LearnerEndpoints.cs`; sie soll einmal definiert werden (`FIX-06`).
+Die Regel samt Ampelschwellen steht einmal in `MasteryRules` (Learning-Modul, `FIX-06`); die Wortzählung (`WordProgressAsync`) und die Zählung von fälligen Karten und Tagesbudget stehen einmal im `LearningService`, Rundenstart, Ampel und Übersicht benutzen sie. Die Übersicht zählt sicher gelernte Wörter, also genau die Wörter mit grüner Ampel, und alle Wörter der Familie. Die Felder `cardsMastered`/`cardsTotal` behalten ihren Namen und zählen Wörter.
 
-Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen, Streak, heute fällig, neue Karten übrig, gefestigte Karten) und die Ampel je Set. **Geplant, nicht umgesetzt** (v2, `PAR2-03`): Wochenübersicht (Minuten pro Tag, Antworten, Trefferquote) · Top-10-Problemwörter mit Fehlversuchen.
+Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen, Streak, heute fällig, neue Karten übrig, sicher gelernte Wörter) und die Ampel je Set. **Geplant, nicht umgesetzt** (v2, `PAR2-03`): Wochenübersicht (Minuten pro Tag, Antworten, Trefferquote) · Top-10-Problemwörter mit Fehlversuchen.
 
 **Was das Dashboard bewusst nicht zeigt:** keine Vergleiche mit anderen Kindern, keine Prognosen („wird die Arbeit nicht bestehen"), keine Minuten-Genauigkeit der Nutzungszeiten. Das Dashboard soll einem Elternteil zeigen, wo es helfen kann — es ist kein Überwachungswerkzeug. Das Kind sieht in seinem Profil, dass Eltern den Fortschritt sehen können; heimliche Überwachung ist ausgeschlossen.
 
@@ -458,7 +484,7 @@ Umgesetzt sind die Übersicht (`GET /learners/{id}/overview`: Level, XP, Münzen
 
 ### 10.1 C4 — Container
 
-Das Bild zeigt die Variante mit Domain und TLS (`docker-compose.yml`). Primärer Betrieb für v1.0 ist das Heimnetz über HTTP ohne Traefik: `docker-compose.quick.yml` liefert `web` auf Port 8080 aus und wird für v1.0 betriebstauglich gemacht (`SETUP-01`). Die Domain-Variante bleibt für fortgeschrittene Nutzer bestehen.
+Das Bild zeigt die Variante mit Domain und TLS (`docker-compose.yml`). Primärer Betrieb für v1.0 ist das Heimnetz über HTTP ohne Traefik: `docker-compose.quick.yml` liefert `web` auf Port 8080 aus, liest DB-Passwort und JWT-Schlüssel aus Dateien in `./secrets` und wird mit `./setup.sh` eingerichtet (`SETUP-01`, `SETUP-02`). Die Domain-Variante bleibt für fortgeschrittene Nutzer bestehen.
 
 ```
 ┌──────────────────── Docker-Host (NAS / Mini-PC / Raspberry Pi 5) ────────────────┐
@@ -483,7 +509,7 @@ Das Bild zeigt die Variante mit Domain und TLS (`docker-compose.yml`). Primärer
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Traefik leitet alle Anfragen an `web`; nginx im `web`-Container reicht `/api/` und `/health/` an `api` weiter (`frontend/nginx.conf`). Der `backup`-Container verbindet sich mit `postgres`, nicht mit `api`. Aufbewahrung: 14 Tage, 8 Wochen, 6 Monate. In der HTTP-Variante (`docker-compose.quick.yml`) gibt es heute weder Traefik noch Backup. Ein optionaler Log-Container (seq) ist nicht vorhanden.
+Traefik leitet alle Anfragen an `web`; nginx im `web`-Container reicht `/api/` und `/health/` an `api` weiter (`frontend/nginx.conf`). Der `backup`-Container verbindet sich mit `postgres`, nicht mit `api`. Aufbewahrung: 14 Tage, 8 Wochen, 6 Monate. In der HTTP-Variante (`docker-compose.quick.yml`) gibt es kein Traefik; der `backup`-Dienst ist derselbe, `setup.sh` legt `./backups` mit `0700` an (`SETUP-01`). Ein optionaler Log-Container (seq) ist nicht vorhanden.
 
 Kein Redis, kein Message Broker, kein separater Auth-Server im MVP. Für eine Familie mit drei Kindern ist das Over-Engineering, und jeder zusätzliche Container ist ein Ding, das der Betreiber (die Eltern) warten muss. Bei Schulbetrieb kämen Redis (Session-Cache) und ein Worker-Container dazu — die API hält keinen Zustand im Speicher außer dem Rate Limiter; Schulen sind für v1.0 außer Scope.
 
@@ -502,11 +528,11 @@ backend/tests/
   WordQuest.Learning.Tests/    // ◄ höchste Testabdeckung, siehe unten
 ```
 
-**Verworfen / zurückgestellt:** Ein Modul `WordQuest.Modules.Reporting` gibt es nicht; die Auswertungen liegen in `LearnerEndpoints.cs`. `Result<T>`, In-Process-Domain-Events (z. B. `CardReviewed`) und Repositories gibt es ebenfalls nicht und sie sind nicht geplant.
+**Verworfen / zurückgestellt:** Ein Modul `WordQuest.Modules.Reporting` gibt es nicht; die Auswertungen rechnet der `LearningService`, `LearnerEndpoints.cs` ruft sie nur auf. `Result<T>`, In-Process-Domain-Events (z. B. `CardReviewed`) und Repositories gibt es ebenfalls nicht und sie sind nicht geplant.
 
 **Architekturhaltung: DDD-light.** Die Module sind grobe Bounded Contexts. Sie enthalten Entitäten und reine Domänendienste ohne EF- oder HTTP-Abhängigkeit (`Sm2Scheduler`, `SessionComposer`, `AnswerEvaluator`, `XpRules`, `StreakRules`, `LevelCurve`). Einzige Modulabhängigkeit: `Learning` → `Content`. Aggregates, Domain-Events und Repositories werden bewusst nicht eingeführt; volles DDD ist nicht geplant. Die Orchestrierung einer Session (Auswahl, Bewertung, Terminierung, Protokoll, Belohnung) liegt im `LearningService` in `WordQuest.Infrastructure`, der die Gamification-Regeln direkt aufruft. Endpunkte bleiben dünn; nicht triviale Logik gehört in Module oder Services.
 
-**Testfokus:** `WordQuest.Modules.Learning` ist der einzige Teil, in dem ein Fehler *unsichtbar* schadet — ein falsch berechnetes Intervall merkt niemand, aber das Kind lernt schlechter. Dieser Teil bekommt Unit-Tests (Ziel: Abdeckung > 90 %; in CI wird keine Abdeckung gemessen), inklusive eines Simulationstests, der 365 Tage Lernverhalten mit einem synthetischen Lernenden durchspielt und prüft, dass die tägliche Kartenlast nicht explodiert (`YearLongSimulationTests`). UI und CRUD brauchen diese Tiefe nicht; API-Integrationstests gegen echtes PostgreSQL sind für v1.0 geplant (`QUAL-01`).
+**Testfokus:** `WordQuest.Modules.Learning` ist der einzige Teil, in dem ein Fehler *unsichtbar* schadet — ein falsch berechnetes Intervall merkt niemand, aber das Kind lernt schlechter. Dieser Teil bekommt Unit-Tests (Ziel: Abdeckung > 90 %; in CI wird keine Abdeckung gemessen), inklusive eines Simulationstests, der 365 Tage Lernverhalten mit einem synthetischen Lernenden durchspielt und prüft, dass die tägliche Kartenlast nicht explodiert (`YearLongSimulationTests`). UI und CRUD brauchen diese Tiefe nicht. API-Integrationstests gegen echtes PostgreSQL (`WordQuest.Api.Tests`, `WebApplicationFactory`) decken Anmeldung, Refresh, die Trennung zwischen Geschwistern und jede FIX-Anforderung ab (`QUAL-01`); die CI führt sie gegen PostgreSQL 17 aus (`.github/workflows/ci.yml`).
 
 **Testvorgehen:** Neue Funktionen entstehen testgetrieben (TDD). Ein Bugfix beginnt mit einem Test, der den Fehler reproduziert und zunächst fehlschlägt.
 
@@ -566,20 +592,28 @@ POST   /auth/learner-login              learnerId + PIN   → Access + Refresh
 POST   /auth/refresh
 POST   /auth/logout
 
+POST   /account/password                currentPassword, newPassword → 204 (Elternkonto)
+
 GET    /learners                        Kinder des Mandanten
-POST   /learners                        displayName, avatarKey?, pin?
-PATCH  /learners/{id}/settings          dailyNewLimit, speed, soundEnabled, pin
+POST   /learners                        displayName, pin (Pflicht, genau 4 Ziffern), dailyNewLimit? (3–15, Standard 5), avatarKey? (höchstens 50 Zeichen)
+PATCH  /learners/{id}/settings          displayName?, dailyNewLimit?, speed?, soundEnabled?, pin? (genau 4 Ziffern, leer = unverändert; Pflicht, solange das Kind keine PIN hat)
+DELETE /learners/{id}                   löscht das Kind samt Lernstand, XP, Serie und Anmeldungen; 404 für fremde oder unbekannte Kinder
 GET    /learners/{id}/overview          Level, XP, Streak, fällig, gefestigt
-GET    /learners/{id}/traffic-light?setId=
+GET    /learners/{id}/traffic-light?setId=   404 für fremde oder unbekannte Kinder
 
 GET    /sets
-POST   /sets
-DELETE /sets/{id}
+POST   /sets                            title (Pflicht, höchstens 200 Zeichen); description höchstens 2000, sourceLanguage/targetLanguage höchstens 5 Zeichen
+PATCH  /sets/{id}                       title: benennt das Set um, IDs und Lernstand bleiben; Titel Pflicht, höchstens 200 Zeichen; 404 für fremde oder unbekannte Sets
+DELETE /sets/{id}                       löscht Vokabeln und Lernstand aller Kinder dazu, Sitzungsprotokolle bleiben ohne Set-Bezug; 404 für fremde oder unbekannte Sets
 GET    /sets/{id}/entries
-POST   /sets/{id}/entries
-DELETE /sets/{id}/entries/{entryId}
-POST   /sets/import/preview             CSV-Text als JSON → Vorschau
-POST   /sets/{id}/import                bestätigte Einträge
+POST   /sets/{id}/entries               sourceText, targetText (je Pflicht, höchstens 200 Zeichen); emoji höchstens 16, exampleSource/exampleTarget höchstens 500 Zeichen; 404 für fremde oder unbekannte Sets
+PUT    /sets/{id}/entries/{entryId}     korrigiert Deutsch und Englisch, IDs und Lernstand bleiben; je Wort Pflicht, höchstens 200 Zeichen; 404 für fremde oder unbekannte Vokabeln
+DELETE /sets/{id}/entries/{entryId}     löscht den Lernstand aller Kinder zu dieser Vokabel; 404 für fremde oder unbekannte Vokabeln
+PUT    /sets/{id}/entries/{entryId}/picture   roher Body (kein Formular), nur Elternkonten; Signatur und Struktur WebP/JPEG/PNG, sonst 400; leer 400; über 300 KB 413; fremde oder unbekannte Vokabel 404; gleichzeitiger erster Upload 409; ersetzt ein vorhandenes Bild → { pictureVersion }
+DELETE /sets/{id}/entries/{entryId}/picture   nur Elternkonten; 204, auch ohne Bild; fremde oder unbekannte Vokabel 404
+GET    /pictures/{version}              jede Rolle der Familie; Content-Type aus den Bytes, Cache-Control: no-store; 404 für fremde oder ersetzte Versionen
+POST   /sets/import/preview             CSV-Text als JSON → Vorschau; Zeilen über den Grenzen von /entries (Wort 200, Emoji 16) sind Problemzeilen
+POST   /sets/{id}/import                bestätigte Einträge; Einträge außerhalb der Grenzen von /entries werden übersprungen; 404 für fremde oder unbekannte Sets
 
 POST   /sessions                        { learnerId, setId?, gameKey?, size? }
 POST   /sessions/{id}/answers
@@ -590,15 +624,17 @@ GET    /sessions/games                  Spielkatalog (Key, Titel, XP-Gewicht)
 
 `/sessions/sync` existiert serverseitig, wird vom Frontend aber nicht aufgerufen (Offline-Lernen ist v2, `LRN2-02`).
 
+Fehlerform der Sitzungs-Endpunkte (`FIX-04`): Unbekannte Runde, Karte oder unbekanntes Kind ergeben 404 mit deutschem `detail`; eine unbekannte oder fremde `setId` beim Start ergibt 404 („Dieses Set gibt es nicht (mehr).“); `size` außerhalb 1–50 ergibt 400; eine gleichzeitige Doppel-Antwort auf dieselbe Aufgabe ergibt 409, ebenso gleichzeitige Antworten auf dieselbe Karte in zwei Runden (ohne XP für die zweite); eine Wiederholung nach der ersten Antwort ergibt 200 ohne neue Wertung (0 XP); wird Karte oder Kind gelöscht, während eine Antwort gerade gespeichert wird, ergibt das 404 statt 500 oder 409 (Fremdschlüssel-Verletzung bzw. per Kaskade gelöschte Aufgabe); eine neue Antwort auf eine schon abgeschlossene Runde ergibt 409 („Diese Runde ist schon beendet. Starte eine neue Runde.“), auch per `/sessions/sync`.
+
 **Geplant, nicht umgesetzt:** `GET /sessions/{id}` · `GET /learners/{id}/stats/problem-words` (v2, `PAR2-03`) · `GET /gamification/profile/{learnerId}` · `GET /gamification/missions/today` · `GET /gamification/collection/{learnerId}`.
 
-Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen pro Minute pro IP auf allen `/auth`-Routen, einschließlich `refresh`. Weil im Heimnetz hinter dem Proxy alle Geräte dieselbe IP haben, kann ein Familienmitglied die anderen aussperren (bekannter Fehler, `FIX-01`). PIN: nach 10 Fehlversuchen in Folge wird das Profil 15 Minuten gesperrt.
+Fehlerformat: RFC 9457 (`application/problem+json`). Ein fehlender oder unlesbarer JSON-Body oder ein nicht lesbarer Parameter ergibt in jeder Umgebung 400 mit „Die Anfrage ist unvollständig oder nicht lesbar.“ (`Program.cs`, `ThrowOnBadRequest` plus Exception-Handler). Ein lesbarer Body, dem ein Pflichtfeld fehlt oder in dem es `null` ist, bindet ohne Fehler; Anmeldung, Refresh, Abmelden, Import-Vorschau, Import-Bestätigung und Sync prüfen das selbst und antworten mit 400 und deutschem Feldfehler. Rate Limiting: 10 Anfragen pro Minute pro Gerät auf `/auth/profiles`, `/auth/login`, `/auth/learner-login` und `/account/password`; `/auth/refresh` und `/auth/logout` sind ausgenommen, sie erneuern bzw. beenden nur eine bestehende Anmeldung (`FIX-01`). Der Wert kommt aus `Auth:RequestsPerMinute` (Standard 10 in `appsettings.json`); nur der e2e-Teststack (`frontend/e2e/docker-compose.e2e.yml`) erhöht ihn, weil Playwright alle Anfragen von einer IP schickt. Das Gerät erkennt die API am Kopf `X-Forwarded-For`: nginx setzt ihn selbst auf die Adresse seines Absenders und verwirft einen vom Gerät mitgeschickten Wert; im Traefik-Stack übernimmt nginx vorher die Adresse, die Traefik meldet (`frontend/nginx-traefik-realip.conf`, nur in `docker-compose.yml` eingebunden). Die API übernimmt genau einen Wert und nur von Absendern aus privaten Netzen (`Program.cs`, `ForwardLimit = 1`). Grenze: Wo Docker die Absenderadresse nicht durchreicht (Docker Desktop, Rootless Docker, Zugriff über IPv6 auf ein Compose-Netz nur mit IPv4), sieht nginx für alle Geräte die Gateway-Adresse, dann teilen sich alle Geräte wieder einen Topf. Ein Gerät mit mehreren Adressen bekommt je Adresse 10 Versuche pro Minute; für die PIN greift zusätzlich die Sperre pro Profil, für das Elternpasswort nur dieses Limit. PIN: nach 10 Fehlversuchen in Folge wird das Profil 15 Minuten gesperrt.
 
 ---
 
 ## 13. PWA und Offline
 
-**Service Worker** (Workbox über `vite-plugin-pwa`): App-Shell und statische Assets werden vorab gecacht; API-Lesezugriffe (`GET /api/…`) `NetworkFirst` mit 5-Sekunden-Timeout; API-Schreibzugriffe werden nicht gecacht. Der Service Worker registriert sich nur über HTTPS (oder `localhost`), im primären HTTP-Heimnetzbetrieb also nicht.
+**Service Worker** (Workbox über `vite-plugin-pwa`): App-Shell und statische Assets werden vorab gecacht; API-Lesezugriffe (`GET /api/…`) `NetworkFirst` mit 5-Sekunden-Timeout; API-Schreibzugriffe werden nicht gecacht. Der Service Worker registriert sich nur über HTTPS (oder `localhost`), im primären HTTP-Heimnetzbetrieb also nicht. Sitzungsende (Abmelden, Refresh 400/401, verbrauchter Token nach 409 ohne Nachfolger) und jede neue Anmeldung löschen den Cache `wq-api`, soweit `caches` verfügbar ist (HTTPS oder `localhost`); die Anmeldung löscht, bevor sie speichert (`api.ts`, `HARD-04`). Grenze: Ein GET, der beim Abmelden noch läuft, kann den Cache danach neu anlegen; dieser Eintrag liegt bis zur nächsten Anmeldung im Browser. Ohne Sitzung fragt die App nur die Profilliste (`/auth/profiles`) ab, die Oberfläche zeigt einen solchen Eintrag also nicht. Bild-Antworten (`GET /pictures/{version}`) fallen unter die API-Lesezugriffe und liegen damit nur in `wq-api`, das beim Abmelden geleert wird.
 
 **Geplant, nicht umgesetzt (v2, `LRN2-02`)** — der Rest dieses Abschnitts beschreibt das Zielbild. Dexie und IndexedDB werden heute nicht verwendet.
 
@@ -606,7 +642,7 @@ Fehlerformat: RFC 9457 (`application/problem+json`). Rate Limiting: 10 Anfragen 
 
 **Offline-Ablauf:** Session wird aus den lokal vorgehaltenen Karten zusammengestellt. Bewertung erfolgt lokal nach denselben Regeln (die Normalisierungs- und Levenshtein-Logik liegt als geteiltes TypeScript-Modul auch im Client vor — die *Terminierung* jedoch nicht). Antworten gehen in die Outbox. Beim nächsten Online-Kontakt: `POST /sessions/sync`, der Server rechnet `review_state` autoritativ neu, XP und Münzen werden serverseitig vergeben und im Client überschrieben.
 
-**Konfliktregel:** Der Server gewinnt immer bei `review_state`. Bei XP gilt „höherer Wert gewinnt" — ein Kind, das offline gespielt hat, verliert nie Punkte. Doppelte Antworten werden idempotent verworfen (Antworten tragen eine clientseitig erzeugte UUID). Serverseitig bereits umgesetzt: eindeutiger Index auf `session_item.client_answer_id`; ein schon beantwortetes Item liefert das gespeicherte Ergebnis ohne erneute Wertung.
+**Konfliktregel:** Der Server gewinnt immer bei `review_state`. Bei XP gilt „höherer Wert gewinnt" — ein Kind, das offline gespielt hat, verliert nie Punkte. Doppelte Antworten werden idempotent verworfen (der Client schickt als `clientAnswerId` die Id des Session-Items; jede Retry-Karte ist ein eigenes Item mit eigener Id, und `crypto.randomUUID` wird nicht gebraucht, das über reines Heimnetz-HTTP fehlt). Serverseitig bereits umgesetzt: eindeutiger Index auf `session_item.client_answer_id`; ein schon beantwortetes Item liefert das gespeicherte Ergebnis ohne erneute Wertung.
 
 ---
 
@@ -616,14 +652,14 @@ Die Compose-Dateien im Repository sind die Quelle; hier steht nur die Übersicht
 
 | Datei | Zweck | Stand |
 |---|---|---|
-| `docker-compose.quick.yml` | Heimnetz über HTTP, `http://<host>:8080`, kein Traefik, kein Zertifikat | **primärer Betrieb für v1.0**; heute noch als Probebetrieb markiert: bekannte Standardwerte für DB-Passwort und JWT-Schlüssel, Demo-Daten an, kein Backup. Betriebstauglich machen: `SETUP-01`, `SETUP-02`, `SETUP-05` |
+| `docker-compose.quick.yml` | Heimnetz über HTTP, `http://<host>:8080`, kein Traefik, kein Zertifikat | **primärer Betrieb für v1.0**; Secret-Dateien aus `setup.sh`, Elternkonto aus `setup.sh`, Demo-Daten standardmäßig aus (`WQ_SEED_DEMO_DATA=false`), tägliches Backup nach `./backups` (`SETUP-01`) |
 | `docker-compose.yml` | Domain + Traefik v3 + Let's Encrypt (DNS-Challenge), Secrets als Dateien, tägliches Backup | für fortgeschrittene Nutzer; wird in v1.0 nicht erweitert |
 | `docker-compose.build.yml` | Images aus dem Quellcode bauen (zusätzlich zu `docker-compose.yml`) | — |
 | `docker-compose.dev.yml` | Entwicklung | — |
 
-Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION:-master}`. Versionierte Tags (z. B. `1.0.0`) statt `master` sind für v1.0 geplant (`REL-04`). Die CI baut die Images für `linux/amd64` und `linux/arm64`.
+Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION:-1.0.0}`, Präfix-Standard `ghcr.io/mrhdready/wordquest` (`.env.example`, beide Compose-Dateien; `REL-04`). Die CI (`ci.yml`) baut bei jedem Push auf `master` und bei Tags `v*` beide Images für `linux/amd64` und `linux/arm64` und schiebt sie nach GHCR; aus dem Tag `v1.0.0` entsteht das Image-Tag `1.0.0` (`type=semver`). Bei Tags `v*` baut danach der Job `release` (`needs: images`, damit kein Paket ohne Images erscheint) mit `.github/release-package.sh` das Paket `wordquest.tar.gz` und `wordquest.tar.gz.sha256` und hängt beide per vorinstalliertem `gh` an das GitHub-Release (legt es an, falls es fehlt; `--clobber`). Das Paket enthält eine feste Liste: `docker-compose.quick.yml`, `docker-compose.yml`, `.env.example`, `setup.sh`, `upgrade.sh`, `restore.sh` und `frontend/nginx-traefik-realip.conf` im Ordner `wordquest/`, ohne erweiterte Attribute; `.env`, `secrets/` und `backups/` gehören nie dazu. Das Skript bricht ab, wenn der Tag nicht `v` plus `WQ_VERSION` aus `.env.example` ist. Nur dieser Job hat `contents: write`. Der Build-Stage beider Dockerfiles läuft auf der Build-Plattform (`FROM --platform=$BUILDPLATFORM`), nur der Runtime-Stage wird je Zielplattform gebaut; .NET läuft dabei nicht unter Emulation.
 
-**Zielbild Erstinstallation:** `git clone`, `./setup.sh`, `docker compose up -d`, Browser öffnen, anmelden. Fünf Minuten, keine manuelle SQL-Eingabe. Migrationen laufen beim API-Start automatisch. Heute erzeugt `setup.sh` die Secrets und fragt Hostname, E-Mail für Let's Encrypt und Image-Präfix ab; die Zugangsdaten des DNS-Providers müssen von Hand in `.env` eingetragen werden. Ein Elternkonto legt `setup.sh` noch nicht an — ohne Demo-Daten gibt es heute keinen Weg zum ersten Login. Geplant: `setup.sh` fragt E-Mail und Passwort ab und legt das Konto an (`SETUP-02`); Update und Wiederherstellung über `upgrade.sh` und `restore.sh` (`REL-01`, `REL-02`).
+**Zielbild Erstinstallation:** Paket aus dem GitHub-Release laden und entpacken (`curl -fsSL …/releases/latest/download/wordquest.tar.gz | tar xz`, kein Git nötig), `cd wordquest`, `./setup.sh`, Browser öffnen, anmelden. Die Anleitung für Eltern ist `Documentation/Installation.md`. Fünf Minuten, keine manuelle SQL-Eingabe. Migrationen laufen beim API-Start automatisch; davor legt die API die Migrationshistorie an, damit der erste Start gegen die leere Datenbank keine erwartbaren `fail:`-Zeilen ins Log schreibt (echte Datenbankfehler bleiben `fail:`). Das Vorladen des DataProtection-Schlüsselrings beim Start ist abgeschaltet: WordQuest schützt nichts mit DataProtection (JWT mit eigenem Schlüssel, Refresh-Token als SHA256-Hash), und die zwei `warn:`-Zeilen zu Schlüsseln im Container entfallen damit. Heute erzeugt `setup.sh` die Secrets, legt `.env` mit `COMPOSE_FILE=docker-compose.quick.yml` an (einzige Frage dazu: Image-Präfix mit dem Standard `ghcr.io/mrhdready/wordquest` aus `.env.example`, den Enter übernimmt), startet den Stack und fragt E-Mail und Passwort für das Elternkonto ab; das Konto legt das CLI-Verb `create-owner` im API-Container an, das Passwort geht per stdin hinein (`SETUP-02`). Ein zweiter Lauf ändert nichts. Ein vergessenes Elternpasswort setzt `docker compose exec api dotnet WordQuest.Api.dll reset-password <E-Mail>` zurück: Das neue Passwort wird erzeugt und genau einmal angezeigt, alle Refresh-Tokens des Kontos werden widerrufen (`SETUP-04`). Außerhalb von Development startet die API nicht, wenn DB-Passwort oder JWT-Schlüssel fehlen oder ein bekannter Standardwert aus dem Repository sind oder der JWT-Schlüssel kürzer als 32 Zeichen ist; ein expliziter `ConnectionStrings__Default` wird über seinen Passwort-Teil genauso geprüft (`SecretCheck.cs`, `SETUP-05`). Für die Domain-Variante werden `COMPOSE_FILE=docker-compose.yml`, Hostname, ACME-Adresse und DNS-Provider von Hand in `.env` eingetragen. Demo-Daten gibt es nur noch als Entwickler-Option (`WQ_SEED_DEMO_DATA=true`): Außerhalb von Development startet die API damit nicht, und sie bricht nach der Migration ab, solange ein Demo-Elternkonto aus einer Altinstallation noch das bekannte Passwort hat; die Meldung nennt den Ausweg `docker compose run --rm api reset-password demo@wordquest.local` (`DemoAccountCheck.cs`). Wiederherstellen ist umgesetzt: `restore.sh` listet die Sicherungen aus `backups/`, verlangt eine Bestätigung, sichert vorher den Ist-Stand, spielt die gewählte Datei in einer neu angelegten Datenbank in einer Transaktion ein (`psql -1 -f -`: Scheitert eine Anweisung, bleibt nichts davon; bricht nur das Lesen ab, erkennt das `pipefail`) und fällt bei einem Fehler auf die Vorher-Sicherung zurück (`REL-02`). Update ist umgesetzt, ohne Git (`REL-01`, D-16): `upgrade.sh` lädt `wordquest.tar.gz` und `wordquest.tar.gz.sha256` von `WQ_RELEASE_URL` (Umgebung, sonst `.env`, sonst `https://github.com/mrhdready/WordQuest/releases/latest/download`; nur `http://` oder `https://`, bei https mit `--proto '=https' --proto-redir '=https'`) in ein Arbeitsverzeichnis `.upgrade.*` im Installationsordner und prüft die SHA256. Vor dem Entpacken vergleicht es Typ und Name jedes Eintrags mit der festen Liste (zwei Ordner, sieben Dateien); nach dem Entpacken müssen sie reguläre Dateien und die drei Skripte ausführbar sein. Danach sichert es die Datenbank nach `backups/vor-update-…` und prüft die Sicherung (gzip, Endzeile, Kontotabelle); ohne geprüfte Sicherung ändert es nichts. Erst dann ersetzt es genau die sieben Dateien per `mv` (`.env`, `secrets/` und `backups/` bleiben unberührt) und startet sich per `exec ./upgrade.sh --continue <Sicherung>` mit der neuen Fassung neu; dieser Aufruf ist die feste Schnittstelle zwischen alter und neuer Fassung. Die neue Fassung lädt die Version aus der neuen `.env.example` und schreibt sie erst nach erfolgreichem Laden als `WQ_VERSION` in `.env`, startet den Stack und wartet auf `/health/ready`. Scheitert das Laden, laufen WordQuest und `.env` mit der bisherigen Version weiter, die Paketdateien sind schon neu, und ein neuer Aufruf setzt das Update fort. Scheitert der Start oder ist die API nach zwei Minuten nicht bereit, nennt die Meldung alte Version, Sicherungsdatei und den Weg zurück (alte Version in `.env`, dann `./restore.sh <Datei>`); die Sicherung steht in der Liste von `restore.sh`. Ein früherer Git-Klon (`.git` im Ordner) lädt kein Paket und nimmt wie bisher die Version aus der eigenen `.env.example`. Grenzen: Dateien, die eine neue Version nicht mehr mitbringt, bleiben im Ordner liegen. Und weil die alte `upgrade.sh` das neue Paket gegen ihre eigene Liste prüft, braucht eine Änderung der Dateiliste zuerst eine Übergangsversion, deren `upgrade.sh` beide Listen kennt.
 
 **Zu TLS im Heimnetz:** Eine PWA ist nur über HTTPS installierbar (Ausnahme `localhost`). Im LAN ist das die häufigste Stolperstelle. Für v1.0 ist deshalb der HTTP-Betrieb ohne Domain der Standard — ohne Zertifikatswarnungen, dafür ohne PWA-Installation. Für fortgeschrittene Nutzer bleibt der Weg über eine echte Subdomain (`wordquest.deine-domain.de`) mit Let's-Encrypt-DNS-Challenge, per lokalem DNS auf die interne IP aufgelöst. Das vermeidet Zertifikatswarnungen auf dem Tablet des Kindes — und ein Kind, das eine Sicherheitswarnung wegklicken muss, um zu lernen, ist pädagogisch kein guter Ausgangspunkt. Die Alternative (Reverse Proxy über Cloudflare Tunnel) ist nicht Default, weil sie Daten durch Dritte leitet.
 
@@ -636,17 +672,18 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 | Thema | Umsetzung |
 |---|---|
 | Passwörter | PBKDF2-HMAC-SHA256, 210 000 Iterationen, eigene Implementierung (`PasswordHasher.cs`), kein ASP.NET Core Identity |
-| PIN | separat gehasht (gleiches Verfahren), 10 Fehlversuche in Folge, dann 15 Minuten Sperre |
-| Token | Access 15 min, Refresh 30 Tage rotierend, Reuse-Detection; gespeichert wird nur der Hash des Refresh-Tokens |
+| Passwort ändern | `POST /api/v1/account/password` (`AccountEndpoints.cs`, nur Elternkonten, Rate-Limit wie `/auth`) prüft das aktuelle Passwort; die Konto-Id kommt nur aus dem Token. Falsches aktuelles Passwort ergibt 400 mit Feldfehler, nicht 401. Neue Passwörter brauchen mindestens 8 Zeichen; Passwörter nur aus Leerzeichen werden abgelehnt, Leerzeichen am Rand bleiben Teil des Passworts. Andere Sitzungen bleiben angemeldet. **Bekannte Lücke:** neue Passwörter werden nicht gegen Listen häufiger Passwörter geprüft (v1, D-18) |
+| PIN | Genau 4 Ziffern 0–9, serverseitig geprüft beim Anlegen und beim Ändern; separat gehasht (gleiches Verfahren), 10 Fehlversuche in Folge, dann 15 Minuten Sperre. Fehlversuche werden in einem Statement gezählt (`ExecuteUpdateAsync` mit `FailedPinAttempts + 1` in `AuthService.cs`), auch parallele Anfragen zählen alle (`HARD-03`). Grenze: Anfragen, die die Sperre schon vor ihrem Setzen geprüft haben, werden noch ausgewertet; je Gerät begrenzt das Rate-Limit sie auf 10 pro Minute |
+| Token | Access 15 min, Refresh 30 Tage rotierend, Reuse-Detection; gespeichert wird nur der Hash des Refresh-Tokens. `reset-password` widerruft alle Refresh-Tokens des Kontos, eine neue Kinder-PIN (`PATCH /learners/{id}/settings`) alle Refresh-Tokens des Kindes; bereits ausgegebene Access-Tokens bleiben bis zu ihrem Ablauf gültig (höchstens 15 Minuten, `Auth:AccessTokenMinutes`). Refresh, Abmelden und Widerruf (`reset-password`, neue PIN) laufen je Konto unter einer Zeilensperre auf `app_user` (`TransactionExtensions.LockUserAsync`): Ein laufender Refresh schreibt seinen Nachfolger entweder vor dem Widerruf fest und wird mit widerrufen, oder er sieht danach den widerrufenen Token; der alte Token wird zusätzlich bedingt beansprucht (nur solange `revoked_at` leer ist). Der unmittelbare Vorgänger ergibt bis 10 Sekunden nach seiner Rotation 409 „Die Anmeldung wurde gerade in einem anderen Fenster erneuert.“ ohne neue Tokens, solange sein Nachfolger aktiv ist (zwei Fenster erneuern gleichzeitig); in allen anderen Fällen greift die Reuse-Detection und widerruft alle Refresh-Tokens des Kontos. Restrisiko dieser 10 Sekunden: Hat ein Angreifer einen gestohlenen Token zuerst erneuert und legt das echte Gerät den alten in diesem Fenster vor, bleibt der Diebstahl unerkannt; das Gerät bekommt nur 409, die Kette des Angreifers lebt bis zum nächsten Widerruf (akzeptiert, `HARD-01`). Abmelden liest den Token erst unter der Sperre und widerruft die ganze Kette ab dem vorgelegten Token, auch eben ausgestellte oder schon weitergedrehte Nachfolger. Jeder Pfad mit dieser Sperre sperrt zuerst `app_user` und schreibt erst danach `refresh_token` bzw. `learner_profile`; die Anmeldungen per Passwort und PIN nehmen die Sperre nicht selbst, warten beim Schreiben aber auf sie (Fremdschlüssel von `refresh_token` und `last_login_at` in `app_user`). Läuft eine Anmeldung dabei in einen Deadlock mit einem PIN-Wechsel, löst PostgreSQL ihn nach `deadlock_timeout` (Standard 1 s) mit 40P01 auf, und die Ausführungsstrategie (`EnableRetryOnFailure`) wiederholt den betroffenen Lauf; das kostet bis etwa eine Sekunde. **Bekannte Lücke:** Eine Anmeldung mit dem alten Passwort bzw. der alten PIN, deren Prüfung schon bestanden ist, wenn `reset-password` oder eine neue PIN läuft, schreibt ihren Refresh-Token erst nach dem Widerruf fest und bleibt angemeldet; dasselbe gilt für die Wiederholung nach einem solchen Deadlock. Das Frontend meldet nur ab, wenn der Refresh mit 400 oder 401 scheitert; bei 429, 5xx oder Netzfehler bleibt die Anmeldung bestehen; die auslösende Aktion zeigt bei 429 und 5xx „Das hat nicht geklappt. Versuche es noch einmal.“, bei einem Netzfehler „Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.“ (`api.ts`, `FIX-01`). Eine Refresh-Antwort übernimmt das Frontend nur, solange im Speicher noch der gesendete Token steht; auch 400/401 meldet nur dann ab, ein inzwischen von einem anderen Fenster gespeicherter Token bleibt. Bei 409 übernimmt das Fenster den Token, den ein anderes Fenster derselben Anmeldung speichert (Abfrage alle 100 ms); kommt binnen 3 Sekunden keiner, bleibt der Speicher unverändert (er gehört allen Fenstern, die Antwort an das andere kann noch unterwegs sein), und die Aktion zeigt „Die Anmeldung wird gerade in einem anderen Fenster erneuert. Versuche es gleich noch einmal.“ Das Fenster sendet diesen Token nicht noch einmal: Steht er beim nächsten Versuch immer noch im Speicher, meldet es lokal ab, ohne Widerruf auf dem Server. Abfragen wiederholt TanStack Query nach einem Fehler einmal automatisch, nach 409 nicht (`retryQuery` in `api.ts`), damit diese Wiederholung nicht schon nach einer Sekunde der nächste Versuch ist. Die Anmeldung per Passwort oder PIN erneuert und wiederholt nach 401 nichts (`auth.tsx`): Ein Fehlversuch zählt beim Rate-Limit einmal, auch wenn noch eine Sitzung im Speicher steht. Eine 401 auf eine Anfrage, deren Access-Token inzwischen ersetzt ist, wiederholt die Anfrage einmal mit dem gespeicherten Token, ohne neuen Refresh. Nach Abmelden oder einer neuen Anmeldung (Kennung `wq.session`, neu bei jeder Anmeldung, gleich bei der Rotation) wird keine Anfrage der alten Anmeldung wiederholt. Grenze: Ein Fenster, das nach einem Update noch den alten Code geladen hat, schreibt und löscht diese Kennung nicht; meldet sich dort ein anderes Profil an, kann ein Fenster mit neuem Code beide Anmeldungen bis zum Neuladen nicht unterscheiden. Die Oberfläche folgt dem Speicher (`useSyncExternalStore` in `auth.tsx`), auch über Fenster hinweg (`storage`-Ereignis). Wechselt dabei die Anmeldung (neue Kennung oder abgemeldet), leert die App den Abfrage-Cache von TanStack Query im Speicher (`App.tsx`); ein anderes Profil im selben Fenster sieht keine Daten des vorigen. Abmelden leert zuerst lokal und sendet danach den Server-Logout; eine später eintreffende Refresh-Antwort wird verworfen. Bricht der Client eine Anfrage ab, nachdem die Arbeit ihrer Transaktion getan ist, wird sie trotzdem festgeschrieben (`InTransactionAsync` übergibt dem Commit nicht das Token der Anfrage); ein solcher Abbruch ergibt keine `fail:`-Zeile im Log. Für einen Refresh, den der Client in diesem Moment abbricht, gilt die Grenze der verlorenen Bestätigung (unten). Grenze: Kommt 409 ohne zweites Fenster (Bestätigung eines erfolgreichen Refresh verloren), zeigt das Fenster nach 3 Sekunden den Hinweis und meldet sich beim nächsten Versuch ab; trifft die Antwort an ein anderes Fenster erst nach diesem nächsten Versuch ein, sind alle Fenster abgemeldet; der Nachfolger bleibt ungenutzt auf dem Server, bis er abläuft (`HARD-01`) |
 | Transport | HSTS außerhalb von Development; TLS nur in der Domain-Variante. Keine Cookies: Tokens liegen im `localStorage` und gehen im `Authorization`-Header (bewusst akzeptiertes Risiko) |
 | Autorisierung | `tenant_id` über einen EF-Core-Global-Query-Filter — nicht pro Query von Hand; zusätzlich darf ein Kind nur für sich selbst lernen (`MayActFor`, Geschwister teilen den Mandanten) |
-| Uploads | CSV wird als Text im JSON-Body übertragen, es gibt keinen Datei- oder Bild-Upload. Größenlimit: **geplant, nicht umgesetzt** (v2, `OPS2-03`) |
-| Headers | CSP in `frontend/nginx.conf`, derzeit mit `style-src 'unsafe-inline'`; `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` |
+| Uploads | Eine gewählte CSV-Datei liest der Browser (höchstens 1 MB); übertragen wird wie beim Einfügen nur Text im JSON-Body. Der Bild-Upload (`PUT /sets/{id}/entries/{entryId}/picture`) ist je Endpoint auf 300 KB begrenzt (begrenztes Lesen, nginx mit 1 MB davor) und nimmt nur Dateien mit Signatur und schlüssiger Struktur von WebP, JPEG oder PNG an, kein SVG; der Server dekodiert nicht. Vor dem Hochladen verkleinert der Browser das Bild auf höchstens 512 px an der längsten Kante (Drehung aus EXIF angewandt; ein Browser, der `imageOrientation: 'from-image'` nicht kennt, dekodiert ohne diese Option, die Drehung hängt dort vom Browser ab) und kodiert es neu als WebP, ohne WebP-Kodierer (Safari) als JPEG auf weißem Grund; dabei entfallen EXIF- und GPS-Daten des Fotos. Jede 413, ob vom Endpoint unter 1 MB oder von nginx darüber, zeigt die App mit demselben Text „Das Bild ist zu groß. Erlaubt sind höchstens 300 KB.“. Grenze: Ein direkter API-Aufruf eines Elternkontos kann Metadaten mitschicken, der Server entfernt sie nicht. Ein Bild, das der Browser nicht laden oder dekodieren kann, erscheint in Vokabelliste und Lernrunde als Emoji im selben Rahmen (ohne Emoji bleibt der Rahmen leer). Allgemeines Größenlimit der API: **geplant, nicht umgesetzt** (v2, `OPS2-03`) |
+| Headers | CSP, derzeit mit `style-src 'unsafe-inline'`; `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`. Alle mit `always` in `frontend/nginx-security-headers.conf`, eingebunden im server-Block von `frontend/nginx.conf` und in jeder location mit eigenem Cache-Control (`/assets/`, `/sw.js`, `/index.html`); sie gelten damit für jede Antwort, auch HTML, Assets, `sw.js` und Fehlerantworten |
 | Audit | Auditlog für Anmeldungen, Rollenwechsel, Löschungen: **geplant, nicht umgesetzt** |
 
 **Datensparsamkeit:** Pflichtfeld für ein Kind ist ausschließlich ein Anzeigename — ein Spitzname genügt, kein Geburtsdatum, keine E-Mail, keine Klasse. Es existiert keine Telemetrie und kein externer Analytics-Dienst. Alle Schriften und Icons werden mitgeliefert, nicht von einem CDN geladen (ein Google-Fonts-Aufruf überträgt die IP des Kindes an einen Dritten); die CSP erlaubt Schriften nur von der eigenen Origin.
 
-**Löschung:** „Kind löschen" soll kaskadierend Profil, `review_state`, `review_log` und Gamification-Daten entfernen — **geplant für v1.0** (`PAR-03`); einen Endpunkt dafür gibt es heute nicht. Datenexport als JSON und Löschen der ganzen Familie: v2 (`PAR2-02`). Löschen ist als gute Praxis gedacht, nicht als Zusage, DSGVO-Pflichten zu erfüllen.
+**Löschung:** „Kind löschen" (`DELETE /learners/{id}`, nur Elternkonten) löscht hart: Der Endpunkt entfernt das Konto, die Datenbank über die Fremdschlüssel Profil, `review_state`, `review_log`, Runden, XP/Serie und Refresh-Tokens (`PAR-03`). Ein noch angemeldetes Gerät des Kindes bekommt danach beim Refresh 401 und auf Übersicht und Rundenstart 404. In der Oberfläche liegt „Kind löschen“ auf der Bearbeiten-Seite eines Kindes, unter dem Formular und außerhalb davon; es öffnet einen Bestätigungsdialog („{Name} löschen?“, Startfokus auf „Abbrechen“, Enter direkt nach dem Öffnen und Esc löschen nicht, ein Klick auf die Abdunklung schließt nicht). Erst „Endgültig löschen“ ruft den Endpunkt auf; danach zeigt die Kinderliste „{Name} ist gelöscht.“. War das Kind schon gelöscht (anderer Tab), bleibt „Dieses Kind gibt es nicht (mehr).“ im Dialog stehen, bis er geschlossen wird. Den Dialog-Baustein (`components/ui/dialog.tsx`) nutzt auch die Set-Seite: „Set umbenennen“ (`PATCH /sets/{id}`: Titel ändern, IDs und Lernstand bleiben, `PAR-04`) und „Set löschen“ (`DELETE /sets/{id}`) mit derselben Bestätigung („Set „{Titel}“ löschen?“), danach zeigt die Set-Liste „Das Set „{Titel}“ ist gelöscht.“. Auch jede Vokabelzeile nutzt ihn: der Stift öffnet „Vokabel bearbeiten“ (`PUT /sets/{id}/entries/{entryId}`: Deutsch und Englisch ändern, IDs, Lernstand, Emoji und Alternativen bleiben, `PAR-04`), im selben Dialog liegt unter den Wörtern der Abschnitt „Bild“ mit „Bild wählen“ (Datei-Feld für Bilder, `accept="image/*"` ohne `capture`; ob das Handy dabei die Kamera anbietet, ist manuelle Abnahme), einer Vorschau und „Bild entfernen“ (nur mit Bild, ohne Rückfrage). Bildänderungen gelten sofort, ohne „Speichern“ („Das Bild ist gespeichert.“ bzw. „Das Bild ist entfernt.“); „Abbrechen“ betrifft nur die Wörter. Der Papierkorb öffnet die Bestätigung „„{Deutsch}“ löschen?“, und das Löschen der Vokabel entfernt auch ihr Bild; danach steht „„{Deutsch}“ ist gelöscht.“ über der Liste und der Fokus liegt auf der Set-Überschrift. `PATCH /learners/{id}/settings` antwortet für ein gelöschtes Kind ebenfalls mit 404 und diesem Text. Datenexport als JSON und Löschen der ganzen Familie: v2 (`PAR2-02`). Löschen ist als gute Praxis gedacht, nicht als Zusage, DSGVO-Pflichten zu erfüllen.
 
 **Zum Familienbetrieb:** Solange die Instanz im eigenen Haushalt für die eigenen Kinder läuft, greift die DSGVO über die Haushaltsausnahme (Art. 2 Abs. 2 lit. c) nicht. Relevant würde sie, sobald fremde Kinder Zugang bekommen — etwa bei einem Schuleinsatz, der für v1.0 außer Scope ist. *(Keine Rechtsberatung — bei tatsächlichem Schuleinsatz gehört das dem schulischen Datenschutzbeauftragten vorgelegt.)*
 

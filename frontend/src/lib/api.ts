@@ -4,11 +4,29 @@ const BASE = '/api/v1'
 const ACCESS_KEY = 'wq.access'
 const REFRESH_KEY = 'wq.refresh'
 const USER_KEY = 'wq.user'
+// Kennung einer Anmeldung: bleibt bei der Rotation, neu bei jeder Anmeldung.
+const SESSION_KEY = 'wq.session'
+// Laufzeit-Cache des Service Workers, gleicher Name wie cacheName in vite.config.ts.
+const API_CACHE = 'wq-api'
+// Eigenes Fenster-Ereignis nach jedem Schreiben; das storage-Ereignis meldet nur andere Tabs.
+const SESSION_EVENT = 'wq-session'
+
+// Deutsche Texte statt englischer Technik-Meldungen (UI-SPEC Copywriting "Error state").
+const UNREACHABLE =
+  'Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal.'
+const GENERIC = 'Das hat nicht geklappt. Versuche es noch einmal.'
+// Rate-Limit "auth" (Program.cs) antwortet ohne Koerper, das Zeitfenster ist eine
+// Minute. Wortlaut wie die PIN-Sperre in AuthService.
+const TOO_MANY = 'Zu viele Versuche. Bitte in einer Minute nochmal probieren.'
+const RENEWING =
+  'Die Anmeldung wird gerade in einem anderen Fenster erneuert. Versuche es gleich noch einmal.'
 
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    // Feldfehler einer ValidationProblem-Antwort, Schluessel wie im Request.
+    readonly errors?: Record<string, string[]>,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -21,7 +39,7 @@ export class ApiError extends Error {
   Bewusste Abwaegung: httpOnly-Cookies waeren gegen XSS sicherer, aber die App
   muss offline starten und die Sitzung ueberleben, ohne dass der Server
   erreichbar ist. Der Gegenwert ist eine strikte CSP ohne inline-Skripte
-  (siehe frontend/nginx.conf) — damit bleibt XSS die Ausnahme statt der Regel.
+  (siehe frontend/nginx-security-headers.conf) — damit bleibt XSS die Ausnahme statt der Regel.
 */
 export const tokenStore = {
   get access() {
@@ -30,24 +48,55 @@ export const tokenStore = {
   get refresh() {
     return safeRead(REFRESH_KEY)
   },
-  get user() {
-    const raw = safeRead(USER_KEY)
-    return raw ? (JSON.parse(raw) as AuthResponse['user']) : null
+  // Roher Eintrag als stabiler Snapshot fuer useSyncExternalStore.
+  get rawUser() {
+    return safeRead(USER_KEY)
+  },
+  get session() {
+    return safeRead(SESSION_KEY)
   },
   save(auth: AuthResponse) {
     safeWrite(ACCESS_KEY, auth.accessToken)
     safeWrite(REFRESH_KEY, auth.refreshToken)
     safeWrite(USER_KEY, JSON.stringify(auth.user))
+    window.dispatchEvent(new Event(SESSION_EVENT))
+  },
+  // Neue Anmeldung: Workbox schreibt Netzantworten im Hintergrund in den Cache;
+  // ein GET, der beim Abmelden noch lief, kann ihn neu anlegen. Deshalb loescht
+  // auch die naechste Anmeldung, bevor sie speichert (Review 02 MEDIUM).
+  async saveLogin(auth: AuthResponse) {
+    await dropApiCache()
+    // Kein Geheimnis, nur ein Vergleichswert; crypto.randomUUID fehlt ohne HTTPS.
+    safeWrite(SESSION_KEY, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`)
+    tokenStore.save(auth)
   },
   clear() {
-    for (const key of [ACCESS_KEY, REFRESH_KEY, USER_KEY]) {
+    for (const key of [ACCESS_KEY, REFRESH_KEY, USER_KEY, SESSION_KEY]) {
       try {
         localStorage.removeItem(key)
       } catch {
         /* privater Modus oder gesperrter Speicher - kein Grund abzustuerzen */
       }
     }
+    window.dispatchEvent(new Event(SESSION_EVENT))
+    void dropApiCache()
   },
+  // Die Oberflaeche folgt dem Speicher, auch wenn ein anderer Tab oder ein
+  // gescheiterter Refresh ihn aendert (D-07).
+  subscribe(listener: () => void) {
+    window.addEventListener(SESSION_EVENT, listener)
+    window.addEventListener('storage', listener)
+    return () => {
+      window.removeEventListener(SESSION_EVENT, listener)
+      window.removeEventListener('storage', listener)
+    }
+  },
+}
+
+// Ohne HTTPS gibt es weder Service Worker noch caches; dann passiert nichts (D-15).
+async function dropApiCache() {
+  if (typeof caches === 'undefined') return
+  await caches.delete(API_CACHE).catch(() => false)
 }
 
 function safeRead(key: string): string | null {
@@ -67,28 +116,57 @@ function safeWrite(key: string, value: string) {
 }
 
 let refreshInFlight: Promise<boolean> | null = null
+// So lange wartet ein Tab nach 409 auf den Token, den der andere Tab speichert.
+const OTHER_TAB_WAIT_MS = 3_000
+// Token, fuer den nach 409 binnen der Frist kein Nachfolger kam (nur dieser Tab).
+let abandoned: string | null = null
 
 async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = tokenStore.refresh
   if (!refreshToken) return false
+  // Steht er beim naechsten Versuch immer noch da, hat ihn niemand ersetzt.
+  // Noch einmal senden hiesse nach der Gnadenfrist Wiederverwendung und
+  // Widerruf aller Anmeldungen des Kontos; deshalb nur lokal abmelden.
+  if (refreshToken === abandoned) {
+    tokenStore.clear()
+    return false
+  }
 
   // Mehrere parallele 401er duerfen nicht mehrere Rotationen ausloesen -
   // die zweite wuerde als Token-Wiederverwendung gewertet und die Sitzung
   // komplett verwerfen.
   refreshInFlight ??= (async () => {
+    const session = tokenStore.session
     try {
-      const response = await fetch(`${BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      })
-
-      if (!response.ok) {
-        tokenStore.clear()
-        return false
+      let response: Response
+      try {
+        response = await fetch(`${BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        })
+      } catch {
+        // Derselbe Netzfehler wie in api(): derselbe Text (IN-04).
+        throw new ApiError(UNREACHABLE, 0)
       }
 
-      tokenStore.save((await response.json()) as AuthResponse)
+      // Nur 400/401 heissen "Anmeldung ungueltig". Ein Limit oder ein kurzer
+      // Serverausfall ist kein Grund, ein Kind abzumelden, und das detail der
+      // urspruenglichen 401-Antwort beschreibt den eigentlichen Fehler nicht;
+      // der Fehler geht ueber refreshInFlight an alle wartenden Aufrufer (FIX-01).
+      // Die Generation ist der gespeicherte Token selbst: Eine Antwort, die nach
+      // Abmelden, neuer Anmeldung oder einer Rotation in einem anderen Tab
+      // eintrifft, aendert nichts (D-05, D-06).
+      if (response.status === 400 || response.status === 401) {
+        if (tokenStore.refresh === refreshToken) tokenStore.clear()
+        return false
+      }
+      if (response.status === 409) return await awaitOtherTab(refreshToken, session)
+      if (!response.ok) throw new ApiError(GENERIC, response.status)
+
+      const auth = (await response.json()) as AuthResponse
+      if (tokenStore.refresh !== refreshToken) return false
+      tokenStore.save(auth)
       return true
     } finally {
       refreshInFlight = null
@@ -98,44 +176,121 @@ async function refreshAccessToken(): Promise<boolean> {
   return refreshInFlight
 }
 
+/*
+  409: Ein anderer Tab hat eben mit demselben Token erneuert (03.1-01). Ohne
+  HTTPS gibt es kein navigator.locks; der Server entscheidet, welcher Tab
+  rotiert, dieser uebernimmt den Nachfolger aus dem Speicher (D-06), aber nur
+  innerhalb derselben Anmeldung (Review 02 MEDIUM). Das Warten laeuft in
+  refreshInFlight, weitere Anfragen dieses Tabs warten mit. Abfrage statt
+  storage-Ereignis, weil das Ereignis im eigenen Dokument nicht feuert. Die Frist
+  misst Uhrzeit, weil Browser Timer in Hintergrund-Tabs stark drosseln.
+*/
+async function awaitOtherTab(sent: string, session: string | null): Promise<boolean> {
+  const deadline = Date.now() + OTHER_TAB_WAIT_MS
+  for (;;) {
+    const current = tokenStore.refresh
+    if (!current || tokenStore.session !== session) return false
+    if (current !== sent) return true
+    if (Date.now() >= deadline) {
+      // Kein Nachfolger aufgetaucht. Der Speicher gehoert allen Tabs; die
+      // Antwort an den anderen Tab kann noch unterwegs sein. Deshalb nichts
+      // loeschen, sondern einen wiederholbaren Fehler melden (Codex-Review
+      // 2026-10-23).
+      abandoned = sent
+      throw new ApiError(RENEWING, 409)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
+/*
+  Automatische Wiederholung einer Abfrage (TanStack Query), einmal wie bisher,
+  aber nicht nach 409: Sie kaeme nach etwa einer Sekunde, traefe den nach der
+  409-Frist verbrauchten Token und meldete alle Tabs ab, bevor der andere Tab
+  seinen Nachfolger speichern konnte (Review 261023-a8x).
+*/
+export function retryQuery(failureCount: number, error: Error): boolean {
+  return failureCount < 1 && !(error instanceof ApiError && error.status === 409)
+}
+
+/*
+  Darf eine Anfrage nach 401 wiederholt werden? Eine verspaetete 401 nach einer
+  Rotation darf die Kette nicht weiterdrehen: Der Nachfolger des anderen Tabs
+  bliebe sonst nicht aktiv, und dessen verspaeteter Refresh widerriefe alles
+  (03.1-01, Gnadenfrist; Review 02 HIGH).
+*/
+async function mayRetry(sentAccess: string | null, session: string | null): Promise<boolean> {
+  // Abmelden oder neue Anmeldung seit dem Senden: Der Fehler der Anfrage gilt.
+  if (!tokenStore.refresh || tokenStore.session !== session) return false
+  // Schon erneuert, hier oder in einem anderen Tab: einmal mit dem neuen Token.
+  if (tokenStore.access !== sentAccess) return true
+  return (await refreshAccessToken()) && tokenStore.session === session
+}
+
 interface RequestOptions {
   method?: string
   body?: unknown
   retryOn401?: boolean
+  // Antwort als Blob statt JSON (Vokabelbilder).
+  blob?: boolean
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, retryOn401 = true } = options
 
+  // Ein Blob (Vokabelbild) geht roh hinaus; der Server liest den Typ aus den Bytes (D-12).
+  const raw = body instanceof Blob
   const headers: Record<string, string> = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (body !== undefined) headers['Content-Type'] = raw ? body.type : 'application/json'
 
   const access = tokenStore.access
+  const session = tokenStore.session
   if (access) headers.Authorization = `Bearer ${access}`
 
-  const response = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+    })
+  } catch {
+    // fetch wirft nur bei Netzfehlern (auch offline), Status 0 wie bei XHR.
+    throw new ApiError(UNREACHABLE, 0)
+  }
 
-  if (response.status === 401 && retryOn401 && (await refreshAccessToken())) {
+  if (response.status === 401 && retryOn401 && (await mayRetry(access, session))) {
     return api<T>(path, { ...options, retryOn401: false })
   }
 
   if (!response.ok) {
-    throw new ApiError(await readErrorMessage(response), response.status)
+    throw await readError(response)
   }
 
   if (response.status === 204) return undefined as T
+  if (options.blob) return (await response.blob()) as T
   return (await response.json()) as T
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+async function readError(response: Response): Promise<ApiError> {
+  // 5xx-Koerper koennen Technikdetails enthalten; die zeigen wir nicht an.
+  if (response.status >= 500) return new ApiError(GENERIC, response.status)
+  if (response.status === 429) return new ApiError(TOO_MANY, response.status)
   try {
-    const problem = (await response.json()) as { detail?: string; title?: string }
-    return problem.detail ?? problem.title ?? `Fehler ${response.status}`
+    const problem = (await response.json()) as {
+      detail?: string
+      title?: string
+      errors?: Record<string, string[]>
+    }
+    if (problem.detail) return new ApiError(problem.detail, response.status, problem.errors)
+    if (problem.errors) {
+      // Der title einer ValidationProblem-Antwort ist englisch, die Feldtexte sind es nicht.
+      const messages = Object.values(problem.errors).flat().join(' ')
+      return new ApiError(messages, response.status, problem.errors)
+    }
+    // Ohne detail/errors bleibt nur der englische Standardtitel ("Not Found") — nicht anzeigen.
+    return new ApiError(GENERIC, response.status)
   } catch {
-    return `Fehler ${response.status}`
+    return new ApiError(GENERIC, response.status)
   }
 }

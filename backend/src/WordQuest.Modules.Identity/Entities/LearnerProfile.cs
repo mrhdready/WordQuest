@@ -26,7 +26,7 @@ public sealed class LearnerProfile : ITenantOwned
     /// <summary>Schluessel des Avatarbildes, z. B. "fox". Das Kind waehlt selbst.</summary>
     public string AvatarKey { get; set; } = "fox";
 
-    /// <summary>Vierstellige PIN, gehasht. Schuetzt gegen Geschwister, nicht gegen Angreifer.</summary>
+    /// <summary>PIN mit genau 4 Ziffern, gehasht. Schuetzt gegen Geschwister, nicht gegen Angreifer.</summary>
     public string? PinHash { get; set; }
 
     /// <summary>

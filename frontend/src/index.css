@@ -1,43 +1,154 @@
 @import 'tailwindcss';
 
 /*
-  Zwei Bereiche, zwei Tonlagen:
-  - Kinderbereich: warm, kontrastreich, grosse Flaechen.
-  - Elternbereich: ruhig, sachlich, dicht.
-  Die Tokens hier sind der gemeinsame Nenner.
+  Default-Namensraeume von Tailwind leeren: als Farben, Schriftstufen, Gewichte und
+  Radien sollen nur die Werte aus DESIGN.md als Klassen existieren. Eine alte Klasse
+  wie text-sm oder bg-white erzeugt dann kein CSS mehr (Gate: design:classes).
 */
 @theme {
-  --color-ink: oklch(0.22 0.03 265);
-  --color-ink-soft: oklch(0.48 0.02 265);
+  --color-*: initial;
+  --text-*: initial;
+  --font-weight-*: initial;
+  --radius-*: initial;
+}
 
-  --color-surface: oklch(0.99 0.004 265);
-  --color-surface-raised: oklch(1 0 0);
-  --color-border-subtle: oklch(0.91 0.008 265);
+/* Aus DESIGN.md erzeugt (npm run design:export), nie von Hand aendern. */
+@import './design-tokens.css';
 
-  --color-brand: oklch(0.58 0.17 265);
-  --color-brand-strong: oklch(0.47 0.18 265);
-  --color-brand-soft: oklch(0.95 0.03 265);
+/*
+  Die benannten Abstaende aus DESIGN.md kollidieren mit max-w-* (Containerbreiten):
+  ohne Reset waere max-w-md nur 16 px breit. Die Skala 4/8/16/24/32/48/64 laeuft
+  ueber die Tailwind-Stufen 1/2/4/6/8/12/16.
+*/
+@theme {
+  --spacing-xs: initial;
+  --spacing-sm: initial;
+  --spacing-md: initial;
+  --spacing-lg: initial;
+  --spacing-xl: initial;
+  --spacing-2xl: initial;
+  --spacing-3xl: initial;
+}
 
-  --color-success: oklch(0.62 0.16 150);
-  --color-success-soft: oklch(0.95 0.05 150);
-  --color-warn: oklch(0.75 0.15 85);
-  --color-warn-soft: oklch(0.96 0.06 85);
-  --color-danger: oklch(0.6 0.18 25);
-  --color-danger-soft: oklch(0.96 0.04 25);
+/*
+  Eine Schriftstufe = eine Klasse. text-<stufe> taugt nicht: tailwind-merge haelt
+  es fuer eine Textfarbe und wirft die daneben stehende Farbe weg.
+*/
+@utility type-* {
+  font-size: --value(--text-*);
+  line-height: --value(--leading-*);
+  font-weight: --value(--font-weight-*);
+  letter-spacing: --value(--tracking-*);
+}
 
-  --color-coin: oklch(0.78 0.15 85);
+/*
+  Glasflaechen (DESIGN.md "Elevation & Depth"). Pflicht-Fallback: ohne
+  backdrop-filter oder bei reduzierter Transparenz deckend in glass-opaque.
+  Tiefe (Schatten, Lichtkante) steht einmal zentral in --wq-glass-depth.
+  Den 1,5-px-Verlaufsrand gibt es bewusst nicht: als ::before verhindert er,
+  dass axe den Textkontrast auf Glas berechnet (incomplete "pseudoContent").
+*/
+@utility glass {
+  background-color: var(--color-glass);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
 
-  --radius-card: 1.25rem;
-  --radius-pill: 999px;
+@utility glass-clear {
+  background-color: var(--color-glass-clear);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
 
-  --font-sans:
-    ui-rounded, 'SF Pro Rounded', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system,
-    sans-serif;
+@utility glass-sheet {
+  background-color: var(--color-glass-sheet);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@utility glass-selected {
+  background-color: var(--color-glass-selected);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: blur(28px) saturate(200%);
+  box-shadow: var(--wq-glass-depth);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/*
+  Glasfarbe ohne Blur fuer Eingabefelder, Chips und Ziffern-Tasten: viele kleine
+  Blur-Ebenen ruckeln auf guenstigen Tablets. Gleicher deckender Fallback.
+*/
+@utility glass-flat {
+  background-color: var(--color-glass);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+  }
+}
+
+@utility glass-flat-clear {
+  background-color: var(--color-glass-clear);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+  }
+}
+
+@utility glass-flat-selected {
+  background-color: var(--color-glass-selected);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: var(--color-glass-opaque);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--color-glass-opaque);
+  }
 }
 
 @layer base {
   :root {
     color-scheme: light;
+    --wq-glass-depth:
+      0 12px 40px color-mix(in oklch, var(--color-primary-deep) 18%, transparent),
+      inset 0 1px 0 color-mix(in oklch, var(--color-on-primary) 95%, transparent),
+      inset 0 -1px 0 color-mix(in oklch, var(--color-on-primary) 40%, transparent);
   }
 
   * {
@@ -45,16 +156,54 @@
   }
 
   html,
-  body,
   #root {
     height: 100%;
   }
 
+  /* body waechst mit dem Inhalt (min-height statt height): sonst endet seine Box
+     bei Seiten knapp ueber Bildschirmhoehe mitten in der schwebenden Tab-Leiste,
+     und axe meldet deren Kontrast als nicht messbar (elmPartiallyObscured).
+     grid laesst #root mit height: 100% trotzdem die volle Hoehe fuellen.
+     minmax(0, 1fr): sonst waechst die Spalte auf die min-content-Breite eines
+     langen Worts, und bei 320 px entsteht ein waagerechter Scrollbalken (WCAG 1.4.10). */
+  body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 100%;
+  }
+
+  /* Fokussierte Elemente nicht unter der schwebenden Tab-Leiste (WCAG 2.4.11).
+     Freiraum = Leiste (Tab 52 px + Innenabstand 2 x sm = 68 px) plus float-bottom
+     (32 px), aufgerundet auf Skalenstufen: 3xl + 2xl, also Tailwind-Stufe 16 + 12
+     (die benannten Stufen sind oben zurueckgesetzt). Gleicher Wert als Innenabstand
+     an <main> in ManageLayout. */
+  html {
+    --wq-tab-bar-clearance: calc(var(--spacing) * 16 + var(--spacing) * 12);
+    scroll-padding-bottom: var(--wq-tab-bar-clearance);
+  }
+
+  /* Unter sm bricht die Leiste mit "+" daneben in zwei Zeilen um (320 px: drei
+     Tabs passen nicht neben das "+"). Zweite Zeile = Tab 52 px + Abstand 8 px,
+     Tailwind-Stufe 15. */
+  @media (width < 40rem) {
+    html {
+      --wq-tab-bar-clearance: calc(var(--spacing) * 16 + var(--spacing) * 12 + var(--spacing) * 15);
+    }
+  }
+
+  /* Backdrop direkt auf body (kein Pseudo-Element): der Kontrastlauf ersetzt ihn
+     per CSSOM durch je eine Blob-Farbe. */
   body {
     margin: 0;
-    background: var(--color-surface);
+    background-color: var(--color-backdrop-base);
+    background-image:
+      radial-gradient(circle at 0% 0%, var(--color-backdrop-blue), transparent 55%),
+      radial-gradient(circle at 100% 30%, var(--color-backdrop-cyan), transparent 50%),
+      radial-gradient(circle at 0% 100%, var(--color-backdrop-pink), transparent 55%),
+      radial-gradient(circle at 100% 100%, var(--color-backdrop-yellow), transparent 50%);
+    background-attachment: fixed;
     color: var(--color-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-body-md);
     /* Overscroll abschalten: ein Kind, das beim Antippen die Seite
        nach unten zieht, verliert mitten im Spiel den Kontext. */
     overscroll-behavior: none;
@@ -69,9 +218,43 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  /* Ein Fokusbild fuer alle Bedienelemente (UI-SPEC D6). */
+  :focus-visible {
+    outline: 3px solid var(--color-primary-deep);
+    outline-offset: 3px;
+  }
+
   button,
   [role='button'] {
     touch-action: manipulation;
+  }
+
+  /* Fortschrittsbalken (DESIGN.md progress-bar, progress-bar-fill): natives
+     <progress>, Spur und Fuellung fuer WebKit/Blink und Firefox getrennt. */
+  progress {
+    appearance: none;
+    display: block;
+    height: calc(var(--spacing) * 2);
+    border: 0;
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    background-color: var(--color-track);
+    color: var(--color-primary);
+  }
+
+  progress::-webkit-progress-bar {
+    background-color: var(--color-track);
+  }
+
+  progress::-webkit-progress-value {
+    background-color: var(--color-primary);
+    border-radius: var(--radius-full);
+    transition: width 500ms;
+  }
+
+  progress::-moz-progress-bar {
+    background-color: var(--color-primary);
+    border-radius: var(--radius-full);
   }
 
   /* Alle Tippziele mindestens 48 px - Leitplanke 3 des Konzepts. */

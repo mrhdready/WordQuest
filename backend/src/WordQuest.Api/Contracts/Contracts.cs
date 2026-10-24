@@ -8,6 +8,8 @@ public sealed record LearnerLoginRequest(Guid LearnerId, string Pin);
 
 public sealed record RefreshRequest(string RefreshToken);
 
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
 public sealed record AuthUserDto(Guid Id, string DisplayName, string Role, Guid TenantId);
 
 public sealed record AuthResponse(
@@ -30,13 +32,14 @@ public sealed record LearnerDto(
     bool SoundEnabled,
     bool HasPin);
 
-public sealed record CreateLearnerRequest(string DisplayName, string? AvatarKey, string? Pin);
+public sealed record CreateLearnerRequest(string DisplayName, string? AvatarKey, string? Pin, int? DailyNewLimit);
 
 public sealed record UpdateLearnerSettingsRequest(
     int? DailyNewLimit,
     string? Speed,
     bool? SoundEnabled,
-    string? Pin);
+    string? Pin,
+    string? DisplayName);
 
 // --- Inhalte ----------------------------------------------------------------
 
@@ -54,6 +57,8 @@ public sealed record CreateSetRequest(
     string? SourceLanguage,
     string? TargetLanguage);
 
+public sealed record UpdateSetRequest(string? Title);
+
 public sealed record VocabularyEntryDto(
     Guid Id,
     string SourceText,
@@ -64,7 +69,8 @@ public sealed record VocabularyEntryDto(
     string? Emoji,
     string? ExampleSource,
     string? ExampleTarget,
-    int Position);
+    int Position,
+    Guid? PictureVersion);
 
 public sealed record CreateEntryRequest(
     string SourceText,
@@ -75,6 +81,11 @@ public sealed record CreateEntryRequest(
     string? Emoji,
     string? ExampleSource,
     string? ExampleTarget);
+
+public sealed record UpdateEntryRequest(string? SourceText, string? TargetText);
+
+/// <summary>Antwort auf das Speichern eines Bildes; die Version steht in der Bild-URL.</summary>
+public sealed record PictureDto(Guid PictureVersion);
 
 public sealed record ImportRowDto(int LineNumber, string Source, string Target, string? Emoji, string? Problem);
 

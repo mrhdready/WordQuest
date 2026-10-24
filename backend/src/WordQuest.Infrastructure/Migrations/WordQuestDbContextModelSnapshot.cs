@@ -133,6 +133,35 @@ namespace WordQuest.Infrastructure.Migrations
                     b.ToTable("vocabulary_entry", (string)null);
                 });
 
+            modelBuilder.Entity("WordQuest.Modules.Content.Entities.VocabularyPicture", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("data");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("Version")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_vocabulary_picture");
+
+                    b.HasIndex("Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_vocabulary_picture_version");
+
+                    b.ToTable("vocabulary_picture", (string)null);
+                });
+
             modelBuilder.Entity("WordQuest.Modules.Content.Entities.VocabularySet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -187,7 +216,6 @@ namespace WordQuest.Infrastructure.Migrations
             modelBuilder.Entity("WordQuest.Modules.Gamification.Entities.GamificationProfile", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -474,6 +502,9 @@ namespace WordQuest.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_learning_session");
 
+                    b.HasIndex("SetId")
+                        .HasDatabaseName("ix_learning_session_set_id");
+
                     b.HasIndex("LearnerId", "StartedAt")
                         .HasDatabaseName("ix_learning_session_learner_id_started_at");
 
@@ -537,6 +568,12 @@ namespace WordQuest.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_review_log");
 
+                    b.HasIndex("CardId")
+                        .HasDatabaseName("ix_review_log_card_id");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_review_log_session_id");
+
                     b.HasIndex("LearnerId", "CardId")
                         .HasDatabaseName("ix_review_log_learner_id_card_id");
 
@@ -584,6 +621,7 @@ namespace WordQuest.Infrastructure.Migrations
                         .HasColumnName("last_grade");
 
                     b.Property<DateTimeOffset?>("LastReviewedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_reviewed_at");
 
@@ -603,6 +641,9 @@ namespace WordQuest.Infrastructure.Migrations
 
                     b.HasKey("LearnerId", "CardId")
                         .HasName("pk_review_state");
+
+                    b.HasIndex("CardId")
+                        .HasDatabaseName("ix_review_state_card_id");
 
                     b.HasIndex("LearnerId", "DueAt")
                         .HasDatabaseName("ix_review_state_learner_id_due_at");
@@ -625,6 +666,7 @@ namespace WordQuest.Infrastructure.Migrations
                         .HasColumnName("answer_ms");
 
                     b.Property<DateTimeOffset?>("AnsweredAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("answered_at");
 
@@ -665,6 +707,9 @@ namespace WordQuest.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_session_item");
 
+                    b.HasIndex("CardId")
+                        .HasDatabaseName("ix_session_item_card_id");
+
                     b.HasIndex("ClientAnswerId")
                         .IsUnique()
                         .HasDatabaseName("ix_session_item_client_answer_id")
@@ -700,6 +745,26 @@ namespace WordQuest.Infrastructure.Migrations
                     b.Navigation("Set");
                 });
 
+            modelBuilder.Entity("WordQuest.Modules.Content.Entities.VocabularyPicture", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Content.Entities.VocabularyEntry", null)
+                        .WithOne()
+                        .HasForeignKey("WordQuest.Modules.Content.Entities.VocabularyPicture", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_vocabulary_picture_vocabulary_entry_id");
+                });
+
+            modelBuilder.Entity("WordQuest.Modules.Gamification.Entities.GamificationProfile", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Identity.Entities.LearnerProfile", null)
+                        .WithOne()
+                        .HasForeignKey("WordQuest.Modules.Gamification.Entities.GamificationProfile", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gamification_profile_learner_profile_id");
+                });
+
             modelBuilder.Entity("WordQuest.Modules.Identity.Entities.LearnerProfile", b =>
                 {
                     b.HasOne("WordQuest.Modules.Identity.Entities.User", "User")
@@ -712,8 +777,81 @@ namespace WordQuest.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("WordQuest.Modules.Identity.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Identity.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_refresh_token_app_user_user_id");
+                });
+
+            modelBuilder.Entity("WordQuest.Modules.Learning.Entities.LearningSession", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Identity.Entities.LearnerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_learning_session_learner_profile_learner_id");
+
+                    b.HasOne("WordQuest.Modules.Content.Entities.VocabularySet", null)
+                        .WithMany()
+                        .HasForeignKey("SetId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_learning_session_vocabulary_set_set_id");
+                });
+
+            modelBuilder.Entity("WordQuest.Modules.Learning.Entities.ReviewLog", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Content.Entities.Card", null)
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_review_log_card_card_id");
+
+                    b.HasOne("WordQuest.Modules.Identity.Entities.LearnerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_review_log_learner_profile_learner_id");
+
+                    b.HasOne("WordQuest.Modules.Learning.Entities.LearningSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_review_log_learning_session_session_id");
+                });
+
+            modelBuilder.Entity("WordQuest.Modules.Learning.Entities.ReviewState", b =>
+                {
+                    b.HasOne("WordQuest.Modules.Content.Entities.Card", null)
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_review_state_card_card_id");
+
+                    b.HasOne("WordQuest.Modules.Identity.Entities.LearnerProfile", null)
+                        .WithMany()
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_review_state_learner_profile_learner_id");
+                });
+
             modelBuilder.Entity("WordQuest.Modules.Learning.Entities.SessionItem", b =>
                 {
+                    b.HasOne("WordQuest.Modules.Content.Entities.Card", null)
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_session_item_card_card_id");
+
                     b.HasOne("WordQuest.Modules.Learning.Entities.LearningSession", "Session")
                         .WithMany("Items")
                         .HasForeignKey("SessionId")

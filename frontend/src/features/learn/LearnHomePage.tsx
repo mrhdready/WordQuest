@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { Flame, LogOut, Sparkles } from 'lucide-react'
+import { Check, Flame, LogOut, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { EmptyState, Progress, Spinner } from '@/components/ui/misc'
+import { Card } from '@/components/ui/card'
+import { Badge, EmptyState, ErrorNote, Progress, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { avatarFor } from '@/lib/avatars'
+import { cn } from '@/lib/utils'
 import type { LearnerOverview, VocabularySet } from '@/types'
 
 export function LearnHomePage() {
@@ -31,112 +32,142 @@ export function LearnHomePage() {
   const data = overview.data
   const availableSets = sets.data ?? []
   const nothingDue = data !== undefined && data.dueToday === 0 && data.newRemainingToday === 0
+  // Ladefehler ist nicht "gibt es nicht" (WR-03): sonst stuenden "Noch keine Vokabeln da"
+  // oder "0 Karten fällig" da. Kopfzeile mit "Abmelden" bleibt.
+  const loadError =
+    (overview.isError && !overview.data ? overview.error : null) ??
+    (sets.isError && !sets.data ? sets.error : null)
 
   return (
-    <div className="mx-auto w-full max-w-lg px-5 py-6 safe-top safe-bottom">
-      <header className="mb-6 flex items-center gap-3">
-        <span className="text-4xl" aria-hidden>
+    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
+      <header className="mb-6 flex items-center gap-4">
+        <span className="type-emoji" aria-hidden>
           {avatarFor(undefined)}
         </span>
-        <div className="flex-1">
-          <p className="text-sm text-ink-soft">Hallo,</p>
-          <p className="text-xl font-bold">{data?.displayName ?? user?.displayName}</p>
+        <div className="min-w-0 flex-1">
+          <p className="type-body-md text-ink">Hallo,</p>
+          <p className="break-words type-title">{data?.displayName ?? user?.displayName}</p>
         </div>
-        <Button variant="ghost" size="icon" aria-label="Abmelden" onClick={() => void logout()}>
-          <LogOut className="h-5 w-5" />
+        <Button variant="round" size="icon" aria-label="Abmelden" onClick={() => void logout()}>
+          <LogOut className="size-5" />
         </Button>
       </header>
 
       {data ? (
-        <Card className="mb-5">
-          <CardContent className="pt-5">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-2xl font-black text-brand-strong">Level {data.level}</span>
-              <span className="flex items-center gap-1 text-sm font-bold text-warn">
-                <Flame className="h-4 w-4" />
+        <Card className="mb-6">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <span className="type-display text-ink">Level {data.level}</span>
+            {data.streak > 0 ? (
+              <Badge tone="yellow" className="gap-1">
+                <Flame className="size-4" aria-hidden />
                 {data.streak} {data.streak === 1 ? 'Tag' : 'Tage'}
-              </span>
-            </div>
+              </Badge>
+            ) : (
+              <Badge tone="neutral">Starte heute deine Serie!</Badge>
+            )}
+          </div>
 
-            <Progress value={data.levelProgress} />
+          <Progress value={data.levelProgress} label="Fortschritt bis zum nächsten Level" />
 
-            <p className="mt-2 text-sm text-ink-soft">
-              Noch {data.xpToNextLevel} XP bis Level {data.level + 1}
-            </p>
+          <p className="mt-2 type-body-md text-ink-soft">
+            Noch {data.xpToNextLevel} XP bis Level {data.level + 1}
+          </p>
 
-            <div className="mt-4 flex gap-4 text-sm">
-              <span className="font-semibold text-coin">🪙 {data.coins}</span>
-              <span className="text-ink-soft">
-                {data.cardsMastered} von {data.cardsTotal} Karten sitzen
-              </span>
-            </div>
-          </CardContent>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <span className="rounded-full bg-glass-opaque px-2 py-1 type-body-sm text-coin">
+              {`🪙 ${data.coins}`}
+            </span>
+            <span className="type-body-sm text-ink-soft">
+              {`Sicher gelernt: ${data.cardsMastered} von ${data.cardsTotal} ${data.cardsTotal === 1 ? 'Wort' : 'Wörtern'}`}
+            </span>
+          </div>
         </Card>
       ) : null}
 
-      {availableSets.length === 0 ? (
+      {loadError ? (
+        <ErrorNote message={loadError.message} />
+      ) : availableSets.length === 0 ? (
         <EmptyState
           title="Noch keine Vokabeln da"
           hint="Ein Elternteil kann im Verwaltungsbereich ein Set anlegen."
         />
       ) : (
         <>
-          <h2 className="mb-3 text-sm font-bold text-ink-soft uppercase">Was möchtest du üben?</h2>
+          <h2 className="mb-2 type-label-section text-ink uppercase">Was möchtest du üben?</h2>
           <div className="mb-6 flex flex-col gap-2">
-            <button
-              onClick={() => setSelectedSet(null)}
-              className={tile(selectedSet === null)}
-              type="button"
-            >
-              <span className="font-bold">Alles, was heute dran ist</span>
-              <span className="text-sm text-ink-soft">{data?.dueToday ?? 0} Karten fällig</span>
-            </button>
+            <SetTile
+              active={selectedSet === null}
+              title="Alles, was heute dran ist"
+              detail={`${data?.dueToday ?? 0} Karten fällig`}
+              onSelect={() => setSelectedSet(null)}
+            />
 
             {availableSets.map((set) => (
-              <button
+              <SetTile
                 key={set.id}
-                onClick={() => setSelectedSet(set.id)}
-                className={tile(selectedSet === set.id)}
-                type="button"
-              >
-                <span className="font-bold">{set.title}</span>
-                <span className="text-sm text-ink-soft">{set.entryCount} Vokabeln</span>
-              </button>
+                active={selectedSet === set.id}
+                title={set.title}
+                detail={`${set.entryCount} Vokabeln`}
+                onSelect={() => setSelectedSet(set.id)}
+              />
             ))}
           </div>
         </>
       )}
 
-      {/* Primaeraktion unten: mit dem Daumen erreichbar. */}
+      {/* Primaeraktion unten: mit dem Daumen erreichbar. Status-Flaeche ohne
+          Glas, damit sie auch bei reduzierter Transparenz gruen bleibt. */}
       {nothingDue ? (
-        <Card className="bg-success-soft">
-          <CardContent className="flex items-center gap-3 pt-5">
-            <Sparkles className="h-6 w-6 shrink-0 text-success" />
-            <p className="font-semibold text-success">
-              Für heute ist alles erledigt. Morgen geht es weiter!
-            </p>
-          </CardContent>
-        </Card>
+        <div className="mt-auto flex items-center gap-4 rounded-lg bg-surface-success p-6">
+          <Sparkles className="size-6 shrink-0 text-success-text" aria-hidden />
+          <p className="type-body-md-strong text-success-text">
+            Für heute ist alles erledigt. Morgen geht es weiter!
+          </p>
+        </div>
       ) : (
         <Button
-          size="xl"
-          className="w-full"
+          size="lg"
+          className="sticky bottom-float-bottom mt-auto w-full"
           disabled={availableSets.length === 0}
           onClick={() =>
             navigate(`/lernen${selectedSet ? `?set=${selectedSet}` : ''}`)
           }
         >
-          Los geht&apos;s
+          Los geht’s
         </Button>
       )}
-    </div>
+    </main>
   )
 }
 
-function tile(active: boolean) {
-  const base =
-    'flex touch-target flex-col items-start justify-center rounded-2xl border-2 px-4 py-3 text-left transition active:scale-[0.98]'
-  return active
-    ? `${base} border-brand bg-brand-soft`
-    : `${base} border-border-subtle bg-surface-raised`
+// Auswahl-Kachel als Glas-Kapsel; gewaehlt zusaetzlich mit Haken und
+// aria-pressed, damit der Zustand nicht nur an der Flaeche haengt.
+function SetTile({
+  active,
+  title,
+  detail,
+  onSelect,
+}: {
+  active: boolean
+  title: string
+  detail: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className={cn(
+        'flex min-h-15 items-center gap-4 rounded-full px-6 py-2 text-left text-ink transition active:scale-[0.98]',
+        active ? 'glass-selected' : 'glass',
+      )}
+    >
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="break-words type-headline">{title}</span>
+        <span className="type-body-sm text-ink-soft">{detail}</span>
+      </span>
+      {active ? <Check className="size-6 shrink-0" aria-hidden /> : null}
+    </button>
+  )
 }

@@ -16,73 +16,43 @@ Memory) und der Offline-Betrieb stehen noch aus.
 
 ## Installation
 
-Die CI baut bei jedem Push auf `master` zwei Container-Images und legt sie auf
-der GitHub Container Registry ab:
+Für den Betrieb im Heimnetz auf einem Raspberry Pi 5 oder einem NAS gibt es
+genau eine Anleitung: [`Documentation/Installation.md`](Documentation/Installation.md).
+Sie führt vom leeren Gerät bis zur ersten Anmeldung, erklärt Update
+(`./upgrade.sh` holt das neueste Release selbst) und Wiederherstellen
+(`./restore.sh`) und hilft bei Problemen.
 
-| Image | Inhalt |
-|---|---|
-| `ghcr.io/<account>/wordquest-api` | ASP.NET-Core-Backend, wendet Migrationen beim Start selbst an |
-| `ghcr.io/<account>/wordquest-web` | nginx mit der gebauten PWA, leitet `/api` ans Backend weiter |
+**Für Entwickler und Forks:** Die CI baut bei jedem Push auf `master` und bei
+jedem Tag `v*` die Images `ghcr.io/<account>/wordquest-api` und `-web` für
+`linux/amd64` und `linux/arm64` und legt sie auf der GitHub Container Registry
+ab. Bei Tags `v*` hängt die CI danach zusätzlich das Paket `wordquest.tar.gz`
+mit Prüfsumme (`wordquest.tar.gz.sha256`) an das GitHub-Release; es enthält nur
+die Dateien für den Betrieb (gebaut von `.github/release-package.sh`). Die
+Installation zieht eine feste Version (`WQ_VERSION` in `.env.example`) vom
+Präfix `ghcr.io/mrhdready/wordquest`. Wer eigene Images baut, stellt seine
+Pakete unter **GitHub → Profil → Packages → Package settings → Change
+visibility** auf *Public* und gibt bei `setup.sh` das eigene Präfix an. Ein
+Fork setzt in `.env` außerdem
+`WQ_RELEASE_URL=https://github.com/<account>/WordQuest/releases/latest/download`.
 
-Beide sind für `linux/amd64` und `linux/arm64` gebaut — es läuft also auch auf
-einem Raspberry Pi 5 oder einem ARM-NAS.
+### Variante B — Mit Domain und TLS (für Fortgeschrittene)
 
-> **Einmalig nötig:** Die Pakete stehen nach dem ersten CI-Lauf auf *privat*.
-> Unter **GitHub → dein Profil → Packages → wordquest-api → Package settings →
-> Change visibility → Public** umstellen, für `-web` genauso. Ohne diesen
-> Schritt braucht jeder Zielhost eine Anmeldung mit Token.
-
-### Variante A — Schnelltest, zwei Minuten
-
-Zum Ausprobieren auf irgendeinem Docker-Host. Eine Datei, kein Zertifikat,
-keine Konfiguration.
-
-```bash
-curl -O https://raw.githubusercontent.com/<account>/WordQuest/master/docker-compose.quick.yml
-
-WQ_IMAGE_PREFIX=ghcr.io/<account>/wordquest \
-  docker compose -f docker-compose.quick.yml up -d
-```
-
-Fertig. Die App läuft auf **http://<host>:8080**.
-
-| | |
-|---|---|
-| Eltern | `demo@wordquest.local` / `demo1234` |
-| Kind | Profil „Max", PIN `1234` |
-
-Ein anderer Port geht mit `WQ_PORT=9000` vor dem Befehl.
-
-**Was hier fehlt:** Ohne HTTPS lässt sich die App nicht als PWA aufs Tablet
-legen — Service Worker verlangen eine sichere Herkunft (außer auf
-`localhost`). Im Browser funktioniert alles, aber ohne Installation und ohne
-Offlinebetrieb. Außerdem stehen die Passwörter im Klartext in der Compose-Datei.
-Für den Dauerbetrieb also Variante B.
-
-Aufräumen: `docker compose -f docker-compose.quick.yml down -v`
-
-### Variante B — Dauerbetrieb mit TLS
-
-Das ist die Variante für den Rechner, auf dem es wirklich laufen soll.
+Mit eigener Domain und Let's-Encrypt-Zertifikat über Traefik. Nur damit lässt
+sich die App als PWA installieren.
 
 ```bash
-git clone https://github.com/<account>/WordQuest.git wordquest
+curl -fsSL https://github.com/mrhdready/WordQuest/releases/latest/download/wordquest.tar.gz | tar xz
 cd wordquest
-./setup.sh
+cp .env.example .env
 ```
 
-`setup.sh` erzeugt Secrets, fragt Hostname, ACME-Mail und Image-Präfix ab,
-zieht die Images und startet den Stack. Danach ist WordQuest unter
-`https://<dein-host>` erreichbar.
-
-Was dabei entsteht und **nicht** ins Repository gehört (steht in `.gitignore`):
-
-```
-secrets/db_password.txt    48 Zeichen Zufall
-secrets/jwt_key.txt        48 Zeichen Zufall, signiert die Tokens
-.env                       Hostname, Image-Präfix, ACME-Einstellungen
-backups/                   tägliche pg_dumps
-```
+In `.env` von Hand eintragen: `COMPOSE_FILE=docker-compose.yml`,
+`WQ_IMAGE_PREFIX`, `WQ_HOST`, `WQ_ACME_EMAIL` und den DNS-Anbieter (siehe
+unten). Danach `./setup.sh`: Es lässt die vorhandene `.env` unverändert,
+erzeugt die Secrets, startet den Stack und legt auch hier das Elternkonto an.
+WordQuest ist dann unter `https://<WQ_HOST>` erreichbar. Update und
+Wiederherstellen gehen wie auf der Installationsseite, weil `docker compose`
+die Variante aus `COMPOSE_FILE` in `.env` liest.
 
 #### Zu TLS — die häufigste Stolperstelle
 
@@ -110,24 +80,15 @@ Kind, das erst eine Sicherheitswarnung wegklicken muss, um zu lernen, ist kein
 guter Ausgangspunkt — und iOS installiert eine PWA mit ungültigem Zertifikat
 gar nicht erst.
 
-#### Nach der Ersteinrichtung
+#### Demo-Daten
 
-1. Eigenes Elternkonto anlegen, Demo-Passwort ändern.
-2. In `.env` `WQ_SEED_DEMO_DATA=false` setzen.
-3. `docker compose up -d` — die Demo-Daten bleiben, werden aber nicht neu angelegt.
-
-#### Aktualisieren
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-Neue Migrationen wendet die API beim Start selbst an. Ein Backup vorher
-schadet trotzdem nicht.
-
-Für einen festen Stand statt des jeweils letzten Builds ein Git-Tag setzen
-(`git tag v0.1.0 && git push --tags`) und in `.env` `WQ_VERSION=0.1.0`
-eintragen.
+Demo-Daten (Elternkonto, Kind, Beispielset) gibt es nur noch als
+Entwickler-Option: `WQ_SEED_DEMO_DATA=true` legt sie beim Start auf einer
+leeren Datenbank an. In beiden Compose-Dateien und in `.env.example` steht der
+Wert auf `false`. Steht in einer älteren `.env` noch `true` (auch `True` oder
+`"true"`), bricht `setup.sh` mit einem Hinweis ab, denn das Demo-Konto hat ein
+bekanntes Passwort. Außerhalb des Entwicklungsmodus startet auch die API mit
+eingeschalteten Demo-Daten nicht.
 
 ### Variante C — Entwicklung
 
@@ -145,7 +106,9 @@ npm install
 npm run dev                                    # http://localhost:5173
 ```
 
-Der Vite-Dev-Server leitet `/api` an `localhost:5080` weiter.
+Der Vite-Dev-Server leitet `/api` an `localhost:5080` weiter. Im
+Entwicklungsmodus legt die API Demo-Daten an (Zugangsdaten in
+`backend/src/WordQuest.Infrastructure/Seed/DemoDataSeeder.cs`).
 
 Images lokal bauen statt ziehen:
 
@@ -260,21 +223,17 @@ Drei Bremsen tragen das ganze System:
 | Secrets | Dateien unter `./secrets/`, nie als Umgebungsvariable |
 | Logs | `docker compose logs -f api` |
 
-Wiederherstellung aus einem Backup:
-
-```bash
-gunzip -c backups/daily/wordquest-<datum>.sql.gz \
-  | docker compose exec -T db psql -U wordquest -d wordquest
-```
-
-> Ein Backup, das nie zurückgespielt wurde, ist kein Backup. Einmal ausprobieren.
+Wiederherstellen aus einer Sicherung geht mit `./restore.sh`; die Anleitung steht
+in [`Documentation/Installation.md`](Documentation/Installation.md). Ein
+einfaches `psql` in die laufende Datenbank stellt nichts wieder her, weil die
+Tabellen dort schon existieren.
 
 ---
 
 ## Datenschutz
 
-Pflichtfeld für ein Kind ist ausschließlich ein Anzeigename — ein Spitzname
-genügt. Kein Geburtsdatum, keine E-Mail, keine Klasse. Es gibt keine Telemetrie
+Pflichtfelder für ein Kind sind ausschließlich ein Anzeigename — ein Spitzname
+genügt — und die PIN für die Anmeldung. Kein Geburtsdatum, keine E-Mail, keine Klasse. Es gibt keine Telemetrie
 und keinen externen Analytics-Dienst; Schriften und Icons werden mitgeliefert
 statt von einem CDN geladen.
 

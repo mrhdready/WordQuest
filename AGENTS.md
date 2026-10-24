@@ -154,10 +154,12 @@ Vor jeder Fertig-Meldung ausführen (entspricht der CI in `.github/workflows/ci.
 ```bash
 dotnet build backend/WordQuest.slnx -c Release /warnaserror
 dotnet test backend/WordQuest.slnx -c Release
-cd frontend && npm ci && npm run lint && npm run typecheck && npm run build
+cd frontend && npm ci && npm run lint && npm run typecheck && npm run build && npm test && npm run design:check && npm run design:classes
 ```
 
-UI-Änderungen brauchen zusätzlich einen axe-Check (WCAG 2.2 AA) der berührten Seiten, Ergebnis wird festgehalten, sowie den `DESIGN.md`-Lint und -Export (siehe Design).
+Die Backend-Tests brauchen ein laufendes PostgreSQL (`docker compose -f docker-compose.dev.yml up -d`); die Verbindung kommt aus `WQ_TEST_DB` (Standard `Host=localhost;Port=5432;Username=wordquest;Password=devpassword`), jede Test-Factory legt darauf eine eigene Datenbank an. Ohne lokales .NET-SDK laufen Build und Tests im Container `mcr.microsoft.com/dotnet/sdk:10.0` mit `-e WQ_TEST_DB='Host=host.docker.internal;Port=5432;Username=wordquest;Password=devpassword'`.
+
+UI-Änderungen brauchen zusätzlich einen axe-Check (WCAG 2.2 AA) der berührten Seiten gegen den gebauten Stack, Ergebnis wird festgehalten: `cd frontend && npm run e2e:stack && npm run e2e` (Playwright mit `@axe-core/playwright`, danach `docker compose -f e2e/docker-compose.e2e.yml down -v`). `npm run design:check` deckt den `DESIGN.md`-Lint und -Export ab (siehe Design).
 
 ## Lokale Entwicklung
 

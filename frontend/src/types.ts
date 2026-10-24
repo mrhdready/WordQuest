@@ -7,6 +7,11 @@ export interface AuthUser {
   tenantId: string
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
 export interface AuthResponse {
   accessToken: string
   refreshToken: string
@@ -30,6 +35,19 @@ export interface Learner {
   hasPin: boolean
 }
 
+export interface CreateLearnerRequest {
+  displayName: string
+  pin: string
+  dailyNewLimit: number
+}
+
+// pin fehlt = PIN unveraendert.
+export interface UpdateLearnerSettingsRequest {
+  displayName: string
+  dailyNewLimit: number
+  pin?: string
+}
+
 export interface VocabularySet {
   id: string
   title: string
@@ -50,6 +68,8 @@ export interface VocabularyEntry {
   exampleSource: string | null
   exampleTarget: string | null
   position: number
+  // Version des eigenen Bildes (Teil der Bild-URL), null ohne Bild.
+  pictureVersion: string | null
 }
 
 export interface SessionItem {
@@ -60,6 +80,7 @@ export interface SessionItem {
   expectedAnswerType: 'text' | 'choice'
   choices: string[] | null
   emoji: string | null
+  pictureVersion: string | null
   exampleSentence: string | null
   isRetry: boolean
 }

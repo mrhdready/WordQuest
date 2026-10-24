@@ -8,6 +8,8 @@ namespace WordQuest.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    private const string TokenMissing = "Es fehlt das Anmelde-Token.";
+
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         RouteGroupBuilder group = app.MapGroup("/api/v1/auth")
@@ -17,8 +19,11 @@ public static class AuthEndpoints
         group.MapGet("/profiles", GetProfilesAsync);
         group.MapPost("/login", LoginAsync);
         group.MapPost("/learner-login", LearnerLoginAsync);
-        group.MapPost("/refresh", RefreshAsync);
-        group.MapPost("/logout", LogoutAsync);
+        // Refresh und Abmelden erneuern bzw. beenden nur eine bestehende Anmeldung
+        // und duerfen das Login-Budget nicht verbrauchen (D-10). Raten ist
+        // aussichtslos: Refresh-Tokens sind 256 Bit Zufall.
+        group.MapPost("/refresh", RefreshAsync).DisableRateLimiting();
+        group.MapPost("/logout", LogoutAsync).DisableRateLimiting();
     }
 
     /// <summary>
@@ -35,6 +40,9 @@ public static class AuthEndpoints
     {
         List<Guid> tenantIds = await db.Tenants
             .IgnoreQueryFilters()
+            // Nur die Anzahl zaehlt (genau einer?); die Sortierung beseitigt
+            // lediglich die EF-Warnung zu Take ohne OrderBy.
+            .OrderBy(t => t.Id)
             .Select(t => t.Id)
             .Take(2)
             .ToListAsync(ct);
@@ -61,6 +69,11 @@ public static class AuthEndpoints
     private static async Task<IResult> LoginAsync(
         LoginRequest request, AuthService auth, CancellationToken ct)
     {
+        if (request.Email is null || request.Password is null)
+        {
+            return Missing("email", "Bitte gib E-Mail-Adresse und Passwort ein.");
+        }
+
         try
         {
             AuthTokens tokens = await auth.LoginAsync(request.Email, request.Password, ct);
@@ -89,6 +102,11 @@ public static class AuthEndpoints
     private static async Task<IResult> RefreshAsync(
         RefreshRequest request, AuthService auth, CancellationToken ct)
     {
+        if (request.RefreshToken is null)
+        {
+            return Missing("refreshToken", TokenMissing);
+        }
+
         try
         {
             AuthTokens tokens = await auth.RefreshAsync(request.RefreshToken, ct);
@@ -98,14 +116,31 @@ public static class AuthEndpoints
         {
             return Unauthorized(ex);
         }
+        catch (RefreshConflictException ex)
+        {
+            return Results.Problem(
+                title: "Anmeldung erneuert",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     private static async Task<IResult> LogoutAsync(
         RefreshRequest request, AuthService auth, CancellationToken ct)
     {
+        if (request.RefreshToken is null)
+        {
+            return Missing("refreshToken", TokenMissing);
+        }
+
         await auth.LogoutAsync(request.RefreshToken, ct);
         return Results.NoContent();
     }
+
+    // Lesbarer Body ohne Pflichtfeld: System.Text.Json bindet null ohne Fehler, das
+    // zentrale 400 in Program.cs greift nur bei unlesbarem Body (W-1).
+    private static IResult Missing(string key, string message) =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] });
 
     private static IResult Unauthorized(AuthFailedException ex) =>
         Results.Problem(

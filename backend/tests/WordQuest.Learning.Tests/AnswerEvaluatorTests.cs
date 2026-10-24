@@ -20,6 +20,23 @@ public sealed class AnswerEvaluatorTests
         Assert.False(result.HadTypo);
     }
 
+    // Ein fehlendes Fragezeichen ist keine inhaltliche Abweichung (Entscheidung
+    // Dennis 2026-10-22). Beide Richtungen werden abgefragt, also beide Seiten.
+    [Theory]
+    [InlineData("what's your name", "What's your name?")]
+    [InlineData("What's your name?", "what's your name")]
+    [InlineData("Wie heißt du", "Wie heißt du?")]
+    [InlineData("Wie heißt du?", "Wie heißt du")]
+    public void IgnoresATrailingQuestionMark(string given, string expected)
+    {
+        AnswerEvaluation result = _evaluator.Evaluate(given, ExpectedAnswer.Of(expected), 1000);
+
+        Assert.True(result.IsCorrect);
+        Assert.False(result.HadTypo);
+        Assert.Null(result.Hint);
+        Assert.Equal(_evaluator.Evaluate(expected, ExpectedAnswer.Of(expected), 1000).Grade, result.Grade);
+    }
+
     [Theory]
     [InlineData("to go", "go")]
     [InlineData("go", "to go")]

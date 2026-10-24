@@ -31,6 +31,36 @@ public sealed class CsvVocabularyParserTests
         Assert.Equal("Hund", result.Rows[0].Source);
     }
 
+    // Ein einzelnes Kopfwort macht noch keine Kopfzeile (Codex-Befund 10, D-13, D-20).
+    [Theory]
+    [InlineData("Quelle;source")]
+    [InlineData("Ziel;target")]
+    [InlineData("Bild;picture")]
+    [InlineData("Deutsch;German")]
+    public void KeepsAFirstVocabularyRowMadeOfHeaderWords(string firstLine)
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse($"{firstLine}\nHund;dog");
+        string[] fields = firstLine.Split(';');
+
+        Assert.False(result.HadHeader);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal(fields[0], result.Rows[0].Source);
+        Assert.Equal(fields[1], result.Rows[0].Target);
+    }
+
+    [Theory]
+    [InlineData("source;target\nHund;dog")]
+    [InlineData("Quelle;Ziel;Emoji\nHund;dog;🐶")]
+    [InlineData("\"Deutsch\";\"Englisch\";\nHund;dog")]
+    public void SkipsAnUnambiguousHeaderRow(string content)
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse(content);
+
+        Assert.True(result.HadHeader);
+        Assert.Single(result.Rows);
+        Assert.Equal("Hund", result.Rows[0].Source);
+    }
+
     [Fact]
     public void KeepsQuotedFieldsTogether()
     {
@@ -66,6 +96,33 @@ public sealed class CsvVocabularyParserTests
 
         Assert.Equal(1, result.ValidCount);
         Assert.NotNull(result.Rows[1].Problem);
+    }
+
+    // Dieselben Grenzen wie beim Hinzufuegen einer Vokabel; laenger endete beim Bestaetigen als 500.
+    public static TheoryData<string, string> TooLongRows => new()
+    {
+        { $"{new string('a', 201)};dog", "Ein Wort darf höchstens 200 Zeichen lang sein." },
+        { $"Hund;{new string('b', 201)}", "Ein Wort darf höchstens 200 Zeichen lang sein." },
+        { $"Hund;dog;{new string('x', 17)}", "Das Emoji darf höchstens 16 Zeichen lang sein." },
+    };
+
+    [Theory]
+    [MemberData(nameof(TooLongRows))]
+    public void FlagsRowsBeyondTheEntryLimits(string line, string problem)
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse($"Haus;house\n{line}");
+
+        Assert.Equal(1, result.ValidCount);
+        Assert.Equal(problem, result.Rows[1].Problem);
+    }
+
+    [Fact]
+    public void AcceptsRowsExactlyAtTheEntryLimits()
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse(
+            $"{new string('a', 200)};{new string('b', 200)};{new string('x', 16)}");
+
+        Assert.Null(result.Rows[0].Problem);
     }
 
     [Fact]

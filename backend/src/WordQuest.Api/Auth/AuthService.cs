@@ -10,6 +10,8 @@ public sealed record AuthTokens(string AccessToken, string RefreshToken, int Exp
 
 public sealed class AuthFailedException(string message) : Exception(message);
 
+public sealed class RefreshConflictException(string message) : Exception(message);
+
 /// <summary>
 /// Anmeldung und Token-Rotation.
 ///
@@ -26,6 +28,13 @@ public sealed class AuthService(
     TimeProvider clock,
     ILogger<AuthService> logger)
 {
+    // Zwei Fenster teilen den Speicher und erneuern gleichzeitig mit demselben
+    // Token. Der unmittelbare Vorgaenger ergibt bis 10 Sekunden nach seiner
+    // Rotation 409 ohne neue Tokens, solange sein Nachfolger aktiv ist, statt
+    // als Diebstahl alle Sitzungen zu widerrufen (D-06, akzeptiert per D-17).
+    // Restrisiko im Konzept (Sicherheitstabelle, Token).
+    private static readonly TimeSpan RotationGrace = TimeSpan.FromSeconds(10);
+
     private readonly AuthOptions _options = options.Value;
 
     public async Task<AuthTokens> LoginAsync(string email, string password, CancellationToken ct)
@@ -44,7 +53,7 @@ public sealed class AuthService(
 
         if (user is null || !ok || !user.IsActive || user.Role == UserRole.Learner)
         {
-            logger.LogWarning("Fehlgeschlagener Login fuer {Email}.", normalized);
+            logger.LogWarning("Fehlgeschlagener Login fuer ein Elternkonto.");
             throw new AuthFailedException("E-Mail-Adresse oder Passwort stimmt nicht.");
         }
 
@@ -78,14 +87,19 @@ public sealed class AuthService(
 
         if (!PasswordHasher.Verify(pin, profile.PinHash))
         {
-            profile.FailedPinAttempts++;
-            if (profile.FailedPinAttempts >= _options.MaxPinAttempts)
-            {
-                profile.PinLockedUntil = now.AddMinutes(_options.PinLockoutMinutes);
-                profile.FailedPinAttempts = 0;
-            }
-
-            await db.SaveChangesAsync(ct);
+            // Ein Statement statt Lesen-Erhoehen-Schreiben: Das verlor parallele
+            // Fehlversuche (Codex-Befund 9, D-11). Beide Ausdruecke sehen dieselbe
+            // Ausgangszeile, die Datenbank serialisiert die Erhoehungen (Muster
+            // CreditAsync). Ohne IgnoreQueryFilters traefe der Mandantenfilter
+            // bei der Anmeldung keine Zeile.
+            int max = _options.MaxPinAttempts;
+            DateTimeOffset? lockUntil = now.AddMinutes(_options.PinLockoutMinutes);
+            await db.LearnerProfiles
+                .IgnoreQueryFilters()
+                .Where(p => p.Id == learnerId)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(p => p.FailedPinAttempts, p => p.FailedPinAttempts + 1 >= max ? 0 : p.FailedPinAttempts + 1)
+                    .SetProperty(p => p.PinLockedUntil, p => p.FailedPinAttempts + 1 >= max ? lockUntil : p.PinLockedUntil), ct);
             throw new AuthFailedException("Die PIN stimmt nicht.");
         }
 
@@ -100,58 +114,168 @@ public sealed class AuthService(
         DateTimeOffset now = clock.GetUtcNow();
         string hash = TokenHasher.Hash(refreshToken);
 
-        RefreshToken? stored = await db.RefreshTokens
+        // Vor der Sperre nur Konto und Mandant ermitteln; entschieden wird erst
+        // unter der Sperre mit frisch gelesenem Stand.
+        RefreshToken? found = await db.RefreshTokens
             .IgnoreQueryFilters()
+            .AsNoTracking()
             .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
 
-        if (stored is null)
+        if (found is null)
         {
             throw new AuthFailedException("Sitzung abgelaufen. Bitte neu anmelden.");
         }
 
-        // Ein bereits rotiertes Token taucht erneut auf: entweder ein
-        // verschlepptes Offline-Geraet oder ein gestohlenes Token. Beides
-        // beantworten wir gleich — die ganze Kette dieses Nutzers verwerfen.
-        if (stored.ReplacedByTokenHash is not null || stored.RevokedAt is not null)
+        // Die Ausfuehrungsstrategie kann den Callback nach einem transienten
+        // Fehler wiederholen. Deshalb entsteht der Nachfolger genau einmal hier
+        // und nicht im Callback; sonst stuenden nach einer Wiederholung zwei
+        // Nachfolger im Change Tracker.
+        string next = TokenHasher.NewToken();
+        string nextHash = TokenHasher.Hash(next);
+        var successor = new RefreshToken
         {
-            logger.LogWarning("Wiederverwendetes Refresh-Token fuer Nutzer {UserId}.", stored.UserId);
-            await RevokeAllAsync(stored.UserId, now, ct);
-            throw new AuthFailedException("Sitzung abgelaufen. Bitte neu anmelden.");
-        }
+            TenantId = found.TenantId,
+            UserId = found.UserId,
+            TokenHash = nextHash,
+            CreatedAt = now,
+            ExpiresAt = now.AddDays(_options.RefreshTokenDays),
+        };
 
-        if (!stored.IsActive(now))
+        RefreshOutcome outcome = RefreshOutcome.Expired;
+        User? user = null;
+
+        // Refresh, Abmelden und Widerruf laufen je Konto unter derselben Sperre:
+        // Ein Widerruf (neue PIN, Passwort-Reset) sieht den Nachfolger oder der
+        // Refresh sieht den widerrufenen Token, nie ein Dazwischen (D-04).
+        await db.InTransactionAsync(async () =>
         {
-            throw new AuthFailedException("Sitzung abgelaufen. Bitte neu anmelden.");
-        }
+            outcome = RefreshOutcome.Expired;
+            user = null;
+            db.Entry(successor).State = EntityState.Detached;
 
-        User user = await db.Users
-            .IgnoreQueryFilters()
-            .FirstAsync(u => u.Id == stored.UserId, ct);
+            await db.LockUserAsync(found.UserId, ct);
+            RefreshToken? stored = await db.RefreshTokens
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == found.Id, ct);
 
-        if (!user.IsActive)
+            if (stored is null)
+            {
+                return;
+            }
+
+            if (stored.ReplacedByTokenHash is { } replacedBy
+                && stored.RevokedAt > now - RotationGrace
+                && await db.RefreshTokens
+                    .IgnoreQueryFilters()
+                    .AnyAsync(t => t.TokenHash == replacedBy && t.RevokedAt == null && t.ExpiresAt > now, ct))
+            {
+                logger.LogInformation("Refresh mit eben rotiertem Token fuer Nutzer {UserId}: 409.", stored.UserId);
+                outcome = RefreshOutcome.Conflict;
+                return;
+            }
+
+            // Ein bereits rotiertes Token taucht erneut auf: entweder ein
+            // verschlepptes Offline-Geraet oder ein gestohlenes Token. Beides
+            // beantworten wir gleich — die ganze Kette dieses Nutzers verwerfen.
+            if (stored.ReplacedByTokenHash is not null || stored.RevokedAt is not null)
+            {
+                logger.LogWarning("Wiederverwendetes Refresh-Token fuer Nutzer {UserId}.", stored.UserId);
+                await RevokeAllAsync(stored.UserId, now, ct);
+                return;
+            }
+
+            if (!stored.IsActive(now))
+            {
+                return;
+            }
+
+            User account = await db.Users
+                .IgnoreQueryFilters()
+                .FirstAsync(u => u.Id == stored.UserId, ct);
+
+            if (!account.IsActive)
+            {
+                outcome = RefreshOutcome.Inactive;
+                return;
+            }
+
+            // Den alten Token bedingt beanspruchen; die Sperre ordnet schon,
+            // die Bedingung bleibt als zweite Sicherung (D-04).
+            int claimed = await db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(t => t.Id == stored.Id && t.RevokedAt == null)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(t => t.RevokedAt, now)
+                    .SetProperty(t => t.ReplacedByTokenHash, nextHash), ct);
+            if (claimed != 1)
+            {
+                return;
+            }
+
+            db.RefreshTokens.Add(successor);
+            account.LastLoginAt = now;
+            await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+            user = account;
+            outcome = RefreshOutcome.Issued;
+        }, ct);
+
+        // Ausnahmen erst nach dem Commit, damit ein Widerruf festgeschrieben ist.
+        return outcome switch
         {
-            throw new AuthFailedException("Dieses Konto ist deaktiviert.");
-        }
-
-        AuthTokens issued = await IssueAsync(user, ct, rotating: stored);
-        return issued;
+            RefreshOutcome.Issued => new AuthTokens(
+                tokens.CreateAccessToken(user!),
+                next,
+                tokens.AccessTokenLifetimeSeconds,
+                user!),
+            RefreshOutcome.Inactive => throw new AuthFailedException("Dieses Konto ist deaktiviert."),
+            RefreshOutcome.Conflict => throw new RefreshConflictException("Die Anmeldung wurde gerade in einem anderen Fenster erneuert."),
+            _ => throw new AuthFailedException("Sitzung abgelaufen. Bitte neu anmelden."),
+        };
     }
 
     public async Task LogoutAsync(string refreshToken, CancellationToken ct)
     {
+        DateTimeOffset now = clock.GetUtcNow();
         string hash = TokenHasher.Hash(refreshToken);
-        RefreshToken? stored = await db.RefreshTokens
+        Guid? userId = await db.RefreshTokens
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
+            .Where(t => t.TokenHash == hash)
+            .Select(t => (Guid?)t.UserId)
+            .FirstOrDefaultAsync(ct);
 
-        if (stored is not null)
+        if (userId is null)
         {
-            stored.RevokedAt = clock.GetUtcNow();
-            await db.SaveChangesAsync(ct);
+            return;
         }
+
+        // Abmelden beendet die ganze Kette ab dem vorgelegten Token, auch
+        // Nachfolger, die der Server schon ausgestellt oder weitergedreht hat
+        // (D-05; Codex-Review 2026-10-23). Erst unter der Sperre ist der Stand
+        // verlaesslich; deshalb hier lesen. Eine Abfrage fuer alle Tokens des
+        // Kontos statt einer je Glied, weil alte Tokens nicht geloescht werden.
+        await db.InTransactionAsync(async () =>
+        {
+            await db.LockUserAsync(userId.Value, ct);
+            Dictionary<string, string?> successors = await db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(t => t.UserId == userId.Value)
+                .Select(t => new { t.TokenHash, t.ReplacedByTokenHash })
+                .ToDictionaryAsync(t => t.TokenHash, t => t.ReplacedByTokenHash, ct);
+            List<string> hashes = [];
+            for (string? current = hash; current is not null && successors.TryGetValue(current, out string? next); current = next)
+            {
+                hashes.Add(current);
+            }
+
+            await db.RefreshTokens
+                .IgnoreQueryFilters()
+                .Where(t => hashes.Contains(t.TokenHash) && t.RevokedAt == null)
+                .ExecuteUpdateAsync(u => u.SetProperty(t => t.RevokedAt, now), ct);
+        }, ct);
     }
 
-    private async Task<AuthTokens> IssueAsync(User user, CancellationToken ct, RefreshToken? rotating = null)
+    private async Task<AuthTokens> IssueAsync(User user, CancellationToken ct)
     {
         DateTimeOffset now = clock.GetUtcNow();
 
@@ -166,12 +290,6 @@ public sealed class AuthService(
             CreatedAt = now,
             ExpiresAt = now.AddDays(_options.RefreshTokenDays),
         });
-
-        if (rotating is not null)
-        {
-            rotating.ReplacedByTokenHash = refreshHash;
-            rotating.RevokedAt = now;
-        }
 
         user.LastLoginAt = now;
         await db.SaveChangesAsync(ct);
@@ -189,5 +307,20 @@ public sealed class AuthService(
             .IgnoreQueryFilters()
             .Where(t => t.UserId == userId && t.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now), ct);
+    }
+
+    private enum RefreshOutcome
+    {
+        /// <summary>Unbekannt, abgelaufen, widerrufen oder nicht beansprucht: 401.</summary>
+        Expired = 0,
+
+        /// <summary>Konto deaktiviert: 401.</summary>
+        Inactive = 1,
+
+        /// <summary>Nachfolger ausgestellt.</summary>
+        Issued = 2,
+
+        /// <summary>Eben rotierter Vorgaenger mit aktivem Nachfolger: 409 ohne Tokens.</summary>
+        Conflict = 3,
     }
 }

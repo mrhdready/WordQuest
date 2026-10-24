@@ -4,6 +4,7 @@ Alle Projektdokumente liegen als Markdown in diesem Ordner. `.docx` wird nicht m
 
 | Dokument | Zweck | Zielgruppe | Status |
 |---|---|---|---|
+| [`Installation.md`](Installation.md) | Installation, Update, Sicherung, Wiederherstellung und Hilfe im Heimnetz | Eltern und Betreiber | gültig |
 | [`WordQuest_Konzept_und_Architektur.md`](WordQuest_Konzept_und_Architektur.md) | Fachkonzept und Architektur, jeweils mit Umsetzungsstand | Entwicklung | gültig |
 | [`archiv/Ursprungskonzept.md`](archiv/Ursprungskonzept.md) | Frühere Schul-Ausrichtung aus den ehemaligen `.docx`-Dateien | Nachvollziehbarkeit | historisch |
 

@@ -5,35 +5,39 @@ import { cn } from '@/lib/utils'
 export function Label({ className, ...props }: ComponentProps<typeof LabelPrimitive.Root>) {
   return (
     <LabelPrimitive.Root
-      className={cn('text-sm font-semibold text-ink-soft', className)}
+      className={cn('type-label-section text-ink-soft', className)}
       {...props}
     />
   )
 }
 
-export function Progress({ value, className }: { value: number; className?: string }) {
+// Vertrag bleibt 0 bis 1: alle Aufrufer uebergeben Anteile wie index / total.
+// Intern Prozent, damit das native <progress> ohne Inline-Style auskommt.
+export function Progress({
+  value,
+  label,
+  className,
+}: {
+  value: number
+  label?: string
+  className?: string
+}) {
   const clamped = Math.max(0, Math.min(1, value))
   return (
-    <div
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(clamped * 100)}
-      className={cn('h-3 w-full overflow-hidden rounded-full bg-brand-soft', className)}
-    >
-      <div
-        className="h-full rounded-full bg-brand transition-[width] duration-500"
-        style={{ width: `${clamped * 100}%` }}
-      />
-    </div>
+    <progress
+      max={100}
+      value={Math.round(clamped * 100)}
+      aria-label={label}
+      className={cn('w-full', className)}
+    />
   )
 }
 
 const badgeTones = {
-  neutral: 'bg-brand-soft text-brand-strong',
-  green: 'bg-success-soft text-success',
-  yellow: 'bg-warn-soft text-warn',
-  red: 'bg-danger-soft text-danger',
+  neutral: 'glass-flat-selected text-ink',
+  green: 'bg-surface-success text-success-text',
+  yellow: 'bg-surface-warn text-warn-text',
+  red: 'bg-surface-error text-danger-text',
 } as const
 
 export function Badge({
@@ -44,7 +48,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold',
+        'inline-flex items-center rounded-full px-2 py-1 type-body-sm',
         badgeTones[tone],
         className,
       )}
@@ -55,16 +59,25 @@ export function Badge({
 
 export function Spinner({ label = 'Lädt …' }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-3 p-8 text-ink-soft" role="status">
-      <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-      <span className="text-sm">{label}</span>
+    <div className="flex items-center justify-center gap-2 p-8 text-ink-soft" role="status">
+      <span className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <span className="type-body-md">{label}</span>
     </div>
   )
 }
 
 export function ErrorNote({ message }: { message: string }) {
   return (
-    <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger" role="alert">
+    <p className="rounded-sm bg-surface-error p-4 type-body-md-strong text-danger-text" role="alert">
+      {message}
+    </p>
+  )
+}
+
+// break-words: Meldungen tragen Namen bis 100 Zeichen ohne Trennstelle ("{Name} ist geloescht.").
+export function SuccessNote({ message }: { message: string }) {
+  return (
+    <p className="rounded-sm bg-surface-success p-4 type-body-md break-words text-success-text" role="status">
       {message}
     </p>
   )
@@ -72,9 +85,9 @@ export function ErrorNote({ message }: { message: string }) {
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-[var(--radius-card)] border-2 border-dashed border-border-subtle p-8 text-center">
-      <p className="font-semibold text-ink">{title}</p>
-      {hint ? <p className="mt-1 text-sm text-ink-soft">{hint}</p> : null}
+    <div className="glass rounded-lg p-8 text-center">
+      <p className="type-headline text-ink">{title}</p>
+      {hint ? <p className="mt-1 type-body-md text-ink-soft">{hint}</p> : null}
     </div>
   )
 }

@@ -1,21 +1,31 @@
 import { useQuery } from '@tanstack/react-query'
-import { Delete } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronLeft, Delete } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ErrorNote, Spinner } from '@/components/ui/misc'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { avatarFor } from '@/lib/avatars'
+import { cn } from '@/lib/utils'
 import type { LearnerTile } from '@/types'
 
+// PIN mit genau 4 Ziffern (PAR-02); die vierte Ziffer sendet ab, es gibt keinen
+// Absende-Button (Entscheidung 2026-10-21).
 const PIN_LENGTH = 4
+const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+
+// keypad-key: Glasfarbe ohne Blur je Taste (viele Blur-Ebenen ruckeln auf
+// guenstigen Tablets), deckender Fallback kommt aus glass-flat-clear.
+const keyClass =
+  'glass-flat-clear flex size-20 items-center justify-center rounded-full type-keypad text-ink ' +
+  'transition active:scale-95 disabled:opacity-50'
 
 /**
- * Startbildschirm des Kindes: Avatar antippen, vierstellige PIN eingeben.
+ * Startbildschirm des Kindes: Avatar antippen, vier Zahlen eingeben, fertig.
  *
- * Kein Passwortfeld und keine Tastatur — das ist die haeufigste Abbruchstelle
- * bei Lern-Apps (Konzept §3).
+ * Kein Passwortfeld: das ist die haeufigste Abbruchstelle bei Lern-Apps
+ * (Konzept §3). Eine angeschlossene Tastatur funktioniert trotzdem (FIX-08).
  */
 export function ProfilePickerPage() {
   const navigate = useNavigate()
@@ -25,6 +35,19 @@ export function ProfilePickerPage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Spiegel als Refs: Tasten im selben Takt saehen den State noch vor dem
+  // Rendern; so sendet die vierte Ziffer genau einmal und eine fuenfte zaehlt nicht.
+  const pinRef = useRef('')
+  const busyRef = useRef(false)
+  const firstKey = useRef<HTMLButtonElement>(null)
+  const tiles = useRef<HTMLDivElement>(null)
+  const retried = useRef(false)
+
+  // Nach falscher PIN zurueck an den Anfang des Ziffernfelds. Als Effekt, weil
+  // die Tasten erst nach dem Rendern mit busy=false wieder fokussierbar sind.
+  useEffect(() => {
+    if (error) firstKey.current?.focus()
+  }, [error])
 
   const profiles = useQuery({
     queryKey: ['profiles'],
@@ -32,136 +55,213 @@ export function ProfilePickerPage() {
     retry: false,
   })
 
-  async function submit(nextPin: string) {
-    if (!selected) return
+  // Nach "Noch einmal" verschwindet der Button: Fokus auf die erste Kachel statt auf body.
+  useEffect(() => {
+    if (!retried.current || !profiles.isSuccess) return
+    retried.current = false
+    tiles.current?.querySelector('button')?.focus()
+  }, [profiles.isSuccess])
+
+  function updatePin(next: string) {
+    pinRef.current = next
+    setPin(next)
+  }
+
+  async function submit(learnerId: string, entered: string) {
+    busyRef.current = true
     setBusy(true)
     setError(null)
     try {
-      await loginAsLearner(selected.id, nextPin)
+      await loginAsLearner(learnerId, entered)
       navigate('/', { replace: true })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Das hat nicht geklappt.')
-      setPin('')
-    } finally {
+      updatePin('')
+      // Nur nach einem Fehler frei: nach Erfolg bis zum Seitenwechsel keine zweite Anmeldung.
+      busyRef.current = false
       setBusy(false)
     }
   }
 
   function press(digit: string) {
-    if (busy || pin.length >= PIN_LENGTH) return
-    const next = pin + digit
-    setPin(next)
-    if (next.length === PIN_LENGTH) void submit(next)
+    if (!selected || busyRef.current || pinRef.current.length >= PIN_LENGTH) return
+    updatePin(pinRef.current + digit)
+    if (pinRef.current.length === PIN_LENGTH) void submit(selected.id, pinRef.current)
   }
+
+  function removeLast() {
+    if (busyRef.current) return
+    updatePin(pinRef.current.slice(0, -1))
+  }
+
+  function choose(profile: LearnerTile | null) {
+    setSelected(profile)
+    updatePin('')
+    setError(null)
+  }
+
+  // Physische Tastatur nur, solange ein Profil gewaehlt ist (T-01-15).
+  useEffect(() => {
+    if (!selected) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey || event.altKey || event.metaKey) return
+      if (/^[0-9]$/.test(event.key)) {
+        press(event.key)
+      } else if (event.key === 'Backspace') {
+        removeLast()
+      } else if (
+        event.key === 'Enter' &&
+        event.target instanceof HTMLButtonElement &&
+        /^[0-9]$/.test(event.target.textContent ?? '')
+      ) {
+        // Enter waere ein Klick auf die fokussierte Ziffer (nach einem Fehler "1"):
+        // ein Enter aus Gewohnheit haengte sonst eine Ziffer an. Leertaste bedient die Taste weiter.
+        event.preventDefault()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  })
 
   if (profiles.isLoading) return <Spinner />
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-lg flex-col px-5 py-8 safe-top safe-bottom">
+    <main className="mx-auto flex min-h-full w-full max-w-lg flex-col px-screen-margin pt-screen-top pb-8 safe-top safe-bottom">
       {!selected ? (
         <>
-          <h1 className="mb-8 text-center text-2xl font-bold">Wer lernt heute?</h1>
+          <h1 className="mb-8 text-center type-large-title">Wer lernt heute?</h1>
 
+          {/* Ein Kind am Tablet laedt nicht selbst neu: Wiederholen direkt hier. */}
           {profiles.isError ? (
-            <ErrorNote message="Die Profile konnten nicht geladen werden." />
+            <div className="mb-8 flex flex-col gap-4">
+              <ErrorNote message="Der Server ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal." />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={profiles.isFetching}
+                onClick={() => {
+                  retried.current = true
+                  void profiles.refetch()
+                }}
+              >
+                Noch einmal
+              </Button>
+            </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div ref={tiles} className="grid grid-cols-2 gap-4">
             {(profiles.data ?? []).map((profile) => (
               <button
                 key={profile.id}
-                onClick={() => {
-                  setSelected(profile)
-                  setPin('')
-                  setError(null)
-                }}
-                className="animate-pop flex flex-col items-center gap-3 rounded-[var(--radius-card)] border-2 border-border-subtle bg-surface-raised p-6 transition active:scale-95"
+                type="button"
+                onClick={() => choose(profile)}
+                className="animate-pop glass flex flex-col items-center gap-2 rounded-lg p-6 text-ink transition active:scale-95"
               >
-                <span className="text-6xl" aria-hidden>
+                <span className="type-emoji" aria-hidden>
                   {avatarFor(profile.avatarKey)}
                 </span>
-                <span className="text-lg font-bold">{profile.displayName}</span>
+                <span className="w-full break-words text-center type-headline">
+                  {profile.displayName}
+                </span>
               </button>
             ))}
           </div>
 
           {profiles.data?.length === 0 ? (
-            <p className="mt-8 text-center text-sm text-ink-soft">
+            <p className="mt-8 text-center type-body-md text-ink">
               Hier ist noch kein Kinderprofil angelegt.
             </p>
           ) : null}
 
-          <div className="mt-auto pt-10 text-center">
-            <Link to="/login" className="text-sm font-semibold text-ink-soft underline">
-              Ich bin ein Elternteil
-            </Link>
-          </div>
+          <Link to="/login" className="mt-auto pt-12 text-center type-body-md-strong text-ink underline">
+            Ich bin ein Elternteil
+          </Link>
         </>
       ) : (
         <>
-          <div className="mb-6 flex flex-col items-center gap-2">
-            <span className="text-6xl" aria-hidden>
+          <div>
+            <Button
+              type="button"
+              variant="round"
+              size="icon"
+              aria-label="Zurück zur Profilwahl"
+              onClick={() => choose(null)}
+            >
+              <ChevronLeft className="size-6" aria-hidden />
+            </Button>
+          </div>
+
+          <div className="mb-6 flex flex-col items-center gap-2 text-center">
+            <span className="type-emoji" aria-hidden>
               {avatarFor(selected.avatarKey)}
             </span>
-            <h1 className="text-xl font-bold">Hallo, {selected.displayName}!</h1>
-            <p className="text-sm text-ink-soft">Gib deine vier Zahlen ein.</p>
+            <h1 className="w-full break-words type-title">Hallo, {selected.displayName}!</h1>
+            <p className="type-body-md text-ink">Gib deine Zahlen ein.</p>
           </div>
 
-          <div className="mb-6 flex justify-center gap-3" aria-label="PIN-Eingabe">
-            {Array.from({ length: PIN_LENGTH }, (_, index) => (
-              <span
-                key={index}
-                className={
-                  index < pin.length
-                    ? 'h-5 w-5 rounded-full bg-brand'
-                    : 'h-5 w-5 rounded-full bg-brand-soft'
-                }
-              />
-            ))}
-          </div>
+          <div className="mt-auto flex flex-col gap-4">
+            <div data-testid="ziffern-punkte" className="flex justify-center gap-4" aria-hidden>
+              {Array.from({ length: PIN_LENGTH }, (_, index) => (
+                <span
+                  key={index}
+                  className={cn(
+                    'size-5 rounded-full',
+                    index < pin.length ? 'bg-primary' : 'border-2 border-border-control',
+                  )}
+                />
+              ))}
+            </div>
+            {/* Leer, solange nach einem Fehler noch nichts eingegeben ist: sonst kaeme
+                "0 Ziffern eingegeben" als zweite Ansage neben der Fehlermeldung.
+                Waehrend der Anmeldung sagt sie das Warten an und zeigt es auch sehenden
+                Kindern (Entscheidung 2026-10-22); die Ziffernanzahl zeigen die Punkte.
+                min-h-lh haelt die Zeile frei, damit die Tasten nicht springen. */}
+            <p className="min-h-lh text-center type-body-md text-ink" role="status">
+              <span className={busy ? undefined : 'sr-only'}>
+                {busy
+                  ? 'Einen Moment …'
+                  : error && pin.length === 0
+                    ? ''
+                    : pin.length === 1
+                      ? '1 Ziffer eingegeben'
+                      : `${pin.length} Ziffern eingegeben`}
+              </span>
+            </p>
 
-          {error ? <ErrorNote message={error} /> : null}
+            {error ? <ErrorNote message={error} /> : null}
 
-          {/* Ziffernfeld im unteren Bildschirmdrittel — mit dem Daumen
-              erreichbar, auch auf einem grossen Tablet. */}
-          <div className="mt-auto grid grid-cols-3 gap-3">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-              <Button
-                key={digit}
-                variant="outline"
-                size="xl"
+            {/* Ziffernfeld im unteren Bildschirmdrittel - mit dem Daumen
+                erreichbar, auch auf einem grossen Tablet. */}
+            <div className="grid grid-cols-3 justify-items-center gap-4">
+              {DIGITS.map((digit) => (
+                <button
+                  key={digit}
+                  ref={digit === '1' ? firstKey : undefined}
+                  type="button"
+                  className={keyClass}
+                  disabled={busy}
+                  onClick={() => press(digit)}
+                >
+                  {digit}
+                </button>
+              ))}
+              <span aria-hidden />
+              <button type="button" className={keyClass} disabled={busy} onClick={() => press('0')}>
+                0
+              </button>
+              <button
+                type="button"
+                aria-label="Letzte Ziffer löschen"
+                className="flex size-20 items-center justify-center rounded-full text-ink transition active:scale-95 disabled:opacity-50"
                 disabled={busy}
-                onClick={() => press(digit)}
+                onClick={removeLast}
               >
-                {digit}
-              </Button>
-            ))}
-            <Button
-              variant="ghost"
-              size="xl"
-              onClick={() => {
-                setSelected(null)
-                setPin('')
-                setError(null)
-              }}
-            >
-              Zurück
-            </Button>
-            <Button variant="outline" size="xl" disabled={busy} onClick={() => press('0')}>
-              0
-            </Button>
-            <Button
-              variant="ghost"
-              size="xl"
-              aria-label="Letzte Ziffer löschen"
-              disabled={busy}
-              onClick={() => setPin(pin.slice(0, -1))}
-            >
-              <Delete className="h-6 w-6" />
-            </Button>
+                <Delete className="size-8" aria-hidden />
+              </button>
+            </div>
           </div>
         </>
       )}
-    </div>
+    </main>
   )
 }

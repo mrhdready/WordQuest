@@ -169,6 +169,72 @@ public sealed class StreakRulesTests
         Assert.Equal(GamificationProfile.MonthlyStreakSavers, profile.StreakSaversLeft);
     }
 
+    // Angezeigte Serie (FIX-05, D-12): heute ist der 2026-05-10.
+    private static readonly DateOnly Today = new(2026, 5, 10);
+
+    private static GamificationProfile Active(int daysAgo, int saversLeft = 2, string? period = "2026-05") => new()
+    {
+        Id = Guid.NewGuid(),
+        CurrentStreak = 4,
+        LongestStreak = 7,
+        LastActiveDate = Today.AddDays(-daysAgo),
+        StreakSaversLeft = saversLeft,
+        StreakSaverPeriod = period,
+    };
+
+    [Fact]
+    public void CurrentStreakIsZeroWithoutAnyActivity()
+    {
+        Assert.Equal(0, StreakRules.CurrentStreak(NewProfile(), Today));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void CurrentStreakKeepsTheStreakWhenActiveTodayOrYesterday(int daysAgo)
+    {
+        Assert.Equal(4, StreakRules.CurrentStreak(Active(daysAgo), Today));
+    }
+
+    [Fact]
+    public void CurrentStreakKeepsTheStreakAfterOneMissedDayWithASaverLeft()
+    {
+        Assert.Equal(4, StreakRules.CurrentStreak(Active(2, saversLeft: 1), Today));
+    }
+
+    [Fact]
+    public void CurrentStreakIsZeroAfterOneMissedDayWithoutASaver()
+    {
+        Assert.Equal(0, StreakRules.CurrentStreak(Active(2, saversLeft: 0), Today));
+    }
+
+    [Fact]
+    public void CurrentStreakCountsTheRefillOfANewMonth()
+    {
+        // Zuletzt am 30. Mai, heute der 1. Juni: Der Juni bringt neue Retter mit.
+        GamificationProfile profile = Active(2, saversLeft: 0, period: "2026-05");
+        profile.LastActiveDate = new DateOnly(2026, 5, 30);
+
+        Assert.Equal(4, StreakRules.CurrentStreak(profile, new DateOnly(2026, 6, 1)));
+    }
+
+    [Fact]
+    public void CurrentStreakIsZeroAfterTwoMissedDays()
+    {
+        Assert.Equal(0, StreakRules.CurrentStreak(Active(3), Today));
+    }
+
+    [Fact]
+    public void CurrentStreakChangesNothing()
+    {
+        GamificationProfile profile = Active(3, saversLeft: 0, period: "2026-04");
+        string before = System.Text.Json.JsonSerializer.Serialize(profile);
+
+        StreakRules.CurrentStreak(profile, Today);
+
+        Assert.Equal(before, System.Text.Json.JsonSerializer.Serialize(profile));
+    }
+
     [Fact]
     public void ADateGoingBackwardsDoesNotDamageTheStreak()
     {

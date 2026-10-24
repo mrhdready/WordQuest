@@ -1,0 +1,775 @@
+import { expect, test, type Locator, type Page } from '@playwright/test'
+import { checkPage, expectDialogContrast, expectNoAxeViolations } from './axe'
+import { guardianStorageState } from './global-setup'
+import {
+  accessToken,
+  canvasPicture,
+  decodePicture,
+  entryIdOf,
+  putPicture,
+  storedPicture,
+  webpChunks,
+  withExif,
+} from './pictures'
+
+test.use({ storageState: guardianStorageState })
+
+interface FocusStep {
+  name: string
+  href: string | null
+  inBar: boolean
+  bottom: number
+  barTop: number
+  startBottom: number | null
+}
+
+// Tab von Dokumentanfang bis zum Ende; je Schritt Name, Ziel und Lage zur Leiste.
+async function walkTabOrder(page: Page): Promise<FocusStep[]> {
+  const steps: FocusStep[] = []
+  for (let index = 0; index < 80; index += 1) {
+    await page.keyboard.press('Tab')
+    const step = await page.evaluate(() => {
+      const element = document.activeElement
+      if (!element || element === document.body) return null
+      const bar = document.querySelector('nav[aria-label="Bereiche"]')?.parentElement
+      return {
+        name: (element.getAttribute('aria-label') ?? element.textContent ?? '').trim(),
+        href: element.getAttribute('href'),
+        inBar: bar?.contains(element) ?? false,
+        bottom: element.getBoundingClientRect().bottom,
+        barTop: bar?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+        startBottom: element.hasAttribute('data-start-bottom')
+          ? Number(element.getAttribute('data-start-bottom'))
+          : null,
+      }
+    })
+    if (!step) break
+    steps.push(step)
+  }
+  return steps
+}
+
+// WCAG 2.4.11: kein per Tab fokussiertes Element liegt unter der schwebenden Leiste.
+// Bei Scroll 0 merkt sich jedes Element seine Unterkante; mindestens ein Ziel muss
+// dort unter der Leiste beginnen, sonst prueft der Test nur den trivialen Fall.
+async function expectFocusNotObscured(page: Page) {
+  await page.setViewportSize({ width: 320, height: 568 })
+  const startBarTop = await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    for (const element of document.querySelectorAll('main *')) {
+      element.setAttribute('data-start-bottom', String(element.getBoundingClientRect().bottom))
+    }
+    const bar = document.querySelector('nav[aria-label="Bereiche"]')?.parentElement
+    return bar?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY
+  })
+  const steps = await walkTabOrder(page)
+  const inContent = steps.filter((entry) => !entry.inBar)
+  const coveredAtStart = inContent.filter((entry) => (entry.startBottom ?? 0) > startBarTop)
+  expect(coveredAtStart.length, 'kein Ziel lag bei Scroll 0 unter der Leiste').toBeGreaterThan(0)
+  for (const step of inContent) {
+    expect(step.bottom, `"${step.name}" unter der Tab-Leiste`).toBeLessThanOrEqual(step.barTop)
+  }
+}
+
+test('/verwalten: axe 0', async ({ page }) => {
+  await page.goto('/verwalten')
+  await expect(page.getByRole('main')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Bereiche' })).toBeVisible()
+  await checkPage(page)
+})
+
+test('Tab-Reihenfolge: Kopf, Inhalt, Tabs, "+"', async ({ page }) => {
+  await page.goto('/verwalten')
+  await expect(page.locator('main a[href^="/verwalten/sets/"]').first()).toBeVisible()
+  const steps = await walkTabOrder(page)
+  const names = steps.map((step) => step.name)
+
+  const logout = names.indexOf('Abmelden')
+  const firstSet = steps.findIndex((step) => step.href?.startsWith('/verwalten/sets/'))
+  const vocabTab = names.indexOf('Vokabeln')
+  const plus = names.indexOf('Neues Set')
+  expect(logout, names.join(' | ')).toBeGreaterThanOrEqual(0)
+  expect(firstSet, names.join(' | ')).toBeGreaterThan(logout)
+  expect(vocabTab, names.join(' | ')).toBeGreaterThan(firstSet)
+  expect(plus, names.join(' | ')).toBeGreaterThan(vocabTab)
+
+  await expect(page.getByRole('link', { name: 'Vokabeln', exact: true })).toHaveAttribute('aria-current', 'page')
+})
+
+test('Fokus nicht verdeckt bei 320 px', async ({ page }) => {
+  // Mit offenem Formular reicht die Set-Liste bei 320 x 568 unter die Leiste.
+  await page.goto('/verwalten?neu=1')
+  await expect(page.locator('main a[href^="/verwalten/sets/"]').first()).toBeVisible()
+  await expectFocusNotObscured(page)
+})
+
+// 640 px (= 200 % Zoom) prueft keyboard-zoom.spec.ts fuer alle Phase-1-Seiten.
+
+test('"+" öffnet das Set-Formular', async ({ page }) => {
+  await page.goto('/verwalten')
+  await page.getByRole('link', { name: 'Neues Set' }).click()
+  await expect(page).toHaveURL(/[?&]neu=1/)
+  await expect(page.locator('main form input').first()).toBeFocused()
+  await checkPage(page)
+})
+
+async function openFirstSet(page: Page) {
+  await page.goto('/verwalten')
+  await page.locator('main a[href^="/verwalten/sets/"]').first().click()
+  await expect(page.getByRole('link', { name: 'Alle Sets' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /löschen$/ }).first()).toBeVisible()
+}
+
+test('Set-Detail: axe 0, Fokus nicht verdeckt', async ({ page }) => {
+  await openFirstSet(page)
+  await checkPage(page)
+  await expectFocusNotObscured(page)
+})
+
+test('Eintrag-Formular: unvollständig sendet nichts, Enter und Knopf legen je einen an', async ({ page }) => {
+  const posts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/api\/v1\/sets\/[^/]+\/entries$/.test(request.url())) {
+      posts.push(request.url())
+    }
+  })
+  await openFirstSet(page)
+  const german = page.getByLabel('Deutsch', { exact: true })
+  const english = page.getByLabel('Englisch', { exact: true })
+  const stamp = Date.now()
+
+  // 1: nur Englisch
+  await english.fill(`nur-englisch-${stamp}`)
+  await english.press('Enter')
+  await expect(page.getByText(`nur-englisch-${stamp}`, { exact: false })).toHaveCount(0)
+  expect(posts).toHaveLength(0)
+  await english.fill('')
+
+  // 2: nur Deutsch
+  await german.fill(`nur-deutsch-${stamp}`)
+  await english.press('Enter')
+  expect(posts).toHaveLength(0)
+
+  // 3: Deutsch nur Leerzeichen, ueber den Knopf
+  const add = page.getByRole('button', { name: 'Hinzufügen' })
+  await german.fill('   ')
+  await english.fill(`leer-deutsch-${stamp}`)
+  await add.click()
+  expect(posts).toHaveLength(0)
+
+  // 4: Englisch nur Leerzeichen, ueber den Knopf
+  await german.fill(`leer-englisch-${stamp}`)
+  await english.fill('   ')
+  await add.click()
+  expect(posts).toHaveLength(0)
+
+  // Happy Path zuletzt: beide Felder, einmal Enter im Feld Englisch, einmal der Knopf.
+  // Die Endzahl 2 belegt zugleich, dass die Faelle 1 bis 4 nichts gesendet haben.
+  for (const submit of [() => english.press('Enter'), () => add.click()]) {
+    const word = `word${posts.length}-${stamp}`
+    await german.fill(`Wort${posts.length}-${stamp}`)
+    await english.fill(word)
+    const created = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().endsWith('/entries'),
+    )
+    await submit()
+    expect((await created).status()).toBe(201)
+    await expect(page.getByText(word)).toBeVisible()
+  }
+  expect(posts).toHaveLength(2)
+})
+
+// Ab sm stehen Felder und Button nebeneinander; der Button sitzt unten buendig mit den Feldern.
+test('Erfassung: „Hinzufügen“ unten bündig mit den Feldern', async ({ page }) => {
+  await openFirstSet(page)
+  const field = (await page.getByLabel('Deutsch', { exact: true }).boundingBox())!
+  const button = (await page.getByRole('button', { name: 'Hinzufügen' }).boundingBox())!
+  expect(Math.abs(field.y + field.height - (button.y + button.height))).toBeLessThanOrEqual(1)
+})
+
+test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
+  await openFirstSet(page)
+  await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()
+
+  // Zustand geöffnet: leeres Textfeld, "Vorschau" deaktiviert
+  await expect(page.getByRole('button', { name: 'Vorschau' })).toBeDisabled()
+  await checkPage(page)
+
+  // Fehlerzustand Vorschau: Server antwortet mit 500, der deutsche Allgemeintext erscheint
+  const stamp = Date.now()
+  await page.locator('textarea').fill(`Haus${stamp};house${stamp}\nohneTrennzeichen`)
+  const previewUrl = '**/api/v1/sets/import/preview'
+  await page.route(previewUrl, (route) => route.fulfill({ status: 500, body: '' }))
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await checkPage(page)
+  await page.unroute(previewUrl)
+
+  // Zustand Vorschau: eine gültige Zeile, eine ohne Trennzeichen
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText('1 erkannt')).toBeVisible()
+  await expect(page.getByText('1 übersprungen')).toBeVisible()
+  await expect(page.getByText('Zeile hat keine zwei befüllten Spalten.')).toBeVisible()
+  // Die Problemzeile nennt das betroffene Wort, nicht nur Grund und Nummer.
+  await expect(page.getByRole('region', { name: 'Vorschau' }).getByText('ohneTrennzeichen')).toBeVisible()
+  await checkPage(page)
+
+  // Fehlerzustand: Server antwortet beim Übernehmen mit 500, der Text kommt aus ApiError.message
+  const importUrl = '**/api/v1/sets/*/import'
+  await page.route(importUrl, (route) => route.fulfill({ status: 500, body: '' }))
+  await page.getByRole('button', { name: '1 Vokabel übernehmen' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await checkPage(page)
+
+  // Happy Path zuletzt: Route entfernen, erneut übernehmen
+  await page.unroute(importUrl)
+  await page.getByRole('button', { name: '1 Vokabel übernehmen' }).click()
+  await expect(page.getByRole('button', { name: 'Vorschau' })).toHaveCount(0)
+  await expect(page.getByText(`house${stamp}`)).toBeVisible()
+})
+
+// Datei statt Text: Windows-1252 wie aus Excel unter Windows, gelesen nur im Browser.
+test('CSV-Import: Datei wählen, Vorschau', async ({ page }) => {
+  await openFirstSet(page)
+  await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()
+  await expect(page.getByRole('button', { name: 'Datei wählen' })).toBeVisible()
+  const stamp = Date.now()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'vokabeln.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(`L\xf6we${stamp};lion${stamp}`, 'latin1'),
+  })
+  await expect(page.getByRole('status')).toHaveText('Die Datei „vokabeln.csv“ ist eingelesen.')
+  await expect(page.locator('textarea')).toHaveValue(`Löwe${stamp};lion${stamp}`)
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText('1 erkannt')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Vorschau' }).getByText(`Löwe${stamp} → lion${stamp}`)).toBeVisible()
+  await checkPage(page)
+})
+
+// WCAG 1.4.10: die Vorschau-Liste scrollt bei 320 px nur senkrecht. Gueltige Zeile
+// und Problemzeile (201 Zeichen) je mit einem Wort ohne Trennstelle.
+test('CSV-Vorschau bei 320 px mit langem Wort ohne Trennstelle', async ({ page }) => {
+  await openFirstSet(page)
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()
+  const tooLong = 'x'.repeat(201)
+  await page.locator('textarea').fill(`${longWord};${longWord}\n${tooLong};dog`)
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  const region = page.getByRole('region', { name: 'Vorschau' })
+  await expect(region.getByText('Ein Wort darf höchstens 200 Zeichen lang sein.')).toBeVisible()
+  expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth), 'Vorschau scrollt waagerecht').toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  // Das Wort der Problemzeile steht da und bricht um.
+  const word = region.getByText(tooLong)
+  await expect(word).toBeVisible()
+  expect(await word.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+  await checkPage(page)
+})
+
+// Eigene Sets beginnen mit "Zz E2E": sie stehen am Ende der sortierten Liste,
+// openFirstSet und die anderen Specs oeffnen weiter ein Demo-Set.
+async function createAndOpenSet(page: Page, title: string) {
+  await page.goto('/verwalten?neu=1')
+  await page.getByLabel('Titel').fill(title)
+  await page.getByRole('button', { name: 'Anlegen' }).click()
+  await page.getByRole('link').filter({ hasText: title }).click()
+  await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+}
+
+test('Set umbenennen', async ({ page }) => {
+  const title = `Zz E2E Umbenennen ${Date.now()}`
+  const renamed = `${title} neu`
+  await createAndOpenSet(page, title)
+
+  const trigger = page.getByRole('button', { name: 'Umbenennen' })
+  await trigger.click()
+  const dialog = page.getByRole('dialog', { name: 'Set umbenennen' })
+  const field = dialog.getByLabel('Titel')
+  await expect(field).toBeFocused()
+  await expect(field).toHaveValue(title)
+
+  // Serverfehler nach Klick auf "Speichern": Fokus bleibt im Dialog, auf "Abbrechen" (WR-03).
+  const patchUrl = '**/api/v1/sets/*'
+  await page.route(patchUrl, (route) =>
+    route.request().method() === 'PATCH' ? route.fulfill({ status: 500, body: '' }) : route.fallback(),
+  )
+  await dialog.getByRole('button', { name: 'Speichern' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.unroute(patchUrl)
+
+  await field.fill(renamed)
+  await field.press('Enter')
+
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 2, name: renamed })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Der neue Titel ist gespeichert.' })).toBeVisible()
+  await expect(trigger).toBeFocused()
+  await page.goto('/verwalten')
+  await expect(page.getByRole('link').filter({ hasText: renamed })).toBeVisible()
+})
+
+test('Set löschen', async ({ page }) => {
+  const title = `Zz E2E Löschen ${Date.now()}`
+  await createAndOpenSet(page, title)
+  await page.getByLabel('Deutsch', { exact: true }).fill('Hund')
+  await page.getByLabel('Englisch', { exact: true }).fill('dog')
+  await page.getByRole('button', { name: 'Hinzufügen' }).click()
+  await expect(page.getByText('Hund → dog')).toBeVisible()
+
+  const trigger = page.getByRole('button', { name: 'Set löschen' })
+  const dialog = page.getByRole('alertdialog', { name: `Set „${title}“ löschen?` })
+  await trigger.click()
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toHaveAccessibleDescription(
+    'Alle Vokabeln dieses Sets und der Lernstand aller Kinder dazu werden gelöscht. Das lässt sich nicht rückgängig machen.',
+  )
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 2, name: title })).toBeVisible()
+  await expect(trigger).toBeFocused()
+
+  await trigger.click()
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(page).toHaveURL(/\/verwalten$/)
+  await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
+  await expect(page.getByRole('link').filter({ hasText: title })).toHaveCount(0)
+})
+
+// Eigene Vokabel ueber die Erfassung, damit die Demo-Sets unberuehrt bleiben.
+async function addEntry(page: Page, source: string, target: string) {
+  await page.getByLabel('Deutsch', { exact: true }).fill(source)
+  await page.getByLabel('Englisch', { exact: true }).fill(target)
+  await page.getByRole('button', { name: 'Hinzufügen' }).click()
+  await expect(page.getByText(`${source} → ${target}`)).toBeVisible()
+}
+
+test('Vokabel bearbeiten', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bearbeiten ${Date.now()}`)
+  await addEntry(page, 'Hnud', 'dgo')
+
+  await page.getByRole('button', { name: 'Hnud bearbeiten' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const german = dialog.getByLabel('Deutsch')
+  const english = dialog.getByLabel('Englisch')
+  await expect(german).toBeFocused()
+  await expect(german).toHaveValue('Hnud')
+
+  // Serverfehler nach Klick auf "Speichern": Fokus bleibt im Dialog, auf "Abbrechen" (WR-03).
+  const putUrl = '**/api/v1/sets/*/entries/*'
+  await page.route(putUrl, (route) =>
+    route.request().method() === 'PUT' ? route.fulfill({ status: 500, body: '' }) : route.fallback(),
+  )
+  await dialog.getByRole('button', { name: 'Speichern' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.unroute(putUrl)
+
+  await german.fill('Hund')
+  await english.fill('dog')
+  await english.press('Enter')
+
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Hund → dog')).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Die Vokabel ist gespeichert.' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hund bearbeiten' })).toBeFocused()
+})
+
+test('Vokabel löschen', async ({ page }) => {
+  const title = `Zz E2E Vokabel löschen ${Date.now()}`
+  await createAndOpenSet(page, title)
+  await addEntry(page, 'Hund', 'dog')
+  await addEntry(page, 'Katze', 'cat')
+
+  const trigger = page.getByRole('button', { name: 'Katze löschen' })
+  const dialog = page.getByRole('alertdialog', { name: '„Katze“ löschen?' })
+  await trigger.click()
+  await expect(dialog).toHaveAccessibleDescription(
+    'Der Lernstand aller Kinder zu dieser Vokabel wird mit gelöscht. Das lässt sich nicht rückgängig machen.',
+  )
+  await expect(dialog.getByRole('button', { name: 'Abbrechen' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Katze → cat')).toBeVisible()
+  await expect(trigger).toBeFocused()
+
+  await trigger.click()
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('Katze → cat')).toHaveCount(0)
+  await expect(page.getByText('Hund → dog')).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: '„Katze“ ist gelöscht.' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: title })).toBeFocused()
+})
+
+// IMG-01, D-03, D-12: Bild per PUT, nach dem Neuladen steht es als data-URL in der Zeile.
+test('Vorschaubild in der Vokabelliste', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Vorschaubild ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+  const entryId = await entryIdOf(page, setId, 'Hund')
+  const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
+  const version = await putPicture(page, setId, entryId, png, 'image/png')
+
+  await page.reload()
+  const row = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..')
+  const image = row.getByTestId('vokabelbild').locator('img')
+  await expect(image).toBeVisible()
+  await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/)
+  await expect(image).toHaveAttribute('alt', '')
+  expect(await image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+
+  // T-03.1.1-03, -05 (D-09): ueber nginx nur mit Anmeldung, Bild-Typ, nosniff und no-store.
+  const url = `/api/v1/pictures/${version}`
+  const withToken = await page.request.get(url, { headers: { Authorization: `Bearer ${await accessToken(page)}` } })
+  expect(withToken.status()).toBe(200)
+  const headers = withToken.headers()
+  expect(headers['content-type']).toBe('image/png')
+  expect(headers['x-content-type-options']).toBe('nosniff')
+  expect(headers['cache-control']).toContain('no-store')
+  expect((await page.request.get(url)).status()).toBe(401)
+
+  await checkPage(page)
+
+  // D-13: Unter Kontrolle des Service Workers liegt das Bild nur in wq-api, das Abmelden leert.
+  if (!(await page.evaluate(() => navigator.serviceWorker.controller !== null))) await page.reload()
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true)
+  await page.reload()
+  await expect(image).toBeVisible()
+  const cachedIn = () =>
+    page.evaluate(async (path) => {
+      const names: string[] = []
+      for (const name of await caches.keys()) {
+        const keys = await (await caches.open(name)).keys()
+        if (keys.some((request) => new URL(request.url).pathname === path)) names.push(name)
+      }
+      return names
+    }, url)
+  await expect.poll(cachedIn).toEqual(['wq-api'])
+})
+
+// Kanaltoleranz 40: WebP und JPEG sind verlustbehaftet.
+function expectColor(actual: number[], expected: number[]) {
+  expected.forEach((channel, index) => expect(Math.abs((actual[index] ?? -999) - channel)).toBeLessThanOrEqual(40))
+}
+
+// IMG-01, D-03 bis D-05, T-03.1.1-08: Der Browser dreht nach EXIF, verkleinert und kodiert neu;
+// gespeichert ist ein WebP im Hochformat ohne Kamera-Metadaten.
+test('Vokabelbild per Tastatur wählen: verkleinert, ohne EXIF, sofort in der Liste', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bild wählen ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+
+  // Fixture zuerst pruefen: EXIF ist drin, und der Browser dreht sie um 90 Grad im
+  // Uhrzeigersinn ins Hochformat (Orientierung 6): links Rot wird oben Rot.
+  const photo = withExif(await canvasPicture(page, { type: 'image/jpeg', width: 40, height: 20 }))
+  expect(photo.includes('Exif')).toBe(true)
+  const turned = await decodePicture(page, photo)
+  expect(turned).toMatchObject({ width: 20, height: 40 })
+  expectColor(turned.top, [255, 0, 0])
+  expectColor(turned.bottom, [0, 0, 255])
+
+  await page.getByRole('button', { name: 'Hund bearbeiten' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const choose = dialog.getByRole('button', { name: 'Bild wählen' })
+  // Frueh lauschen: Playwright schaltet das Abfangen der Dateiauswahl asynchron ein, ein
+  // einzelner Tastendruck direkt danach kann es ueberholen (gemessen: 6 von 8 Laeufen).
+  const chooser = page.waitForEvent('filechooser')
+  // Tastaturweg ab dem Startfokus: Deutsch, Englisch, Abbrechen, Speichern, Bild wählen.
+  await expect(dialog.getByLabel('Deutsch')).toBeFocused()
+  for (let step = 0; step < 4; step += 1) await page.keyboard.press('Tab')
+  await expect(choose).toBeFocused()
+  await page.keyboard.press('Enter')
+  await (await chooser).setFiles({ name: 'hund.jpg', mimeType: 'image/jpeg', buffer: photo })
+
+  await expect(dialog.getByRole('status')).toHaveText('Das Bild ist gespeichert.')
+  const preview = dialog.getByRole('img', { name: 'Bild zu „Hund“' })
+  await expect(preview).toBeVisible()
+  expect(await preview.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+  await expect(choose).toBeFocused()
+
+  // Chromium schreibt das erweiterte Format (VP8X), das EXIF- und XMP-Chunks tragen kann:
+  // deshalb die Chunks selbst und die Flags in VP8X pruefen, nicht nur den Text "Exif".
+  const stored = await storedPicture(page, setId, 'Hund')
+  expect(stored.subarray(0, 4).toString('latin1')).toBe('RIFF')
+  expect(stored.subarray(8, 15).toString('latin1')).toBe('WEBPVP8')
+  const chunks = webpChunks(stored)
+  test.info().annotations.push({ type: 'WebP-Chunks', description: chunks.join(', ') })
+  expect(chunks).not.toContain('EXIF')
+  expect(chunks).not.toContain('XMP ')
+  // VP8X-Flags: 0x08 EXIF, 0x04 XMP.
+  if (chunks[0] === 'VP8X') expect(stored[20]! & 0x0c).toBe(0)
+  expect(stored.includes('Exif')).toBe(false)
+  // Ohne Auswertung von Metadaten dekodiert: die Drehung steckt in den Pixeln.
+  const raw = await decodePicture(page, stored, 'none')
+  expect(raw).toMatchObject({ width: 20, height: 40 })
+  expectColor(raw.top, [255, 0, 0])
+  expectColor(raw.bottom, [0, 0, 255])
+
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  const row = page.getByRole('button', { name: 'Hund bearbeiten' }).locator('..')
+  await expect(row.getByTestId('vokabelbild').locator('img')).toBeVisible()
+})
+
+async function chooseInDialog(page: Page, sourceText: string, file: { name: string; mimeType: string; buffer: Buffer }) {
+  await page.getByRole('button', { name: `${sourceText} bearbeiten` }).click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  const choose = dialog.getByRole('button', { name: 'Bild wählen' })
+  const chooser = page.waitForEvent('filechooser')
+  await choose.click()
+  await (await chooser).setFiles(file)
+  return { dialog, choose }
+}
+
+// D-08, T-03.1.1-04: nginx bleibt bei 1 MB und antwortet darueber selbst mit HTML;
+// die App zeigt trotzdem den deutschen Text des Endpoints.
+test('Zu großes Bild: 413 von nginx mit deutschem Text', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bild zu groß ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+  const entryId = await entryIdOf(page, setId, 'Hund')
+  const huge = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(1_572_864 - 6), Buffer.from([0xff, 0xd9])])
+  expect(huge.length).toBe(1_572_864)
+
+  const direct = await page.request.put(`/api/v1/sets/${setId}/entries/${entryId}/picture`, {
+    headers: { Authorization: `Bearer ${await accessToken(page)}`, 'Content-Type': 'image/jpeg' },
+    data: huge,
+  })
+  expect(direct.status()).toBe(413)
+  expect(direct.headers()['content-type']).toMatch(/^text\/html/)
+
+  // Der Dialog schickt ein kleines Bild; unterwegs wird der Body auf 1,5 MB vergroessert.
+  const pictureUrl = '**/api/v1/sets/*/entries/*/picture'
+  await page.route(pictureUrl, (route) =>
+    route.request().method() === 'PUT' ? route.continue({ postData: huge }) : route.fallback(),
+  )
+  const png = await canvasPicture(page, { type: 'image/png', width: 64, height: 32 })
+  const { dialog, choose } = await chooseInDialog(page, 'Hund', { name: 'hund.png', mimeType: 'image/png', buffer: png })
+  await expect(dialog.getByRole('alert')).toHaveText('Das Bild ist zu groß. Erlaubt sind höchstens 300 KB.')
+  await expect(choose).toBeFocused()
+  await expect(dialog.getByRole('img')).toHaveCount(0)
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.unroute(pictureUrl)
+})
+
+// Review L-4: der echte Browser lehnt eine PDF beim Dekodieren ab; es geht nichts hoch.
+test('Keine Bilddatei: PDF zeigt deutschen Text, kein Upload', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Bild PDF ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const puts: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().endsWith('/picture')) puts.push(request.url())
+  })
+  const pdf = Buffer.from('%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n', 'latin1')
+  const { dialog, choose } = await chooseInDialog(page, 'Hund', { name: 'liste.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Diese Datei lässt sich nicht als Bild öffnen. Wähle ein Foto oder ein anderes Bild aus.',
+  )
+  await expect(choose).toBeFocused()
+  expect(puts).toEqual([])
+})
+
+// D-04 (Review MEDIUM, Codex 03.1.1-02): echtes Verkleinern im Browser, nicht nur gemockt.
+test('Großes Foto wird auf 512 px verkleinert', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E großes Foto ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const setId = page.url().split('/').pop() ?? ''
+  const photo = await canvasPicture(page, { type: 'image/jpeg', width: 2000, height: 1000 })
+
+  const { dialog } = await chooseInDialog(page, 'Hund', { name: 'gross.jpg', mimeType: 'image/jpeg', buffer: photo })
+  await expect(dialog.getByRole('status')).toHaveText('Das Bild ist gespeichert.')
+
+  const decoded = await decodePicture(page, await storedPicture(page, setId, 'Hund'))
+  expect(Math.abs(decoded.width - 512)).toBeLessThanOrEqual(1)
+  expect(Math.abs(decoded.height - 256)).toBeLessThanOrEqual(1)
+  // Links rot, rechts blau: weder gedreht noch gespiegelt.
+  expectColor(decoded.left, [255, 0, 0])
+  expectColor(decoded.right, [0, 0, 255])
+})
+
+// D-09: beide Dialoge offen (Umbenennen mit Fehlertext) und die Set-Liste mit Erfolgsmeldung.
+test('Set-Dialoge barrierefrei', async ({ page }) => {
+  const title = `Zz E2E Barrierefrei ${Date.now()}`
+  await createAndOpenSet(page, title)
+  await checkPage(page)
+
+  await page.getByRole('button', { name: 'Umbenennen' }).click()
+  const rename = page.getByRole('dialog', { name: 'Set umbenennen' })
+  await rename.getByLabel('Titel').fill('')
+  await rename.getByRole('button', { name: 'Speichern' }).click()
+  await expect(rename.getByText('Ein Set braucht einen Titel.')).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.keyboard.press('Escape')
+  await expect(rename).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Set löschen' }).click()
+  const confirm = page.getByRole('alertdialog', { name: `Set „${title}“ löschen?` })
+  await expect(confirm).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await confirm.getByRole('button', { name: 'Endgültig löschen' }).click()
+
+  await expect(page).toHaveURL(/\/verwalten$/)
+  await expect(page.getByRole('status').filter({ hasText: `Das Set „${title}“ ist gelöscht.` })).toBeVisible()
+  await checkPage(page)
+})
+
+// Text bricht um statt abgeschnitten zu werden, kein waagerechtes Scrollen (WCAG 1.4.10).
+async function expectWraps(page: Page, locator: Locator, text: string) {
+  await expect(locator).toBeVisible()
+  expect(await locator.textContent()).toBe(text)
+  expect(await locator.evaluate((element) => element.scrollWidth <= element.clientWidth), text).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+}
+
+// Unguenstigster Fall (UI-SPEC long-text): 200 Zeichen ohne Leerzeichen in Kopf, Dialogtitel und Erfolgsmeldung.
+test('Langer Set-Titel bei 320 px', async ({ page }) => {
+  const stamp = `ZzE2E${Date.now()}`
+  const long = stamp + 'x'.repeat(200 - stamp.length)
+  await createAndOpenSet(page, `Zz E2E Lang ${Date.now()}`)
+  await page.getByRole('button', { name: 'Umbenennen' }).click()
+  await page.getByLabel('Titel').fill(long)
+  await page.getByLabel('Titel').press('Enter')
+  const heading = page.getByRole('heading', { level: 2, name: long })
+  await expect(heading).toBeVisible()
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await expectWraps(page, heading, long)
+  await page.getByRole('button', { name: 'Set löschen' }).click()
+  const dialog = page.getByRole('alertdialog', { name: `Set „${long}“ löschen?` })
+  await expectWraps(page, dialog.getByRole('heading', { level: 2 }), `Set „${long}“ löschen?`)
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expect(page).toHaveURL(/\/verwalten$/)
+  await expectWraps(page, page.getByRole('status').filter({ hasText: 'ist gelöscht.' }), `Das Set „${long}“ ist gelöscht.`)
+})
+
+// D-09: beide Vokabel-Dialoge offen (Bearbeiten mit zwei Fehlertexten), danach Erfolgsmeldung ueber dem Leerzustand.
+test('Vokabel-Dialoge barrierefrei', async ({ page }) => {
+  await createAndOpenSet(page, `Zz E2E Vokabeln ${Date.now()}`)
+  await addEntry(page, 'Hund', 'dog')
+  const edit = page.getByRole('button', { name: 'Hund bearbeiten' })
+  const remove = page.getByRole('button', { name: 'Hund löschen' })
+  for (const button of [edit, remove]) {
+    const box = await button.boundingBox()
+    expect([box!.width, box!.height]).toEqual([48, 48])
+  }
+  // Stift vor Papierkorb
+  expect((await edit.boundingBox())!.x).toBeLessThan((await remove.boundingBox())!.x)
+
+  await edit.click()
+  const dialog = page.getByRole('dialog', { name: 'Vokabel bearbeiten' })
+  await dialog.getByLabel('Deutsch').fill('')
+  await dialog.getByLabel('Englisch').fill('')
+  await dialog.getByRole('button', { name: 'Speichern' }).click()
+  await expect(dialog.getByText('Bitte gib das deutsche Wort ein.')).toBeVisible()
+  await expect(dialog.getByText('Bitte gib das englische Wort ein.')).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+
+  await remove.click()
+  const confirm = page.getByRole('alertdialog', { name: '„Hund“ löschen?' })
+  await expect(confirm).toBeVisible()
+  await expectNoAxeViolations(page)
+  await expectDialogContrast(page)
+  await confirm.getByRole('button', { name: 'Endgültig löschen' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: '„Hund“ ist gelöscht.' })).toBeVisible()
+  await expect(page.getByText('Noch keine Vokabeln in diesem Set')).toBeVisible()
+  await checkPage(page)
+})
+
+// Unguenstigster Fall (UI-SPEC long-text): 200 Zeichen ohne Leerzeichen in Zeile, Dialogtitel und Erfolgsmeldung.
+test('Lange Vokabel bei 320 px', async ({ page }) => {
+  const stamp = `ZzE2E${Date.now()}`
+  const long = stamp + 'x'.repeat(200 - stamp.length)
+  await createAndOpenSet(page, `Zz E2E Lange Vokabel ${Date.now()}`)
+  await addEntry(page, long, 'x')
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await expectWraps(page, page.getByText(`${long} → x`), `${long} → x`)
+  await page.getByRole('button', { name: `${long} löschen` }).click()
+  const dialog = page.getByRole('alertdialog', { name: `„${long}“ löschen?` })
+  await expectWraps(page, dialog.getByRole('heading', { level: 2 }), `„${long}“ löschen?`)
+  await dialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await expectWraps(page, page.getByRole('status').filter({ hasText: 'ist gelöscht.' }), `„${long}“ ist gelöscht.`)
+})
+
+test('Fortschritt: axe 0', async ({ page }) => {
+  await page.goto('/verwalten/fortschritt')
+  await expect(page.getByText(/^Level \d+$/)).toBeVisible()
+  await expect(page.getByText('Wörter sitzen sicher', { exact: true })).toBeVisible()
+  await checkPage(page)
+})
+
+// WCAG 1.4.10 mit dem unguenstigsten Inhalt: ein langes Wort ohne Trennstelle als
+// Set-Titel, Vokabel und Kindername. Die API-Antwort wird nur im Feld ersetzt.
+const longWord = 'Donaudampfschifffahrtsgesellschaftskapitaensmuetze'
+
+type Items = Record<string, unknown>[]
+
+async function rewrite(page: Page, url: RegExp, change: (items: Items) => Items) {
+  await page.route(url, async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: change((await response.json()) as Items) })
+  })
+}
+
+test.describe(() => {
+  // Antworten ueber den Service Worker (localhost ist ein sicherer Kontext) sieht
+  // page.route nicht; ohne Worker geht jede Anfrage durch die Umschreibung.
+  test.use({ serviceWorkers: 'block' })
+
+  test('Reflow bei 320 px mit langem Wort ohne Trennstelle', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 })
+    const first = (field: string) => (items: Items) =>
+      items.map((item, index) => (index === 0 ? { ...item, [field]: longWord } : item))
+    await rewrite(page, /\/api\/v1\/sets$/, first('title'))
+    await rewrite(page, /\/api\/v1\/sets\/[^/]+\/entries$/, first('sourceText'))
+    // Namen stehen erst ab zwei Kindern als Auswahl da: ein zweites Kind anhaengen.
+    await rewrite(page, /\/api\/v1\/learners$/, (items) => [
+      ...items,
+      { ...items[0], id: '00000000-0000-0000-0000-000000000001', displayName: longWord },
+    ])
+    for (const path of ['/verwalten', 'set', '/verwalten/fortschritt']) {
+      if (path === 'set') await page.locator('main a[href^="/verwalten/sets/"]').first().click()
+      else await page.goto(path)
+      const word = page.getByText(longWord, { exact: false }).first()
+      await expect(word, path).toBeVisible()
+      // Das Wort selbst bricht um, statt nur unsichtbar abgeschnitten zu werden.
+      const fits = await word.evaluate((element) => element.scrollWidth <= element.clientWidth)
+      expect(fits, `${path}: Wort bricht nicht um`).toBe(true)
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
+      expect(scrollWidth, `${path}: waagerechter Scrollbalken`).toBeLessThanOrEqual(320)
+    }
+  })
+
+  // Codex-Befund 11 (D-14): Ladefehler sichtbar und barrierefrei, auch mit offenem Formular.
+  test('Ladefehler der Set-Liste: Meldung, Formular bleibt, axe 0', async ({ page }) => {
+    // Zwei volle checkPage-Laeufe plus Wiederholung des App-Clients je Aufruf.
+    test.slow()
+    await page.route(/\/api\/v1\/sets$/, (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 500 }) : route.fallback(),
+    )
+    const message = page.getByRole('alert').filter({
+      hasText: 'Das hat nicht geklappt. Versuche es noch einmal.',
+    })
+    await page.goto('/verwalten')
+    // App-Client wiederholt einmal (retry: 1), daher etwas mehr Zeit.
+    await expect(message).toBeVisible({ timeout: 15_000 })
+    await checkPage(page)
+
+    await page.goto('/verwalten?neu=1')
+    await expect(message).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByLabel('Titel')).toBeVisible()
+    await checkPage(page)
+  })
+})
