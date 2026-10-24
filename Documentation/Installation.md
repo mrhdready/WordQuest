@@ -54,7 +54,7 @@ Starte die Einrichtung:
 
 1. das **Image-Präfix**. Drück einfach Enter, dann nimmt es den vorgeschlagenen Wert `ghcr.io/mrhdready/wordquest`. Einen anderen Wert brauchst du nur, wenn du eigene Images baust.
 
-Danach lädt es WordQuest in der Version 1.0.0 und startet es; beim ersten Mal kann das ein paar Minuten dauern. Erst dann fragt es nach:
+Danach lädt es WordQuest in der Version 1.0.1 und startet es; beim ersten Mal kann das ein paar Minuten dauern. Erst dann fragt es nach:
 
 2. der **E-Mail-Adresse** für dein Elternkonto,
 3. dem **Passwort** dafür, zweimal, mindestens 8 Zeichen. Die Eingabe bleibt unsichtbar.
