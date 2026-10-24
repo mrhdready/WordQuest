@@ -46,9 +46,11 @@ cd wordquest
 cp .env.example .env
 ```
 
-In `.env` von Hand eintragen: `COMPOSE_FILE=docker-compose.yml`,
-`WQ_IMAGE_PREFIX`, `WQ_HOST`, `WQ_ACME_EMAIL` und den DNS-Anbieter (siehe
-unten). Danach `./setup.sh`: Es lässt die vorhandene `.env` unverändert,
+In `.env` die vorhandenen Zeilen ändern, nicht neue anhängen (sonst stehen sie
+doppelt da): `COMPOSE_FILE` auf `docker-compose.yml`, dazu `WQ_HOST`,
+`WQ_ACME_EMAIL` sowie `WQ_ACME_DNS_PROVIDER` und das Token des DNS-Anbieters
+(siehe unten). `WQ_IMAGE_PREFIX` ändert nur, wer eigene Images baut. Danach
+`./setup.sh`: Es lässt die vorhandene `.env` unverändert,
 erzeugt die Secrets, startet den Stack und legt auch hier das Elternkonto an.
 WordQuest ist dann unter `https://<WQ_HOST>` erreichbar. Update und
 Wiederherstellen gehen wie auf der Installationsseite, weil `docker compose`
@@ -62,7 +64,7 @@ zeigt per lokalem DNS auf die interne IP, das Zertifikat kommt trotzdem von
 Let's Encrypt, weil die Prüfung über einen DNS-Eintrag läuft und nicht über
 eine von außen erreichbare Adresse.
 
-Dafür in `.env`:
+Dafür in `.env` diese Zeilen ändern:
 
 ```
 WQ_HOST=wordquest.deine-domain.de
