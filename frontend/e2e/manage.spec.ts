@@ -752,6 +752,24 @@ test.describe(() => {
     }
   })
 
+  // WCAG 2.2 SC 1.4.1: Die Demo-Daten haben nur ein Kind, die Kapseln erscheinen erst ab zwei.
+  // Nicht auf das zweite Kind klicken: die erfundene ID hat keine Uebersicht.
+  test('Fortschritt mit zwei Kindern: Haken nur an der Auswahl, axe 0', async ({ page }) => {
+    await rewrite(page, /\/api\/v1\/learners$/, (items) => [
+      ...items,
+      { ...items[0], id: '00000000-0000-0000-0000-000000000002', displayName: 'Lena' },
+    ])
+    await page.goto('/verwalten/fortschritt')
+    await expect(page.getByText(/^Level \d+$/)).toBeVisible()
+    const pressed = page.getByRole('button', { pressed: true })
+    await expect(pressed).toHaveCount(1)
+    await expect(pressed.locator('svg')).toHaveCount(1)
+    const lena = page.getByRole('button', { name: 'Lena', pressed: false })
+    await expect(lena).toBeVisible()
+    await expect(lena.locator('svg')).toHaveCount(0)
+    await checkPage(page)
+  })
+
   // Codex-Befund 11 (D-14): Ladefehler sichtbar und barrierefrei, auch mit offenem Formular.
   test('Ladefehler der Set-Liste: Meldung, Formular bleibt, axe 0', async ({ page }) => {
     // Zwei volle checkPage-Laeufe plus Wiederholung des App-Clients je Aufruf.
