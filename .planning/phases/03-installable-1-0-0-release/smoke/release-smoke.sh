@@ -3,7 +3,7 @@
 # Release-Smoke der Phase 3 (REL-04, REL-03) und 03.1 (D-16): frische
 # Installation aus dem lokal gebauten Release-Paket, so wie Eltern sie ohne Git
 # machen (curl | tar xz, ./setup.sh), mit lokal gebauten Images, die genau so
-# heissen wie die veroeffentlichten (ghcr.io/mrhdready/wordquest-{api,web}:1.0.0).
+# heissen wie die veroeffentlichten (ghcr.io/mrhdready/wordquest-{api,web}:$EXPECTED_VERSION).
 # Paket und Images entstehen aus einer Arbeitskopie des Arbeitsbaums ($WORK/src),
 # das Paket kommt von einem lokalen HTTP-Server (127.0.0.1:18083). Das Update
 # (03.1-06) laedt die Zielimages echt aus einer lokalen Registry (registry:2,
@@ -31,7 +31,7 @@ export COMPOSE_FILE=docker-compose.quick.yml:docker-compose.build.yml
 # setup-smoke.sh): Eine Shell-Variable schlaegt .env, dann pruefte der Smoke
 # die Werte aus .env gar nicht (03-RESEARCH Pitfall 3).
 
-EXPECTED_VERSION=1.0.0
+EXPECTED_VERSION=1.0.1
 EXPECTED_PREFIX=ghcr.io/mrhdready/wordquest
 API_TAG="${EXPECTED_PREFIX}-api:${EXPECTED_VERSION}"
 WEB_TAG="${EXPECTED_PREFIX}-web:${EXPECTED_VERSION}"
@@ -191,7 +191,7 @@ done
 echo "PAKET OK"
 
 echo "== Vorpruefung der lokalen Tags und der Registry"
-# Update (03.1-06): Ziel 1.0.0 kommt aus der lokalen Registry, die alte Version
+# Update (03.1-06): Ziel EXPECTED_VERSION kommt aus der lokalen Registry, die alte Version
 # 0.0.0-smoke liegt nur lokal unter demselben Praefix.
 REG_PREFIX=localhost:18084/wordquest
 OLD_VERSION=0.0.0-smoke
@@ -288,7 +288,7 @@ for script in setup.sh upgrade.sh restore.sh; do
   [[ -f "$script" && -x "$script" ]] || fail "$script fehlt im Paket oder ist nicht ausfuehrbar."
 done
 # Nur fuer den Smoke: Mit dem Build-Overlay gelten api und web als baubar, und
-# pull --ignore-buildable in setup.sh ersetzt die lokal gebauten 1.0.0-Tags
+# pull --ignore-buildable in setup.sh ersetzt die lokal gebauten Tags EXPECTED_VERSION
 # nicht durch veroeffentlichte.
 cp "$SRC/docker-compose.build.yml" .
 # Grossbuchstaben im Praefix werden abgelehnt, danach uebernimmt Enter den Standard.

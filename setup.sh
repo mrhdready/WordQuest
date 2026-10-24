@@ -91,8 +91,26 @@ if ! docker compose pull --ignore-buildable </dev/null; then
   die "Images konnten nicht geladen werden. Stimmt WQ_IMAGE_PREFIX in .env, und sind die Pakete öffentlich?"
 fi
 
+# Ohne COMPOSE_FILE (aeltere .env) nimmt docker compose docker-compose.yml.
+compose_file="${COMPOSE_FILE:-$(env_value COMPOSE_FILE)}"
+port="${WQ_PORT:-$(env_value WQ_PORT)}"
+
 say "Starte WordQuest …"
-docker compose up -d </dev/null
+# Ausgabe mitschreiben: Dockers englische Meldung zum belegten Port laesst Laien ohne Ausweg.
+# Nur in der Heimnetz-Variante hilft WQ_PORT; die Traefik-Variante hat feste Ports 80/443.
+# tee in eine Datei statt Variable: Der Fortschritt bleibt live sichtbar (Warten auf db).
+up_log="$(mktemp)"
+up_status=0
+docker compose up -d </dev/null 2>&1 | tee "$up_log" >&2 || up_status=$?
+port_taken=0
+if grep -qE 'port is already allocated|address already in use' "$up_log"; then port_taken=1; fi
+rm -f "$up_log"
+if (( up_status != 0 )); then
+  if [[ "$port_taken" == 1 && -n "$compose_file" && "$compose_file" != docker-compose.yml* ]]; then
+    die "Der Port ${port:-8080} ist schon belegt. Trage in .env eine Zeile WQ_PORT=9000 ein (oder ändere die vorhandene Zeile WQ_PORT=) und starte ./setup.sh noch einmal."
+  fi
+  exit "$up_status"
+fi
 
 say ""
 say "Warte auf die API …"
@@ -158,14 +176,11 @@ case "$status" in
 esac
 
 # --- Abschluss ---------------------------------------------------------------
-compose_file="${COMPOSE_FILE:-$(env_value COMPOSE_FILE)}"
-# Ohne COMPOSE_FILE (aeltere .env) nimmt docker compose docker-compose.yml.
 if [[ -z "$compose_file" || "$compose_file" == docker-compose.yml* ]]; then
   url="https://$(env_value WQ_HOST)"
 else
   host="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
   host="${host:-$(hostname)}"
-  port="${WQ_PORT:-$(env_value WQ_PORT)}"
   url="http://${host}:${port:-8080}"
 fi
 

@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProgressPage } from '@/features/manage/ProgressPage'
 import { renderWithProviders } from '@/test/render'
@@ -83,5 +84,39 @@ describe('Fortschritt', () => {
     renderWithProviders(<ProgressPage />, { route: '/verwalten/fortschritt', path: '/verwalten/fortschritt' })
     const value = await screen.findByText('2/5')
     expect(value.parentElement?.textContent).toBe('2/5Wörter sitzen sicher')
+  })
+
+  // WCAG 2.2 SC 1.4.1: Die Auswahl darf nicht nur an der Farbe haengen.
+  it('Gewähltes Kind trägt einen Haken, nicht nur eine Farbe (WCAG 1.4.1)', async () => {
+    const overview = {
+      level: 2,
+      levelProgress: 0.5,
+      streak: 0,
+      dueToday: 4,
+      newRemainingToday: 2,
+      cardsMastered: 2,
+      cardsTotal: 5,
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/overview')) return Response.json(overview)
+        if (url.endsWith('/traffic-light')) return Response.json([])
+        return Response.json([
+          { id: 'kind-1', displayName: 'Mia', avatarKey: 'fox' },
+          { id: 'kind-2', displayName: 'Ben', avatarKey: 'fox' },
+        ])
+      }),
+    )
+    renderWithProviders(<ProgressPage />, { route: '/verwalten/fortschritt', path: '/verwalten/fortschritt' })
+
+    const mia = await screen.findByRole('button', { name: 'Mia', pressed: true })
+    expect(mia.querySelector('svg')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Ben', pressed: false }).querySelector('svg')).toBeNull()
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Ben' }))
+
+    expect(screen.getByRole('button', { name: 'Ben', pressed: true }).querySelector('svg')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Mia', pressed: false }).querySelector('svg')).toBeNull()
   })
 })

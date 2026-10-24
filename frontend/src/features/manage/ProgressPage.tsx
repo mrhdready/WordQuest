@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Check } from 'lucide-react'
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge, EmptyState, ErrorNote, Progress, Spinner } from '@/components/ui/misc'
@@ -80,6 +81,8 @@ export function ProgressPage() {
                 {avatarFor(learner.avatarKey)}
               </span>
               <span className="min-w-0 break-words">{learner.displayName}</span>
+              {/* Haken zusaetzlich zur Farbe: Auswahl auch ohne Farbsehen erkennbar (WCAG 1.4.1). */}
+              {learner.id === learnerId ? <Check className="size-5 shrink-0" aria-hidden /> : null}
             </button>
           ))}
         </div>
