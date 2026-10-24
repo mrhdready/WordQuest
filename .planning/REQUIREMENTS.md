@@ -69,6 +69,7 @@
 - **PAR2-01**: Assign sets to individual children
 - **PAR2-02**: JSON export of family data; delete whole family
 - **PAR2-03**: Parent reporting: history over time, problem words, pre-test view, in-app notices
+- **PAR2-04**: Read-only family dashboard for a wall tablet: all children side by side (level, streak, done today), refreshes itself; access via a display link the parent creates and can revoke, not via a parent session
 
 ### Accounts
 
@@ -151,4 +152,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-24 — v2-Kandidaten QA2-01 bis QA2-04 aus der Codebase-Map ergänzt.*
+*Last updated: 2026-10-24 — v2-Kandidaten QA2-01 bis QA2-04 aus der Codebase-Map und PAR2-04 (Tablet-Dashboard) ergänzt.*
