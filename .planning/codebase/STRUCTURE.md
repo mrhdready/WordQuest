@@ -1,166 +1,140 @@
 ---
-last_mapped_commit: 4ce32da23d1c0046c5a7ec201ef058c9a776f2c8
-last_mapped_at: 2026-09-24
+last_mapped_commit: a397d4db9d120da68a269a147900eabb05e0a42e
+last_mapped_at: 2026-10-24
 ---
-# Codebase Structure
+# Codebase-Struktur
 
-**Analysis Date:** 2026-09-24
+**Analysis Date:** 2026-10-24
 
-## Directory Layout
+## Verzeichnislayout
 
 ```
 WordQuest/
-├── .github/workflows/ci.yml     # CI (build, tests, migration check)
-├── Claude outputs/              # Stray AI-generated CI drafts (ci.yml, ci-1.yml), not used
-├── Documentation/               # Concept doc (authoritative) + .docx
-├── backend/
-│   ├── WordQuest.slnx           # Solution
-│   ├── Directory.Build.props    # Shared MSBuild settings
-│   ├── Directory.Packages.props # Central package versions
-│   ├── Dockerfile
+├── backend/                     # .NET 10 Solution (`WordQuest.slnx`, `Dockerfile`, `Directory.Build.props`)
 │   ├── src/
-│   │   ├── WordQuest.Api/                 # Host, endpoints, auth, DTOs
-│   │   ├── WordQuest.Infrastructure/      # EF Core, migrations, seed, LearningService
-│   │   ├── WordQuest.Modules.Identity/    # Tenant, User, LearnerProfile, RefreshToken, hashing
-│   │   ├── WordQuest.Modules.Content/     # VocabularySet/Entry, Card, CSV parser
-│   │   ├── WordQuest.Modules.Learning/    # SM-2, composer, evaluator, game catalog
-│   │   ├── WordQuest.Modules.Gamification/# XP, streak, level rules, profile
-│   │   └── WordQuest.Shared.Kernel/       # Tenant interfaces, Grade
-│   └── tests/WordQuest.Learning.Tests/    # Unit + year-long simulation tests
-├── frontend/
-│   ├── src/
-│   │   ├── features/{auth,learn,manage}/  # Pages per feature
-│   │   ├── components/ui/                 # button, card, input, misc primitives
-│   │   ├── lib/                           # api client, auth context, avatars, utils
-│   │   ├── types.ts                       # API types
-│   │   ├── App.tsx, main.tsx, index.css
-│   ├── public/                  # favicon, PWA icons
-│   ├── vite.config.ts           # Vite + Tailwind + PWA/Workbox
-│   ├── nginx.conf, Dockerfile
-├── docker-compose.yml           # Prod: proxy, web, api, db, backup
-├── docker-compose.{dev,build,quick}.yml
-├── setup.sh                     # Generates secrets / bootstraps
-└── .env.example
+│   │   ├── WordQuest.Api/            # Host, Endpoints, Auth, DTOs, CLI
+│   │   ├── WordQuest.Infrastructure/ # EF Core, Services, Migrationen, Seed
+│   │   ├── WordQuest.Modules.Identity/
+│   │   ├── WordQuest.Modules.Content/
+│   │   ├── WordQuest.Modules.Learning/
+│   │   ├── WordQuest.Modules.Gamification/
+│   │   └── WordQuest.Shared.Kernel/
+│   └── tests/
+│       ├── WordQuest.Api.Tests/      # Integrationstests (WebApplicationFactory + PostgreSQL)
+│       └── WordQuest.Learning.Tests/ # Unit-Tests Domänenlogik
+├── frontend/                    # React 19 + Vite SPA/PWA, nginx-Image
+│   ├── src/{features,components/ui,lib,test}/
+│   ├── e2e/                     # Playwright + axe gegen gebauten Stack
+│   ├── scripts/design-classes.mjs
+│   └── public/                  # Icons
+├── Documentation/               # Maßgebliche Doku (Konzept, Installation, Fragen, archiv/)
+├── .github/                     # CI (`workflows/ci.yml`), `release-package.sh`
+├── .claude/skills/vokabel-csv/  # Projekt-Skill
+├── .planning/                   # GSD-Planung
+├── Claude outputs/              # Lose Ablage (`ci.yml`, `ci-1.yml`)
+├── DESIGN.md                    # Design-Tokens (normativ)
+├── docker-compose{,.quick,.dev,.build}.yml
+├── setup.sh · upgrade.sh · restore.sh
+└── AGENTS.md · README.md · .env.example
 ```
 
-## Directory Purposes
+## Verzeichniszwecke
 
 **`backend/src/WordQuest.Api/`:**
-
-- Purpose: HTTP layer and composition root
-- Contains: `Endpoints/*Endpoints.cs`, `Auth/*`, `Contracts/Contracts.cs`
-- Key files: `Program.cs`
+- Zweck: HTTP-Schicht und Komposition
+- Enthält: `Endpoints/<Bereich>Endpoints.cs`, `Auth/`, `Contracts/Contracts.cs`
+- Schlüsseldateien: `Program.cs`, `AccountCommands.cs`, `SecretCheck.cs`, `DemoAccountCheck.cs`, `Properties/launchSettings.json`
 
 **`backend/src/WordQuest.Infrastructure/`:**
-
-- Purpose: persistence and orchestration
-- Contains: `Configurations/<Module>Configurations.cs`, `Migrations/`, `Seed/DemoDataSeeder.cs`
-- Key files: `WordQuestDbContext.cs`, `LearningService.cs`
+- Zweck: Persistenz + modulübergreifende Services
+- Enthält: `WordQuestDbContext.cs`, `Configurations/<Modul>Configurations.cs`, `Migrations/` (generiert), `Seed/DemoDataSeeder.cs`
+- Schlüsseldateien: `LearningService.cs`, `PictureService.cs`, `AccountService.cs`, `OrphanCleanup.cs`, `TransactionExtensions.cs`, `SystemTenantContext.cs`, `DesignTimeDbContextFactory.cs`
 
 **`backend/src/WordQuest.Modules.<Name>/`:**
+- Zweck: Bounded Context ohne EF/HTTP
+- Enthält: `Entities/` (z. B. `VocabularyEntry.cs`, `ReviewState.cs`, `LearnerProfile.cs`, `GamificationProfile.cs`), `Services/` (Regeln, Algorithmen)
 
-- Purpose: one bounded domain each
-- Contains: `Entities/` (EF-agnostic classes), `Services/` (pure logic, often static)
+**`backend/src/WordQuest.Shared.Kernel/`:**
+- Zweck: Gemeinsame Typen — `Grade.cs`, `ITenantContext.cs`, `ITenantOwned.cs`
 
-**`backend/tests/WordQuest.Learning.Tests/`:**
+**`frontend/src/`:**
+- `features/auth/` (`GuardianLoginPage`, `ProfilePickerPage`), `features/learn/` (`LearnHomePage`, `SessionPage`), `features/manage/` (`ManageLayout`, `SetsPage`, `SetDetailPage`, `ProgressPage`, `ChildrenPage`, `ChildFormPage`, `AccountPage`)
+- `components/ui/`: `button`, `card`, `dialog`, `field`, `input`, `list`, `misc`
+- `lib/`: `api.ts`, `auth.tsx`, `picture.tsx`, `gone.ts`, `avatars.ts`, `utils.ts`
+- `test/`: `render.tsx`, `setup.ts`
+- `types.ts`, `index.css`, `design-tokens.css`, `App.tsx`, `main.tsx`
 
-- Purpose: tests for Learning, Content parser, Gamification
-- Key files: `Sm2SchedulerTests.cs`, `YearLongSimulationTests.cs`
+## Wichtige Dateien
 
-**`frontend/src/features/`:**
+**Einstiegspunkte:**
+- `backend/src/WordQuest.Api/Program.cs`: API-Host
+- `backend/src/WordQuest.Api/AccountCommands.cs`: Konto-CLI
+- `frontend/src/main.tsx`, `frontend/src/App.tsx`: SPA und Routen
 
-- `auth/`: `GuardianLoginPage.tsx`, `ProfilePickerPage.tsx`
-- `learn/`: `LearnHomePage.tsx`, `SessionPage.tsx`
-- `manage/`: `ManageLayout.tsx`, `SetsPage.tsx`, `SetDetailPage.tsx`, `ProgressPage.tsx`
+**Konfiguration:**
+- `backend/src/WordQuest.Api/appsettings.json`, `appsettings.Development.json`
+- `backend/Directory.Build.props`, `backend/Directory.Packages.props` (CPM aus)
+- `frontend/vite.config.ts`, `frontend/eslint.config.js`, `frontend/tsconfig.json`, `frontend/playwright.config.ts`
+- `frontend/nginx.conf`, `nginx-security-headers.conf`, `nginx-traefik-realip.conf`
+- `.env.example` (Vorlage; `.env` nicht lesen)
+- `.github/workflows/ci.yml`
 
-## Key File Locations
-
-**Entry Points:**
-
-- `backend/src/WordQuest.Api/Program.cs`: API host
-- `frontend/src/main.tsx`: React mount; `frontend/src/App.tsx`: routes
-
-**Configuration:**
-
-- `backend/src/WordQuest.Api/appsettings*.json`, `backend/Directory.Packages.props`
-- `frontend/vite.config.ts`, `frontend/tsconfig.json`, `frontend/eslint.config.js`, `.editorconfig`
-- `docker-compose*.yml`, `.env.example` (`.env` not tracked)
-
-**Core Logic:**
-
+**Kernlogik:**
 - `backend/src/WordQuest.Infrastructure/LearningService.cs`
-- `backend/src/WordQuest.Modules.Learning/Services/`
+- `backend/src/WordQuest.Modules.Learning/Services/Sm2Scheduler.cs`, `SessionComposer.cs`, `AnswerEvaluator.cs`
+- `backend/src/WordQuest.Infrastructure/WordQuestDbContext.cs`
 
-**Testing:**
+**Tests:**
+- `backend/tests/WordQuest.Api.Tests/`, `backend/tests/WordQuest.Learning.Tests/`
+- `frontend/src/**/*.test.ts(x)` (co-located), `frontend/e2e/*.spec.ts`
 
-- `backend/tests/WordQuest.Learning.Tests/`
+## Namenskonventionen
 
-## Naming Conventions
+**Dateien:**
+- C#: Dateiname = Typname (`LearningService.cs`); Endpoints `<Bereich>Endpoints.cs`; EF-Konfiguration `<Modul>Configurations.cs`
+- React-Seiten: PascalCase + `Page` (`SetDetailPage.tsx`); UI-Primitives/Libs klein (`button.tsx`, `api.ts`)
+- Tests: `<Datei>.test.tsx` neben der Quelle; E2E `<bereich>.spec.ts`
 
-**Files:**
+**Verzeichnisse:**
+- Backend-Projekte `WordQuest.<Schicht>` bzw. `WordQuest.Modules.<Kontext>`; Frontend-Features klein (`auth`, `learn`, `manage`)
 
-- C#: one type per file, PascalCase = type name (`Sm2Scheduler.cs`); endpoint groups `<Resource>Endpoints.cs`; EF configs grouped per module `<Module>Configurations.cs`; tests `<Class>Tests.cs`.
-- React: PascalCase components with `Page`/`Layout` suffix (`SetDetailPage.tsx`); lowercase for `components/ui/*.tsx` and `lib/*.ts`.
+## Wo neuer Code hinkommt
 
-**Directories:**
+**Neue Fachregel:**
+- Code: `backend/src/WordQuest.Modules.<Kontext>/Services/`
+- Tests: `backend/tests/WordQuest.Learning.Tests/`
 
-- Backend projects `WordQuest.<Layer>` / `WordQuest.Modules.<Domain>`; inside: `Entities/`, `Services/`.
-- Frontend features lowercase (`features/manage`). Route paths German (`/lernen`, `/verwalten`, `/fortschritt`).
-
-**Namespaces:** mirror folder (`WordQuest.Modules.Learning.Services`). Frontend imports via `@/` alias.
-
-## Where to Add New Code
-
-**New API endpoint:**
-
-- Route: new or existing `backend/src/WordQuest.Api/Endpoints/<Resource>Endpoints.cs` under `/api/v1/...`, register `app.Map<Resource>Endpoints()` in `Program.cs`
+**Neuer Endpoint:**
+- Route: bestehende `backend/src/WordQuest.Api/Endpoints/<Bereich>Endpoints.cs` bzw. neue Datei + Aufruf in `Program.cs` (nach `MapSessionEndpoints`)
 - DTOs: `backend/src/WordQuest.Api/Contracts/Contracts.cs`
-- Logic beyond CRUD: a scoped service in `backend/src/WordQuest.Infrastructure/`
+- Orchestrierung über mehrere Module/DB: Service in `backend/src/WordQuest.Infrastructure/`, DI in `Program.cs`
+- Tests: `backend/tests/WordQuest.Api.Tests/`
 
-**New entity:**
+**Neue Entität:**
+- Klasse: `backend/src/WordQuest.Modules.<Kontext>/Entities/`, mandantengebunden über `ITenantOwned`
+- DbSet + Filter: `WordQuestDbContext.cs`; Mapping: `Configurations/<Modul>Configurations.cs`
+- Migration per `dotnet ef migrations add` (nie von Hand ändern)
 
-- Class: `backend/src/WordQuest.Modules.<Domain>/Entities/`; implement `ITenantOwned` if user data
-- EF config: `backend/src/WordQuest.Infrastructure/Configurations/<Domain>Configurations.cs`
-- DbSet + `ApplyTenantFilter<T>` in `WordQuestDbContext.cs`
-- Migration: `dotnet ef migrations add <Name>` into `backend/src/WordQuest.Infrastructure/Migrations/` (CI fails on missing migration)
+**Neue Seite / Komponente:**
+- Seite: `frontend/src/features/<bereich>/<Name>Page.tsx` + Route in `frontend/src/App.tsx`
+- UI-Baustein: `frontend/src/components/ui/` (erst `DESIGN.md` prüfen)
+- API-Typen: `frontend/src/types.ts`; Hilfen: `frontend/src/lib/`
+- E2E/axe: `frontend/e2e/`
 
-**New domain rule:**
-
-- `backend/src/WordQuest.Modules.<Domain>/Services/`; tests in `backend/tests/WordQuest.Learning.Tests/`
-
-**New game:**
-
-- Server: entry in `backend/src/WordQuest.Modules.Learning/Services/GameCatalog.cs`
-- Client: currently in `frontend/src/features/learn/SessionPage.tsx` (no registry yet)
-
-**New frontend page:**
-
-- `frontend/src/features/<area>/<Name>Page.tsx`, route in `frontend/src/App.tsx`, API calls via `frontend/src/lib/api.ts`, types in `frontend/src/types.ts`
-
-**Utilities:**
-
-- Frontend: `frontend/src/lib/utils.ts`; UI primitives `frontend/src/components/ui/`
-- Backend cross-module: `backend/src/WordQuest.Shared.Kernel/`
-
-## Special Directories
+## Besondere Verzeichnisse
 
 **`backend/src/WordQuest.Infrastructure/Migrations/`:**
+- Zweck: EF-Migrationen · Generiert: ja · Committet: ja
 
-- Purpose: EF Core migrations + snapshot
-- Generated: Yes
-- Committed: Yes
+**`frontend/dist/`, `frontend/node_modules/`, `frontend/test-results/`, `frontend/playwright/`:**
+- Zweck: Build-/Testartefakte · Generiert: ja · Committet: nein
 
 **`Claude outputs/`:**
+- Zweck: Lose CI-Entwürfe, nicht von der CI genutzt · Generiert: nein · Committet: ja
 
-- Purpose: leftover CI drafts
-- Generated: Yes (AI)
-- Committed: Yes (candidate for removal)
-
-**`bin/`, `obj/`, `node_modules/`, `dist/`:**
-
-- Generated: Yes
-- Committed: No
+**`.planning/`:**
+- Zweck: GSD-Stand · Generiert: teils · Committet: ja
 
 ---
 
-*Structure analysis: 2026-09-24*
+*Structure analysis: 2026-10-24*

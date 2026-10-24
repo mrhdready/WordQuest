@@ -1,184 +1,196 @@
 ---
-last_mapped_commit: 4ce32da23d1c0046c5a7ec201ef058c9a776f2c8
-last_mapped_at: 2026-09-24
+last_mapped_commit: a397d4db9d120da68a269a147900eabb05e0a42e
+last_mapped_at: 2026-10-24
 ---
-<!-- refreshed: 2026-09-24 -->
+<!-- refreshed: 2026-10-24 -->
 
-# Architecture
+# Architektur
 
-**Analysis Date:** 2026-09-24
+**Analysis Date:** 2026-10-24
 
-## System Overview
+## Systemüberblick
 
 ```text
-┌──────────────── Docker host (docker-compose.yml) ─────────────────────────┐
-│  proxy (Traefik v3, TLS) ──► web (nginx, React PWA)  `frontend/`          │
-│                          └─► api (ASP.NET Core, net10.0) `backend/src/`   │
-└──────────────────────────────────┬────────────────────────────────────────┘
-                                   ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│ WordQuest.Api — Minimal API endpoints, auth, DI root                      │
-│ `backend/src/WordQuest.Api/Endpoints/*.cs`, `Auth/*.cs`, `Program.cs`     │
-└───────────────┬──────────────────────────────────────┬────────────────────┘
-                ▼                                      ▼
-┌───────────────────────────────────┐   ┌──────────────────────────────────┐
-│ WordQuest.Infrastructure          │   │ Domain modules (pure logic)      │
-│ WordQuestDbContext, LearningService│──►│ Identity / Content / Learning /  │
-│ EF configs, migrations, seed      │   │ Gamification                     │
-└───────────────┬───────────────────┘   │ `backend/src/WordQuest.Modules.*`│
-                ▼                       └───────────────┬──────────────────┘
-┌───────────────────────────────────┐                   ▼
-│ PostgreSQL 17 (db) + backup       │   WordQuest.Shared.Kernel
-└───────────────────────────────────┘   (ITenantContext, ITenantOwned, Grade)
+┌──────── Docker-Host (docker-compose.quick.yml = Standard, HTTP im Heimnetz) ────────┐
+│  web (nginx + React-SPA/PWA) `frontend/Dockerfile`, `frontend/nginx.conf`            │
+│     └─ /api ─► api (ASP.NET Core Minimal API, net10.0) `backend/Dockerfile`          │
+│  db (postgres:17-alpine)      backup (prodrigestivill/postgres-backup-local:17)      │
+│  Variante: `docker-compose.yml` zusätzlich proxy (Traefik v3, Let's Encrypt)         │
+└───────────────────────────────────────┬─────────────────────────────────────────────┘
+                                        ▼
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ WordQuest.Api — Komposition, Auth, Endpoints, CLI-Kommandos                           │
+│ `backend/src/WordQuest.Api/Program.cs`, `Endpoints/*.cs`, `Auth/*.cs`                 │
+└──────────────┬──────────────────────────────────────────────┬────────────────────────┘
+               ▼                                              ▼
+┌───────────────────────────────────────┐   ┌──────────────────────────────────────────┐
+│ WordQuest.Infrastructure              │──►│ Domänenmodule (rein, ohne EF/HTTP/NuGet) │
+│ WordQuestDbContext, LearningService,  │   │ Identity · Content · Learning ·          │
+│ PictureService, AccountService, EF-   │   │ Gamification                             │
+│ Konfigurationen, Migrationen, Seed    │   │ `backend/src/WordQuest.Modules.*`        │
+└──────────────┬────────────────────────┘   └──────────────────┬───────────────────────┘
+               ▼                                               ▼
+        PostgreSQL 17                         WordQuest.Shared.Kernel
+                                              (`ITenantContext`, `ITenantOwned`, `Grade`)
 ```
 
-## Component Responsibilities
+## Verantwortlichkeiten der Komponenten
 
-| Component | Responsibility | File |
+| Komponente | Verantwortung | Datei |
 |-----------|----------------|------|
-| API host | Config, secrets, DI, auth, rate limiting, migrate-on-start, seed | `backend/src/WordQuest.Api/Program.cs` |
-| Endpoints | HTTP routes under `/api/v1/*`, authorization checks | `backend/src/WordQuest.Api/Endpoints/{Auth,Learner,Set,Session}Endpoints.cs` |
-| DTOs | Request/response records | `backend/src/WordQuest.Api/Contracts/Contracts.cs` |
-| Auth | Login, PIN login, refresh tokens, JWT issuing, tenant from claim `tid` | `backend/src/WordQuest.Api/Auth/AuthService.cs`, `JwtTokenService.cs`, `HttpTenantContext.cs` |
-| DbContext | All DbSets, tenant query filters, tenant stamping, snake_case names | `backend/src/WordQuest.Infrastructure/WordQuestDbContext.cs` |
-| LearningService | Orchestrates session start / answer / complete across Learning + Gamification + DB | `backend/src/WordQuest.Infrastructure/LearningService.cs` |
-| SM-2 scheduler | Interval/ease computation | `backend/src/WordQuest.Modules.Learning/Services/Sm2Scheduler.cs` |
-| Session composer | Picks relearning/due/new cards | `backend/src/WordQuest.Modules.Learning/Services/SessionComposer.cs` |
-| Answer evaluator | Normalization + Damerau-Levenshtein grading | `backend/src/WordQuest.Modules.Learning/Services/AnswerEvaluator.cs`, `Levenshtein.cs`, `TextNormalizer.cs` |
-| Game catalog | Server-side list of game keys + XP weights | `backend/src/WordQuest.Modules.Learning/Services/GameCatalog.cs` |
-| Gamification rules | XP, streak, level curve (static) | `backend/src/WordQuest.Modules.Gamification/Services/*.cs` |
-| CSV import | Parses vocabulary CSV | `backend/src/WordQuest.Modules.Content/Services/CsvVocabularyParser.cs` |
-| Frontend shell | Routing, React Query client, auth provider | `frontend/src/App.tsx`, `frontend/src/lib/auth.tsx` |
-| API client | fetch wrapper, token store in localStorage | `frontend/src/lib/api.ts` |
+| API-Host | Secret-Prüfung, DI, JWT-Auth, Policies, Rate-Limiter, ProblemDetails, Health, Migration + Seed beim Start | `backend/src/WordQuest.Api/Program.cs` |
+| CLI-Kommandos | `has-owner`, `create-owner <E-Mail>`, `reset-password <E-Mail>` statt Webserver-Start | `backend/src/WordQuest.Api/AccountCommands.cs` |
+| Start-Prüfungen | Signing-Key/DB-Passwort, Demo-Konto-Sperre | `backend/src/WordQuest.Api/SecretCheck.cs`, `DemoAccountCheck.cs` |
+| Endpoints | Routen unter `/api/v1/*`: parsen, autorisieren, Service aufrufen, mappen | `backend/src/WordQuest.Api/Endpoints/{Auth,Account,Learner,Set,Picture,Session}Endpoints.cs` |
+| DTOs | Request-/Response-Records | `backend/src/WordQuest.Api/Contracts/Contracts.cs` |
+| Auth | Login, PIN-Login, Refresh-Rotation, JWT, Mandant aus Claim | `backend/src/WordQuest.Api/Auth/AuthService.cs`, `JwtTokenService.cs`, `HttpTenantContext.cs`, `ClaimsPrincipalExtensions.cs` |
+| DbContext | DbSets, Global Query Filters je `ITenantOwned`, TenantId-Stempel beim Speichern | `backend/src/WordQuest.Infrastructure/WordQuestDbContext.cs` |
+| LearningService | Runde starten / Antwort / Abschluss, Fälligkeiten, Wortfortschritt (Learning + Gamification + DB) | `backend/src/WordQuest.Infrastructure/LearningService.cs` |
+| PictureService | Vokabelbilder speichern/laden/entfernen (als `byte[]` in der DB) | `backend/src/WordQuest.Infrastructure/PictureService.cs` |
+| AccountService | Eltern-Konto anlegen, Passwort ändern/zurücksetzen, Refresh-Token widerrufen | `backend/src/WordQuest.Infrastructure/AccountService.cs` |
+| Start-Aufräumen | Verwaiste Daten vor der Migration bereinigen | `backend/src/WordQuest.Infrastructure/OrphanCleanup.cs` |
+| SM-2 / Komposition / Bewertung | Intervalle, Kartenauswahl, Antwortbewertung (Levenshtein, Normalisierung) | `backend/src/WordQuest.Modules.Learning/Services/Sm2Scheduler.cs`, `SessionComposer.cs`, `AnswerEvaluator.cs` |
+| Spielkatalog / Ampel / Beherrschung | Spiel-Keys, Fortschrittsampel, Mastery-Regeln | `backend/src/WordQuest.Modules.Learning/Services/GameCatalog.cs`, `TrafficLight.cs`, `MasteryRules.cs` |
+| Gamification | XP, Streak, Levelkurve (statische Regeln) | `backend/src/WordQuest.Modules.Gamification/Services/*.cs` |
+| Inhalte | CSV-Parser, Text- und Bildregeln | `backend/src/WordQuest.Modules.Content/Services/*.cs` |
+| Frontend-Shell | Routing, Query-Client, Auth-Provider | `frontend/src/App.tsx`, `frontend/src/main.tsx`, `frontend/src/lib/auth.tsx` |
+| API-Client | `api<T>()`, `ApiError`, Token im localStorage, Refresh, `retryQuery` | `frontend/src/lib/api.ts` |
 
-## Pattern Overview
+## Musterüberblick
 
-**Overall:** Modular monolith (backend, concept ADR-001) + SPA/PWA frontend, deployed as one compose stack.
+**Gesamt:** Modularer Monolith (DDD-light) im Backend + SPA/PWA im Frontend, ausgeliefert als ein Compose-Stack mit genau einer API-Instanz.
 
-**Key Characteristics:**
+**Kernmerkmale:**
+- Domänenmodule enthalten Entitäten und reine Regeln; ihre `.csproj` referenzieren nur `WordQuest.Shared.Kernel`, `Modules.Learning` zusätzlich `Modules.Content`. Keine NuGet-Pakete.
+- Nur `WordQuest.Infrastructure` kennt EF Core/Npgsql; nur `WordQuest.Api` kennt HTTP/JWT.
+- Keine Repositories, keine Domain Events, kein `Result<T>`. Fehlerfälle von Services: `null`/`bool` oder Ergebnis-Records (`OwnerCreation.cs`, `PasswordChange.cs`), Sonderfall `SessionCompletedException.cs`.
+- Mandantentrennung zentral über EF Global Query Filters.
+- Bewertung und Terminierung entscheidet der Server; das Frontend zeigt an.
 
-- Domain modules hold entities and pure/static rules; they have no EF or HTTP dependency. Only `Modules.Learning` references `Modules.Content`.
-- `WordQuest.Infrastructure` references all modules and owns persistence plus the one application service (`LearningService`).
-- Endpoints are static classes with `Map*Endpoints(this IEndpointRouteBuilder)` extension methods; handlers are private static methods with DI-injected parameters.
-- Multi-tenancy enforced centrally by EF global query filters on every `ITenantOwned` entity.
-- Answer grading and scheduling are server-authoritative (concept ADR-006).
+## Schichten
 
-## Layers
+**Api:**
+- Zweck: HTTP, Auth, Komposition
+- Ort: `backend/src/WordQuest.Api/`
+- Enthält: `Program.cs`, `Endpoints/`, `Auth/`, `Contracts/`
+- Hängt ab von: Infrastructure, allen Modulen, Shared.Kernel
+- Genutzt von: nginx (`/api`), Tests in `backend/tests/WordQuest.Api.Tests/`
 
-**API (`backend/src/WordQuest.Api/`):**
+**Infrastructure:**
+- Zweck: Persistenz und modulübergreifende Orchestrierung
+- Ort: `backend/src/WordQuest.Infrastructure/`
+- Enthält: DbContext, `Configurations/`, `Migrations/`, `Seed/DemoDataSeeder.cs`, Services
+- Hängt ab von: Modulen, Shared.Kernel, EF Core/Npgsql
+- Genutzt von: Api
 
-- Purpose: HTTP surface, auth, composition root
-- Depends on: Infrastructure, all modules, Shared.Kernel
-- Used by: frontend via `/api/v1`
+**Module (Identity, Content, Learning, Gamification):**
+- Zweck: Fachbegriffe und Fachregeln
+- Ort: `backend/src/WordQuest.Modules.<Name>/{Entities,Services}/`
+- Hängt ab von: Shared.Kernel (Learning zusätzlich Content)
+- Genutzt von: Infrastructure, Api, `backend/tests/WordQuest.Learning.Tests/`
 
-**Infrastructure (`backend/src/WordQuest.Infrastructure/`):**
+**Shared.Kernel:**
+- Ort: `backend/src/WordQuest.Shared.Kernel/` — `Grade.cs`, `ITenantContext.cs`, `ITenantOwned.cs`
 
-- Purpose: EF Core DbContext, `IEntityTypeConfiguration` classes in `Configurations/`, migrations, demo seed, `LearningService`
-- Depends on: all modules, Shared.Kernel
+**Frontend:**
+- Ort: `frontend/src/` — `features/{auth,learn,manage}/` (Seiten), `components/ui/` (Primitives), `lib/` (API, Auth, Bilder), `types.ts`
 
-**Modules (`backend/src/WordQuest.Modules.{Identity,Content,Learning,Gamification}/`):**
+## Datenfluss
 
-- Purpose: Entities (`Entities/`) and domain services (`Services/`)
-- Depends on: Shared.Kernel (Learning also on Content)
+### Lernrunde (Hauptpfad)
 
-**Shared.Kernel (`backend/src/WordQuest.Shared.Kernel/`):**
+1. `SessionPage` (`frontend/src/features/learn/SessionPage.tsx`) ruft über `api<T>()` (`frontend/src/lib/api.ts:238`) `POST /api/v1/sessions` auf.
+2. `SessionEndpoints.StartAsync` (`backend/src/WordQuest.Api/Endpoints/SessionEndpoints.cs:30`) prüft Größe (1–50) und Rolle, ruft `LearningService.StartSessionAsync` (`backend/src/WordQuest.Infrastructure/LearningService.cs:35`).
+3. `SessionComposer` wählt Karten; Antworten laufen über `POST /{sessionId}/answers` → `SubmitAnswerAsync` (`LearningService.cs:176`) → `AnswerEvaluator` + `Sm2Scheduler`.
+4. `POST /{sessionId}/complete` → `CompleteSessionAsync` (`LearningService.cs:341`) verbucht XP/Streak/Level über `XpRules`, `StreakRules`, `LevelCurve`.
+5. Zusätzlich `POST /api/v1/sessions/sync` und `GET /api/v1/sessions/games`.
 
-- Purpose: `ITenantContext`, `ITenantOwned`, `Grade`
+### Anmeldung
 
-**Frontend (`frontend/src/`):**
+1. Eltern: `GuardianLoginPage` → `POST /api/v1/auth/login`; Kinder: `ProfilePickerPage` → `GET /auth/profiles`, `POST /auth/learner-login` (PIN).
+2. `AuthService` (`backend/src/WordQuest.Api/Auth/AuthService.cs`) prüft mit `PasswordHasher`, stellt JWT (`JwtTokenService`) und Refresh-Token (gehasht über `TokenHasher`) aus.
+3. Frontend speichert Token im localStorage (`frontend/src/lib/api.ts`), `POST /auth/refresh` rotiert; Login/PIN sind über die Policy `auth` rate-limitiert (`Program.cs:147`), Refresh/Logout nicht.
 
-- `features/*` pages → `lib/api.ts` → `/api/v1`; UI primitives in `components/ui/`.
+### Verwaltung
 
-## Data Flow
-
-### Primary Request Path (learning session)
-
-1. `POST /api/v1/sessions` → `SessionEndpoints.StartAsync` checks `MayActFor` (`backend/src/WordQuest.Api/Endpoints/SessionEndpoints.cs:25`)
-2. `LearningService.StartSessionAsync` loads relearning/due/new candidates, composes via `SessionComposer`, builds choices (`backend/src/WordQuest.Infrastructure/LearningService.cs:29`)
-3. `POST /sessions/{id}/answers` → `LearningService.SubmitAnswerAsync`: `AnswerEvaluator` grades, `Sm2Scheduler` updates `ReviewState`, `XpRules.ForAnswer` awards XP (`LearningService.cs:138`, `:219`)
-4. `POST /sessions/{id}/complete` → `CompleteSessionAsync`: completion bonus, `StreakRules`, `LevelCurve` (`LearningService.cs:256`)
-5. `POST /sessions/sync` replays answers through the same service methods (`SessionEndpoints.cs:118`)
-
-### Auth Flow
-
-1. Guardian `POST /api/v1/auth/login` or learner `POST /auth/learner-login` (PIN), rate-limited policy `auth` (`Program.cs`)
-2. `AuthService` issues JWT (claim `tid` = tenant) + hashed refresh token (`Modules.Identity/Services/TokenHasher.cs`)
-3. Frontend stores tokens in localStorage (`frontend/src/lib/api.ts`), `HttpTenantContext` reads `tid` per request
+- Sets/Einträge/CSV-Import: `SetEndpoints.cs` (`/api/v1/sets`, Import in zwei Schritten `import/preview` → `{setId}/import`), Parser `CsvVocabularyParser.cs`.
+- Bilder: `PictureEndpoints.cs` (`PUT/DELETE /sets/{setId}/entries/{entryId}/picture`, `GET /pictures/{version}`); Frontend verkleinert vor Upload (`shrinkPicture` in `frontend/src/lib/picture.tsx`).
+- Kinder: `LearnerEndpoints.cs` (`/api/v1/learners`, inkl. `overview`, `traffic-light`); Konto: `AccountEndpoints.cs` (`/api/v1/account/password`).
 
 **State Management:**
+- Server-State im Frontend: TanStack Query; Auth-State in `AuthProvider` (`frontend/src/lib/auth.tsx`); gelöschte Ressourcen über `useGone` (`frontend/src/lib/gone.ts`).
+- Backend zustandslos bis auf In-Memory-Rate-Limiter (deshalb genau eine API-Instanz).
 
-- Backend stateless; all state in PostgreSQL.
-- Frontend: TanStack Query cache (`networkMode: 'offlineFirst'`, `frontend/src/App.tsx`), auth in React context (`frontend/src/lib/auth.tsx`), Workbox runtime caching via `vite-plugin-pwa` (`frontend/vite.config.ts`).
+## Zentrale Abstraktionen
 
-## Key Abstractions
+**ITenantOwned / ITenantContext:**
+- Zweck: Mandant je Entität; aktueller Mandant aus dem Request
+- Beispiele: `backend/src/WordQuest.Shared.Kernel/ITenantOwned.cs`, `backend/src/WordQuest.Api/Auth/HttpTenantContext.cs`, `backend/src/WordQuest.Infrastructure/SystemTenantContext.cs`
+- Muster: Query Filter in `WordQuestDbContext.cs:129-132`, TenantId-Stempel in `SaveChanges` (`WordQuestDbContext.cs:139-159`)
 
-**ITenantContext / ITenantOwned:**
+**Statische Domänenregeln:**
+- Beispiele: `ContentRules.cs`, `PictureRules.cs`, `AccountRules.cs`, `XpRules.cs`, `StreakRules.cs`, `MasteryRules.cs`
+- Muster: zustandslose Klassen; konfigurierbare Algorithmen (`Sm2Scheduler`, `SessionComposer`, `AnswerEvaluator`) als Singletons mit `SchedulerOptions` (`Program.cs:78-84`)
 
-- Purpose: tenant isolation
-- Examples: `backend/src/WordQuest.Shared.Kernel/ITenantContext.cs`, `backend/src/WordQuest.Api/Auth/HttpTenantContext.cs`, `backend/src/WordQuest.Infrastructure/SystemTenantContext.cs` (bypass for migration/seed only)
-- Pattern: global query filter + `StampTenant()` in `SaveChanges` override (`WordQuestDbContext.cs`)
+**Problem-Typen:**
+- `ContentTextProblem.cs`, `LearnerProfileProblem.cs` liefern Validierungsfehler aus Modulen, Endpoints mappen auf `Results.ValidationProblem`.
 
-**VocabularyEntry vs Card:** entry = word pair, card = one direction to learn (concept §5.1); `backend/src/WordQuest.Modules.Content/Entities/`.
+## Einstiegspunkte
 
-**ReviewState / ReviewLog / LearningSession / SessionItem:** SM-2 state per learner+card; `backend/src/WordQuest.Modules.Learning/Entities/`.
+**API-Server:**
+- Ort: `backend/src/WordQuest.Api/Program.cs`
+- Auslöser: Container-Start / `dotnet run`
+- Aufgaben: Prüfungen, DI, Middleware (`UseExceptionHandler` → `UseForwardedHeaders` → `UseRateLimiter` → `UseAuthentication` → `UseAuthorization`), `/health/live`, `/health/ready`, `OrphanCleanup` + `MigrateAsync` + optional `DemoDataSeeder`
 
-**GameDefinition (GameCatalog):** key, title, XP weight; games know no learning logic (concept §7.1).
+**Konto-CLI:**
+- Ort: `backend/src/WordQuest.Api/AccountCommands.cs` (`Program.cs:204`), genutzt von `setup.sh`
 
-## Entry Points
+**Frontend:**
+- Ort: `frontend/src/main.tsx` → `frontend/src/App.tsx` (Routen `/login`, `/`, `/lernen`, `/verwalten/*`)
 
-**API:** `backend/src/WordQuest.Api/Program.cs` — migrates DB on start, optional seed via `WQ_SEED_DEMO_DATA`.
-**Frontend:** `frontend/src/main.tsx` → `frontend/src/App.tsx`.
-**EF tooling:** `backend/src/WordQuest.Infrastructure/DesignTimeDbContextFactory.cs`.
-**Ops:** `setup.sh` (secrets), `docker-compose*.yml`, `.github/workflows/ci.yml`.
+**Betriebsskripte:** `setup.sh`, `upgrade.sh`, `restore.sh`; Release: `.github/release-package.sh`
 
-## Architectural Constraints
+## Architektonische Rahmenbedingungen
 
-- **Threading:** ASP.NET request pipeline; domain services registered as singletons (`Sm2Scheduler`, `SessionComposer`, `AnswerEvaluator`) — keep them stateless.
-- **Global state:** static rule classes `XpRules`, `StreakRules`, `LevelCurve`, `GameCatalog`.
-- **Circular imports:** none; project refs are acyclic (see `*.csproj`).
-- **Secrets:** read from `*_FILE` (Docker secrets) first, env var fallback (`Program.cs` `ReadSecret`). JWT key must be >= 32 chars.
-- **Migrations:** applied automatically at startup; CI checks for missing migrations.
-
-## Deviations From Concept Doc
-
-Cross-check with `Documentation/WordQuest_Konzept_und_Architektur.md`:
-
-- §10.2 lists `WordQuest.Modules.Reporting` — not present; reporting queries live in `LearnerEndpoints.cs` (`overview`, `traffic-light`).
-- §10.2 says modules communicate via in-process domain events (`CardReviewed`) and Shared.Kernel holds `Result<T>`/domain events — neither exists. `LearningService` calls Gamification statics directly.
-- §7.3 frontend `games/registry.ts` — not present; `frontend/src/features/learn/SessionPage.tsx` renders sessions directly.
-- §13 IndexedDB/Dexie outbox — not present; offline relies on Workbox cache + React Query. `/sessions/sync` endpoint exists server-side.
-- §10.1 optional seq/log container — not in `docker-compose.yml`.
+- **Threading:** ASP.NET-Request-Modell, async durchgehend; keine Hintergrund-Worker.
+- **Globaler Zustand:** Singletons `JwtTokenService`, `SchedulerOptions`, `Sm2Scheduler`, `SessionComposer`, `AnswerEvaluator`, `TimeProvider.System`; In-Memory-Rate-Limiter (`Program.cs:147`).
+- **Zirkuläre Abhängigkeiten:** keine; Projektreferenzen sind gerichtet (Api → Infrastructure → Module → Shared.Kernel).
+- **Eine Instanz:** Migration beim Start und Rate-Limiter setzen genau eine API-Instanz voraus.
+- **Ohne HTTPS kein Service Worker:** Die App muss als reine Browser-App funktionieren (`vite-plugin-pwa` in `frontend/vite.config.ts`).
 
 ## Anti-Patterns
 
-### Data access in endpoints
+### Geschäftslogik im Endpoint
 
-**What happens:** `SetEndpoints.cs`, `LearnerEndpoints.cs` inject `WordQuestDbContext` and query/save directly.
-**Why it's wrong:** business logic in entry points (house rule: thin controllers); only session logic is in a service.
-**Do this instead:** for non-trivial logic, add a service like `backend/src/WordQuest.Infrastructure/LearningService.cs` and register it scoped in `Program.cs`.
+**Was passiert:** Endpoints wie `SetEndpoints.cs` (390 Zeilen) sind groß und laufen Gefahr, Logik zu sammeln.
+**Warum falsch:** Widerspricht „Endpoints parsen, autorisieren, rufen auf, mappen“ (`AGENTS.md`).
+**Stattdessen:** Regeln in Modul-Services (`ContentRules.cs`) oder Infrastructure-Service (Muster `LearningService.cs`).
 
-### Bypassing the tenant filter
+### Filter umgehen
 
-**What happens:** `SystemTenantContext` disables filters.
-**Why it's wrong:** outside startup it leaks across tenants.
-**Do this instead:** use it only in `Program.cs` startup / seed; request code always uses `HttpTenantContext`.
+**Was passiert:** `IgnoreQueryFilters()` / `SystemTenantContext` außerhalb von Auth/Start.
+**Warum falsch:** Bricht Mandantentrennung.
+**Stattdessen:** Nur wie im Bestand: `Auth/AuthService.cs`, `Endpoints/AuthEndpoints.cs`, `AccountCommands.cs`, `Program.cs`, `Seed/DemoDataSeeder.cs`, `DesignTimeDbContextFactory.cs`; neue Entitäten über `ITenantOwned` im `WordQuestDbContext` registrieren.
 
-## Error Handling
+### Integrität per Hand
 
-**Strategy:** ProblemDetails + `UseExceptionHandler()`; endpoints return `Results.NotFound/Forbid/BadRequest`.
+**Was passiert:** Handgeschriebene Löschlisten.
+**Stattdessen:** Fremdschlüssel/Constraints in `Configurations/*Configurations.cs` (siehe Migration `ReferentialIntegrity`).
 
-**Patterns:**
+## Fehlerbehandlung
 
-- Domain/service failures throw `InvalidOperationException` (e.g. unknown learner in `LearningService`).
-- Frontend throws `ApiError(message, status)` from `frontend/src/lib/api.ts`.
+**Strategie:** Endpoints liefern `IResult` (`Results.ValidationProblem`, `Results.NotFound`, `Results.Problem`); globale `AddProblemDetails` + `UseExceptionHandler` + `UseStatusCodePages`.
 
-## Cross-Cutting Concerns
+**Muster:**
+- Deutsche Nutzertexte als Konstanten im Endpoint (z. B. `SessionEndpoints.cs`).
+- Services signalisieren „nicht gefunden“ über `null`; Frontend wirft `ApiError(message, status)` (`frontend/src/lib/api.ts:24`).
 
-**Logging:** built-in `ILogger` (startup logger in `Program.cs`).
-**Validation:** inline checks in endpoint handlers; CSV validation in `CsvVocabularyParser`.
-**Authentication:** JWT bearer; policies `Guardian` (roles Owner/Guardian) and `Learner`; per-learner check `MayActFor` in `SessionEndpoints.cs`; rate limiter `auth` (10/min/IP).
-**Health:** `/health/live`, `/health/ready` (DB check).
+## Querschnittsthemen
+
+**Logging:** `ILogger` nur in Api/Infrastructure, keine personenbezogenen Daten; Module loggen nicht.
+**Validierung:** an der API-Grenze über Modulregeln (`ContentRules`, `AccountRules`, `PictureRules`).
+**Authentifizierung:** JWT-Bearer, Policies `Guardian` (Owner/Guardian) und `Learner` (`Program.cs:120-122`); Secrets über `ReadSecret()` (`<NAME>_FILE`, dann Env).
 
 ---
 
-*Architecture analysis: 2026-09-24*
+*Architecture analysis: 2026-10-24*

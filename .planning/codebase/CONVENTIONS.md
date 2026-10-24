@@ -1,120 +1,121 @@
 ---
-last_mapped_commit: 4ce32da23d1c0046c5a7ec201ef058c9a776f2c8
-last_mapped_at: 2026-09-24
+last_mapped_commit: a397d4db9d120da68a269a147900eabb05e0a42e
+last_mapped_at: 2026-10-24
 ---
 # Coding Conventions
 
-**Analysis Date:** 2026-09-24
+**Analysis Date:** 2026-10-24
 
-Two stacks: .NET 10 backend (`backend/`) and React 19 + TypeScript frontend (`frontend/`). Style is enforced by `.editorconfig` (root), `backend/Directory.Build.props`, `frontend/eslint.config.js`, `frontend/tsconfig.json`.
+Maßgeblich sind die Regeln in `AGENTS.md` (Abschnitt „Konventionen“). Dieses Dokument zeigt, wie sie im Code umgesetzt sind.
 
 ## Naming Patterns
 
 **Files:**
-
-- C#: one primary type per file, PascalCase, file name = type name (`backend/src/WordQuest.Modules.Learning/Services/AnswerEvaluator.cs`). Grouped types allowed where cohesive (`backend/src/WordQuest.Api/Contracts/Contracts.cs`, `.../Configurations/LearningConfigurations.cs`).
-- C# endpoint files: `<Area>Endpoints.cs` in `backend/src/WordQuest.Api/Endpoints/`.
-- React pages/components: PascalCase `.tsx`, suffix `Page` for routes (`frontend/src/features/learn/LearnHomePage.tsx`, `ManageLayout.tsx`).
-- shadcn-style UI primitives: lowercase (`frontend/src/components/ui/button.tsx`, `card.tsx`, `misc.tsx`).
-- TS libs: lowercase (`frontend/src/lib/api.ts`, `auth.tsx`, `utils.ts`).
+- C#: ein Haupttyp pro Datei, Dateiname = Typname (`backend/src/WordQuest.Modules.Learning/Services/Sm2Scheduler.cs`, `backend/src/WordQuest.Infrastructure/LearningService.cs`). Ausnahme: kleine Begleittypen in derselben Datei (`ReviewSnapshot`/`ReviewOutcome` in `Sm2Scheduler.cs`, `AuthFailedException` in `backend/src/WordQuest.Api/Auth/AuthService.cs`); DTOs gesammelt in `backend/src/WordQuest.Api/Contracts/Contracts.cs`.
+- Endpoints: `<Bereich>Endpoints.cs` unter `backend/src/WordQuest.Api/Endpoints/` (`SetEndpoints.cs`, `SessionEndpoints.cs`, `LearnerEndpoints.cs`, `AuthEndpoints.cs`, `AccountEndpoints.cs`, `PictureEndpoints.cs`).
+- Frontend-Seiten: PascalCase mit Suffix `Page` unter `frontend/src/features/<bereich>/` (`ChildFormPage.tsx`, `SessionPage.tsx`). Layout ohne Suffix-Pflicht: `ManageLayout.tsx`.
+- UI-Primitives und Libs kleingeschrieben: `frontend/src/components/ui/button.tsx`, `frontend/src/lib/api.ts`.
+- Tests neben der Datei: `<Name>.test.tsx` / `<name>.test.ts`; e2e: `frontend/e2e/<bereich>.spec.ts`.
 
 **Functions:**
-
-- C#: PascalCase; async methods end in `Async` (`ListAsync`, `CreateAsync`, `LoginAsync`).
-- TS: camelCase functions (`safeRead`, `refreshAccessToken`, `avatarFor`); React components as named `export function LearnHomePage()`.
+- C#: PascalCase; async-Methoden enden auf `Async` (`ListAsync`, `SeedFamilyAsync`). Endpoint-Registrierung als Extension `Map<Bereich>Endpoints(this IEndpointRouteBuilder app)`; Handler sind `private static` Methoden in derselben Klasse.
+- TS: camelCase für Funktionen und Hooks; Komponenten als benannte `function`-Exports in PascalCase (`export function ChildrenPage()`).
 
 **Variables:**
-
-- C#: private fields `_camelCase` (`_evaluator`, `_options`); constants PascalCase (`private const int MinLengthForTypoTolerance = 5;`).
-- TS: camelCase; module constants UPPER_SNAKE (`BASE`, `ACCESS_KEY` in `frontend/src/lib/api.ts`). Unused vars/args must be prefixed `_` (eslint rule).
+- C#: private Felder `_camelCase` (`_options`, `_factory`), Konstanten PascalCase (`DefaultServer`, `TestSigningKey`, `ChildPin`).
+- TS: camelCase; modulweite Konstanten in UPPER_SNAKE (`ACCESS_KEY`, `UNREACHABLE` in `frontend/src/lib/api.ts`). Ungenutzte Variablen/Argumente mit `_` präfixen (ESLint erzwingt das, `frontend/eslint.config.js`).
 
 **Types:**
-
-- C#: classes `sealed` by default (`public sealed class AnswerEvaluator`, `public sealed class Card`); DTOs/values as `sealed record` (`ExpectedAnswer`, `AnswerEvaluation`, `AuthTokens`). Interfaces `I`-prefix (`ITenantOwned`, `ITenantContext` in `backend/src/WordQuest.Shared.Kernel/`).
-- Enums with explicit numeric values and XML doc per member (`CardDirection` in `backend/src/WordQuest.Modules.Content/Entities/Card.cs`).
-- Entity IDs: `Guid Id { get; set; } = Guid.CreateVersion7();`.
-- TS: shared API types in `frontend/src/types.ts`, imported with `import type`.
+- C#: Klassen standardmäßig `sealed`; DTOs/Werte als `sealed record` bzw. `readonly record struct` (`ReviewSnapshot`); Interfaces mit `I` (`ITenantContext`, `ITenantOwned` in `backend/src/WordQuest.Shared.Kernel/`).
+- Enums mit expliziten Werten und XML-Doku pro Member (`backend/src/WordQuest.Shared.Kernel/Grade.cs`, `backend/src/WordQuest.Modules.Content/Services/ContentTextProblem.cs`).
+- Fachbegriffe im Code: `VocabularyEntry`, `Card`, `ReviewState`, `Grade`, `LearningSession`.
+- Entity-IDs: `Guid.CreateVersion7()` (z. B. `backend/src/WordQuest.Modules.Content/Entities/VocabularySet.cs`).
+- TS: gemeinsame API-Typen in `frontend/src/types.ts`.
 
 ## Code Style
 
 **Formatting:**
-
-- `.editorconfig`: UTF-8, LF, final newline, trim whitespace; 4 spaces for C#, 2 spaces for TS/JSON/CSS/YAML/MD/csproj.
-- No Prettier config. Observed TS style: no semicolons, single quotes, trailing commas, 2-space indent — match it.
-- No `dotnet format` step in CI; formatting enforced via analyzers (`EnforceCodeStyleInBuild=true`).
+- Kein Prettier/kein Formatter-Tool im Frontend. Stil per Konvention: keine Semikolons, einfache Anführungszeichen, Trailing Commas, 2 Leerzeichen.
+- `.editorconfig` (Repo-Root): UTF-8, LF, finale Newline; 4 Leerzeichen für `*.cs`, 2 für TS/JSON/CSS/YAML/MD/SH.
+- C#-Regeln in `.editorconfig`: `file_scoped:warning` für Namespaces, Zugriffsmodifizierer Pflicht (`warning`), `var` nur bei offensichtlichem Typ, explizite Typen für Built-ins, `System`-Usings zuerst, `CA2007` aus.
+- `backend/src/WordQuest.Infrastructure/Migrations/*.cs` sind als `generated_code` von den Stilregeln ausgenommen. Nie von Hand ändern.
 
 **Linting:**
-
-- C# (`.editorconfig`): file-scoped namespaces (warning), accessibility modifiers required (warning), braces preferred, `System` usings first, explicit types for built-ins (`string given = ...`), `var` only when type is apparent (`var set = new VocabularySet { ... }`). CA2007 disabled (no `ConfigureAwait`).
-- `backend/Directory.Build.props`: `Nullable=enable`, `ImplicitUsings=enable`, `LangVersion=latest`, `net10.0`. Warnings are errors only in CI (`dotnet build ... /warnaserror` in `.github/workflows/ci.yml`) — keep the build warning-free.
-- Migrations (`**/Migrations/*.cs`) are generated code, style rules off — never hand-edit.
-- TS: `frontend/eslint.config.js` — `@eslint/js` recommended + `typescript-eslint` recommended + `react-hooks` recommended. `tsconfig.json` strict with `noUncheckedIndexedAccess`, `noUnusedLocals/Parameters`, `verbatimModuleSyntax` (type imports must use `import type`).
+- Backend: `backend/Directory.Build.props` — `Nullable=enable`, `ImplicitUsings=enable`, `EnforceCodeStyleInBuild=true`, lokal `TreatWarningsAsErrors=false`; CI baut mit `/warnaserror`. Build muss warnungsfrei bleiben.
+- Frontend: `frontend/eslint.config.js` (flat config) — `@eslint/js` recommended, `typescript-eslint` recommended, `eslint-plugin-react-hooks` recommended, `no-unused-vars` mit `^_`-Ausnahme.
+- TypeScript strikt (`frontend/tsconfig.json`): `strict`, `noUnusedLocals`, `noUnusedParameters`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `isolatedModules`.
+- Design-Gate: `frontend/scripts/design-classes.mjs` (`npm run design:classes`) bricht ab bei alten Tailwind-Klassen, `style={`, Hex-Farben in Strings, Einzelfall-`px` (`-[..px]`) und `bg-glass*` ohne Fallback. `npm run design:check` prüft `DESIGN.md`-Lint und dass `frontend/src/design-tokens.css` dem Export entspricht.
 
 ## Import Organization
 
-**C#:**
+**Order (Frontend, beobachtet):**
+1. Externe Pakete (`@tanstack/react-query`, `lucide-react`, `react-router-dom`)
+2. Interne Module über `@/…` (`@/components/ui/...`, `@/lib/...`)
+3. Typ-Importe mit `import type` (`import type { Learner } from '@/types'`)
 
-1. `System*`/`Microsoft*` usings first (sorted)
-2. `WordQuest.*` project usings
-- Namespace mirrors folder: `namespace WordQuest.Modules.Learning.Services;`
-
-**TS (see `frontend/src/features/learn/LearnHomePage.tsx`):**
-
-1. External packages (`@tanstack/react-query`, `lucide-react`, `react`, `react-router-dom`), alphabetical
-2. `@/components/...`
-3. `@/lib/...`
-4. `import type { ... } from '@/types'` last
+**Order (C#):** `System.*` zuerst, dann `Microsoft.*`, dann `WordQuest.*` (`dotnet_sort_system_directives_first`).
 
 **Path Aliases:**
-
-- `@/*` → `frontend/src/*` (`tsconfig.json`, `vite.config.ts`). Always use `@/`, not relative `../`.
+- `@/*` → `frontend/src/*` (`frontend/tsconfig.json`, `frontend/vite.config.ts`). Nie `../` verwenden.
 
 ## Error Handling
 
-**Patterns:**
+**Backend:**
+- Endpoints liefern `IResult`: `Results.ValidationProblem(Dictionary<string,string[]>)` mit Feldschlüssel wie im Request, `Results.NotFound`, `Results.Problem`. Konflikte und „nicht gefunden“ sind 4xx, nie unbehandelte 500.
+- Längenprüfungen im Endpoint gegen Konstanten der Domänenregeln (`ContentRules.MaxDescriptionLength` in `backend/src/WordQuest.Api/Endpoints/SetEndpoints.cs`), damit nichts als Datenbankfehler endet.
+- Domänenservices melden Befunde als Enum (`ContentTextProblem`, `LearnerProfileProblem`); die deutschen Texte vergibt der Aufrufer.
+- Wenige eigene Exceptions für Kontrollfluss zwischen Service und Endpoint: `SessionCompletedException` (`backend/src/WordQuest.Infrastructure/SessionCompletedException.cs`), `AuthFailedException`, `RefreshConflictException` (`backend/src/WordQuest.Api/Auth/AuthService.cs`). Kein `Result<T>`.
+- `ArgumentNullException.ThrowIfNull` am öffentlichen Einstieg von Domänenservices (31 Stellen in `backend/src`).
+- Meldungen an Nutzer auf Deutsch in ganzen Sätzen.
 
-- Minimal API endpoints return `IResult`; validation failures via `Results.ValidationProblem(new Dictionary<string, string[]> { ["title"] = ["Ein Set braucht einen Titel."] })`; missing rows via `Results.NotFound()`; created via `Results.Created(location, dto)` (`backend/src/WordQuest.Api/Endpoints/SetEndpoints.cs`).
-- Domain auth errors: throw `AuthFailedException` (`backend/src/WordQuest.Api/Auth/AuthService.cs`), caught in endpoint and mapped to `Results.Problem(title, detail, 401)` (`AuthEndpoints.cs`).
-- Invariant violations: `?? throw new InvalidOperationException("...")` (`backend/src/WordQuest.Infrastructure/LearningService.cs`, `Program.cs` for missing config).
-- Guard clauses: `ArgumentNullException.ThrowIfNull(x)` at public entry of domain services.
-- User-facing messages are German, full sentences.
-- Frontend: `ApiError(message, status)` thrown from `api<T>()` in `frontend/src/lib/api.ts`; storage access wrapped in try/catch with empty-catch comment (`safeRead`/`safeWrite`). 401 triggers single-flight token refresh (`refreshInFlight`).
+**Frontend:**
+- `api<T>()` in `frontend/src/lib/api.ts` wirft `ApiError(message, status, errors?)`; `errors` enthält Feldfehler aus `ValidationProblem`. Netzfehler → Status 0 mit deutschem Text (`UNREACHABLE`), Rate-Limit → `TOO_MANY`.
+- Seiten zeigen Fehler mit `ErrorNote` aus `frontend/src/components/ui/misc.tsx` (`learners.isError ? <ErrorNote message={learners.error.message} /> : null`).
+- Feldfehler mit `id="<input-id>-fehler"`, `aria-invalid` und `aria-describedby` (`frontend/src/components/ui/field.tsx`).
+- Speicherzugriffe defensiv (`safeRead`/`safeWrite`, leerer `catch` mit Kommentar).
 
 ## Logging
 
-**Framework:** `Microsoft.Extensions.Logging` (`ILogger<T>` injected via primary constructor, e.g. `AuthService`; `ILogger` passed into `DemoDataSeeder`).
+**Framework:** `Microsoft.Extensions.Logging` (`ILogger`).
 
 **Patterns:**
-
-- Log only in Api/Infrastructure; domain modules (`WordQuest.Modules.*`) do not log.
-- Frontend: no logging framework, no `console` usage convention.
+- Nur in Api/Infrastructure: `backend/src/WordQuest.Api/Program.cs`, `backend/src/WordQuest.Api/Auth/AuthService.cs`, `backend/src/WordQuest.Infrastructure/Seed/DemoDataSeeder.cs`. Domänenmodule loggen nicht.
+- Keine personenbezogenen Daten (E-Mail-Adressen) in Logs; `backend/tests/WordQuest.Api.Tests/StartupLogTests.cs` prüft Startlog-Ausgaben.
+- Frontend: kein Logging-Framework.
 
 ## Comments
 
 **When to Comment:**
+- Kommentare erklären das *Warum*, auf Deutsch, Umlaute als `ae/oe/ue` umschrieben (`// Laenger endete sonst als Datenbankfehler (500, W-2).`). Nutzertexte in Strings behalten echte Umlaute.
+- Verweise auf Konzept/Planung: `(Konzept §6.1)`, `(RESEARCH Pitfall 3)`, `(Review 02 MEDIUM)`, Entscheidungs-IDs wie `D-16`.
 
-- Comments explain *why* (trade-offs, child-UX constraints, security reasoning), in German, umlauts transliterated (`ae/oe/ue`), e.g. token storage rationale in `frontend/src/lib/api.ts`, 44 px button minimum in `button.tsx`.
-- Reference concept doc sections as `(Konzept §6.4)`.
-
-**JSDoc/TSDoc:**
-
-- C#: `/// <summary>` on public domain types and enum members; `GenerateDocumentationFile=false`, so not mandatory everywhere.
-- TS: block comments `/* ... */` for rationale; no JSDoc.
+**XML-Doku / TSDoc:**
+- C#: `/// <summary>` an öffentlichen Typen, Enum-Membern und nicht-trivialen Methoden (`Sm2Scheduler`, `ApiFactory`). `GenerateDocumentationFile=false`.
+- TS: `/** … */` sparsam für Hilfsfunktionen (`renderWithProviders` in `frontend/src/test/render.tsx`), sonst Zeilenkommentare.
 
 ## Function Design
 
-**Size:** Small pure services in modules (`Levenshtein`, `TextNormalizer`, `XpRules`, `StreakRules`); orchestration in `backend/src/WordQuest.Infrastructure/LearningService.cs`.
+**Size:** Endpoints dünn: parsen, autorisieren (`RequireAuthorization("Guardian")`), aufrufen, mappen. Geschäftslogik in Modul-Services (`backend/src/WordQuest.Modules.*/Services/`) oder Infrastructure-Services (`LearningService.cs`, `AccountService.cs`, `PictureService.cs`).
 
-**Parameters:** Primary constructors for DI (`public sealed class AuthService(WordQuestDbContext db, ...)`); optional options with defaults (`AnswerEvaluator(SchedulerOptions? options = null)`). Always pass `CancellationToken ct` last in async methods. Inject `TimeProvider` / pass `DateTimeOffset now` instead of `DateTime.Now`.
+**Parameters:** Minimal-API-Handler bekommen Request-DTO, `WordQuestDbContext`, `HttpContext` und `CancellationToken ct` injiziert. Domänenservices sind rein (z. B. `Sm2Scheduler` mit `SchedulerOptions` und `Random`), Zeit kommt als Parameter oder über `TimeProvider`.
 
-**Return Values:** Records for results (`AnswerEvaluation`, `CsvParseResult`); `IReadOnlyList<T>` for collections; nullable reference types honoured (`VocabularySet?` + `is null` check).
+**Return Values:** Endpoints `Task<IResult>`; Domänenservices Werte (`ReviewOutcome`) oder Enums für Befunde.
 
 ## Module Design
 
-**Exports:** Backend modules (`WordQuest.Modules.Content|Learning|Gamification|Identity`) each have `Entities/` and `Services/`; public types, no DI extension methods. Endpoints are `static class XEndpoints` with `MapXEndpoints(this IEndpointRouteBuilder app)` extension and private static handlers. Routes grouped under `/api/v1/...` with `.WithTags(...)` and `.RequireAuthorization("Guardian")` per write route.
+**Exports:**
+- C#: Module `WordQuest.Modules.{Identity,Content,Learning,Gamification}` enthalten nur `Entities/` und `Services/`, ohne EF, HTTP oder NuGet. `WordQuest.Shared.Kernel` hält `Grade`, `ITenantContext`, `ITenantOwned`.
+- Mandantengebundene Entitäten implementieren `ITenantOwned` und werden in `WordQuestDbContext` mit Global Query Filter registriert. `IgnoreQueryFilters()`/`SystemTenantContext` nur in Auth-, Start- und Seed-Code.
+- TS: benannte Exports, keine Default-Exports in `src/` (Ausnahme: Konfig-Dateien, `frontend/e2e/global-setup.ts`).
+- UI-Varianten mit `cva` + `cn()` (`frontend/src/components/ui/button.tsx`, `frontend/src/lib/utils.ts`); Radix-Primitives (`Slot`, Dialog, Label) als Basis.
+- Datenzugriff in Seiten über TanStack Query (`useQuery({ queryKey: ['learners'], queryFn: () => api<Learner[]>('/learners') })`).
 
-**Barrel Files:** None. Frontend imports files directly (`@/components/ui/button`).
+**Barrel Files:** Keine. Direkt aus der Datei importieren.
+
+## Commits
+
+- Deutsch mit Conventional-Präfix (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), optional mit Plan-/Task-ID im Scope (`fix(261023-k4m): …`). Atomar pro Anliegen.
 
 ---
 
-*Convention analysis: 2026-09-24*
+*Convention analysis: 2026-10-24*
