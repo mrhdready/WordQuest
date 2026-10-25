@@ -83,7 +83,7 @@
 - **CNT2-01**: Vocabulary library: curated CC0 sets by grade and topic in the repo, checked in CI, offered next to the CSV import ("Aus der Bibliothek", served from the web image); proposal in `.planning/research/VOKABEL-REGISTRY.md`
 - **SPL2-01**: Set type "Lernwörter": parents create a spelling set (one language, setting "article required" yes/no); every entry is a word plus a picture or an emoji, without both it cannot be saved (Dennis 2026-10-25, module proposal `.planning/research/LERNWOERTER-MODUL.md`)
 - **SPL2-02**: In a Lernwörter round the child sees only the picture (or emoji) and types the word; the screen-reader text does not reveal the word
-- **SPL2-03**: Strict server-side grading for Lernwörter: case matters, every typo is wrong, article per set setting; on a mistake the feedback shows the correct spelling
+- **SPL2-03**: Strict server-side grading for Lernwörter: case matters, every typo is wrong, article per set setting; on a mistake the feedback shows the correct spelling and marks the letters where the input differs (not by color alone)
 - **SPL2-04**: Spaced repetition, XP, streak and progress apply to Lernwörter sets as to vocabulary sets
 
 ### Operations
