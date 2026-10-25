@@ -139,9 +139,10 @@ builder.Services.AddAuthorizationBuilder()
 // Partition pro echter Client-IP (FIX-01). nginx setzt X-Forwarded-For selbst auf
 // die Adresse seines Absenders. Vertraut werden nur private Netze: Die API ist
 // in keinem Stack veroeffentlicht, nur nginx erreicht sie, und Docker-Pools
-// weichen je nach Host ab. ForwardLimit = 1, weil genau eine Stufe (nginx) direkt vor der API steht;
-// ein vom Geraet vorangestellter Wert zaehlt so nie. Der e2e-Teststack setzt
-// einen hoeheren Wert, weil Playwright alle Anfragen von einer IP schickt.
+// weichen je nach Host ab. ForwardLimit = 1, weil genau eine Stufe (nginx)
+// direkt vor der API steht; ein vom Geraet vorangestellter Wert zaehlt so nie.
+// Der e2e-Teststack setzt einen hoeheren Wert, weil Playwright alle Anfragen
+// von einer IP schickt.
 int authRequestsPerMinute = builder.Configuration.GetValue("Auth:RequestsPerMinute", 10);
 if (authRequestsPerMinute < 1)
 {

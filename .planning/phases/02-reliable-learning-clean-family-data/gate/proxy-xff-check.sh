@@ -7,6 +7,7 @@
 # Ausserdem fuer jeden Dienst jeder Compose-Datei: Nur certs bindet das CA-Volume
 # (Name endet auf -ca) ein, /etc/nginx/tls nur schreibgeschuetzt, certs ohne Netz,
 # Ports und Secrets (TLS-01, T-fpi-01, T-fpi-08). Bind-Mounts auf /certs/ca zaehlen mit.
+# Kein Dienst bindet etwas unter /etc/nginx/conf.d ein (FIX-01, T-fpi-12).
 #
 # Aufruf (aus dem Repo-Root):
 #   bash .planning/phases/02-reliable-learning-clean-family-data/gate/proxy-xff-check.sh
@@ -82,7 +83,7 @@ send() {
 
 wait_ready "$NET-api"
 
-echo "== Heimnetz-Variante (frontend/nginx.conf)"
+echo "== Heimnetz-Stack (frontend/nginx.conf)"
 docker run -d --name "$NET-home" --network "$NET" \
   --mount "type=bind,src=$ROOT/frontend/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly" \
   --mount "type=bind,src=$ROOT/frontend/nginx-security-headers.conf,dst=/etc/nginx/security-headers.conf,readonly" \
@@ -104,7 +105,7 @@ seen="$(sed -n 2p <<<"$out")"
 echo "Heimnetz /health/: Absender $sender, die API sieht $seen"
 
 echo "== Sicherheits-Header (D-12, D-21)"
-# Prueft je Pfad die Koepfe der Antwort von Container $1 (Variante $2).
+# Prueft je Pfad die Koepfe der Antwort von Container $1 (Stack $2).
 check_headers() {
   local path resp
   for path in / /verwalten /index.html /assets/app.js /sw.js; do
@@ -148,6 +149,9 @@ for file in docker-compose*.yml frontend/e2e/docker-compose.e2e.yml; do
           console.log(`Dienst ${name} bindet das CA-Volume ${volume.source} ein.`)
         if (volume.target === "/etc/nginx/tls" && !volume.read_only)
           console.log(`Dienst ${name} bindet /etc/nginx/tls nicht schreibgeschuetzt ein.`)
+        // Eine eingebundene nginx-Konfiguration (etwa set_real_ip_from) umginge die XFF-Pruefung oben (FIX-01).
+        if ((volume.target ?? "").startsWith("/etc/nginx/conf.d"))
+          console.log(`Dienst ${name} bindet ${volume.target} ein; die XFF-Pruefung deckt nur frontend/nginx.conf ab.`)
       }
       if (name === "certs") {
         if (service.network_mode !== "none") console.log("Dienst certs hat Netz (network_mode ist nicht none).")
