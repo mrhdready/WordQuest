@@ -29,6 +29,86 @@ set_env() {
   fi
 }
 
+# Namensregel wie `tls watch` (TlsCertificates.TryParseNames, Codex 8): ein Label aus
+# Kleinbuchstaben, Ziffern und Bindestrich, hoechstens 63 Zeichen, nicht nur aus Ziffern.
+valid_label() {
+  local re='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
+  [[ "$1" =~ $re && ! "$1" =~ ^[0-9]+$ ]]
+}
+
+# Gateways aller Docker-Netze: Sie stehen in `hostname -I`, sind von anderen Geraeten
+# aus aber nicht erreichbar und gehoeren nicht ins Zertifikat (OU-2).
+bridge_gateways() { docker network inspect $(docker network ls -q 2>/dev/null) --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}' </dev/null 2>/dev/null || true; }
+
+# Namensliste fuer WQ_TLS_NAMES (OD-1): Kurzname, .local, .fritz.box, die IPv4-Adressen
+# des Geraets, localhost und 127.0.0.1, kommagetrennt.
+tls_names() {
+  local name ip gateways list=""
+  local ipv4='^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$'
+  name="$(hostname 2>/dev/null || true)"
+  name="$(printf '%s' "${name%%.*}" | tr '[:upper:]' '[:lower:]')"
+  if valid_label "$name"; then
+    list="${name},${name}.local,${name}.fritz.box,"
+  else
+    warn "Der Gerätename ${name} passt nicht in das Zertifikat. WordQuest ist dann nur über die IP-Adresse erreichbar." >&2
+  fi
+  gateways=" $(bridge_gateways) "
+  for ip in $(hostname -I 2>/dev/null || true); do
+    [[ "$ip" =~ $ipv4 && "$ip" != 127.0.0.1 && "$gateways" != *" $ip "* ]] || continue
+    list="${list}${ip},"
+  done
+  printf '%s\n' "${list}localhost,127.0.0.1"
+}
+
+is_terminal() { [[ -t 0 ]]; }
+
+# Host-Port, auf dem der eigene laufende web-Container den Containerport anbietet, sonst leer.
+own_port() { docker compose port web "$1" </dev/null 2>/dev/null | head -n 1 | sed 's/.*://' || true; }
+
+# Echter Bind ueber Docker auf allen Adressen; jeder Fehlschlag gilt als belegt (OD-2).
+port_free() { docker run --rm --entrypoint true -p "$1:8080" "$probe_image" </dev/null >/dev/null 2>&1; }
+
+# Nutzbar: der eigene Container haelt den Port schon, oder er ist frei.
+port_usable() { [[ "$(own_port "$2")" == "$1" ]] || port_free "$1"; }
+
+# Waehlt die Ports vor dem Start (OD-2). Gesetzte Werte gelten, wie sie sind; ist der
+# Standard belegt, fragt setup.sh nur am Terminal nach dem Ausweich und liest sonst
+# nichts von stdin.
+choose_ports() {
+  local set_http set_https busy="" alt_busy="" answer
+  set_http="${WQ_HTTP_PORT:-$(env_value WQ_HTTP_PORT)}"
+  set_https="${WQ_HTTPS_PORT:-$(env_value WQ_HTTPS_PORT)}"
+  http_port="${set_http:-$http_default}"
+  https_port="${set_https:-$https_default}"
+  port_usable "$http_port" 8080 || busy="$http_port"
+  port_usable "$https_port" 8443 || busy="${busy:+$busy und }$https_port"
+  [[ -n "$busy" ]] || return 0
+  if [[ -z "$set_http$set_https" ]]; then
+    port_usable "$http_alt" 8080 || alt_busy=" und $http_alt"
+    port_usable "$https_alt" 8443 || alt_busy="$alt_busy und $https_alt"
+  fi
+  if [[ -n "$set_http$set_https$alt_busy" ]]; then
+    die "Auf diesem Gerät ist schon belegt: ${busy}${alt_busy}. Trage in .env bei WQ_HTTP_PORT und WQ_HTTPS_PORT freie Werte ein, zum Beispiel 8081 und 8444, und starte ./setup.sh noch einmal."
+  fi
+  is_terminal || die "Port ${http_default} oder ${https_default} ist auf diesem Gerät schon belegt, und ohne Terminal fragt setup.sh nicht nach. Trage in .env WQ_HTTP_PORT=${http_alt} und WQ_HTTPS_PORT=${https_alt} ein und starte ./setup.sh noch einmal."
+  while true; do
+    read -rp "Port ${http_default} oder ${https_default} ist auf diesem Gerät schon belegt. WordQuest kann stattdessen ${http_alt} und ${https_alt} nutzen; die Adresse endet dann auf :${https_alt}. Einverstanden? [J/n] " answer \
+      || die "Eingabe beendet, bevor die Ports feststanden. Es wurde nichts geändert."
+    case "$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')" in
+      ''|j|ja)
+        set_env WQ_HTTP_PORT "$http_alt"
+        set_env WQ_HTTPS_PORT "$https_alt"
+        http_port="$http_alt"
+        https_port="$https_alt"
+        say "✓ WordQuest nutzt die Ports ${http_alt} und ${https_alt}."
+        return 0
+        ;;
+      n|nein) die "Dann gib die Ports ${http_default} und ${https_default} frei oder trage in .env bei WQ_HTTP_PORT und WQ_HTTPS_PORT eigene Werte ein und starte ./setup.sh noch einmal." ;;
+      *) warn "Bitte j oder n eingeben." ;;
+    esac
+  done
+}
+
 # Startet den Stack. Dockers englische Meldung zum belegten Port laesst Laien ohne Ausweg.
 # tee in eine Datei statt Variable: Der Fortschritt bleibt live sichtbar (Warten auf db).
 start_stack() {
@@ -159,11 +239,17 @@ if ! docker compose pull --ignore-buildable </dev/null; then
   die "Images konnten nicht geladen werden. Stimmt WQ_IMAGE_PREFIX in .env, und sind die Pakete öffentlich?"
 fi
 
-http_port="${WQ_HTTP_PORT:-$(env_value WQ_HTTP_PORT)}"
-http_port="${http_port:-80}"
-https_port="${WQ_HTTPS_PORT:-$(env_value WQ_HTTPS_PORT)}"
-https_port="${https_port:-443}"
-set_env WQ_TLS_NAMES localhost,127.0.0.1
+# Ports: Standard und Ausweich (OD-2). Geprobt wird mit dem db-Image, das pull schon geladen hat.
+http_default=80
+https_default=443
+http_alt=8080
+https_alt=8443
+probe_image="$(docker compose config --images db </dev/null)"
+choose_ports
+
+# Namensaenderungen wirken ab hier; certs stellt dann ein neues Zertifikat derselben CA aus.
+names="$(tls_names)"
+set_env WQ_TLS_NAMES "$names"
 
 say "Starte WordQuest …"
 start_stack
@@ -237,7 +323,8 @@ case "$status" in
 esac
 
 # --- Abschluss ---------------------------------------------------------------
-host="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+# Adresse: erste IPv4 aus der Namensliste, sonst localhost.
+host="$(printf '%s\n' "$names" | tr ',' '\n' | grep -E '^[0-9.]+$' | grep -vx '127\.0\.0\.1' | head -n 1 || true)"
 host="${host:-localhost}"
 url="https://${host}"
 [[ "$https_port" == 443 ]] || url="${url}:${https_port}"
