@@ -4,6 +4,10 @@
 # werden in keiner Betriebsdatei verwendet. Port nur an 127.0.0.1 gebunden.
 # Baut die Images aus dem Arbeitsbaum:
 #   npm --prefix frontend run e2e:stack
+#
+# Der Dienst certs (API-Image, `tls watch`) legt die Test-CA und das
+# Server-Zertifikat an; nginx liefert es auf 8443 aus (Host 127.0.0.1:18443).
+# Nur certs bindet das CA-Volume ein (Proxy-Gate).
 
 name: wordquest-e2e
 
@@ -53,12 +57,39 @@ services:
       retries: 20
       start_period: 30s
 
+  certs:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    command: ["tls", "watch"]
+    # root fuer die frisch angelegten, root-eigenen Volumes; Gruppe 101 ist nginx
+    # im Web-Image und liest server.pem (0640) ueber die Gruppe.
+    user: "0:101"
+    network_mode: none
+    # Sonst erbte certs den HTTP-Healthcheck der API und gaelte nie als gesund.
+    healthcheck:
+      disable: true
+    environment:
+      WQ_TLS_NAMES: "localhost,wordquest.test,127.0.0.1"
+    volumes:
+      - e2e-ca:/certs/ca
+      - e2e-tls:/certs/tls
+
   web:
     build:
       context: ../..
       dockerfile: frontend/Dockerfile
     ports:
       - "127.0.0.1:18080:8080"
+      - "127.0.0.1:18443:8443"
+    volumes:
+      - e2e-tls:/etc/nginx/tls:ro
     depends_on:
       api:
         condition: service_healthy
+      certs:
+        condition: service_started
+
+volumes:
+  e2e-ca:
+  e2e-tls:

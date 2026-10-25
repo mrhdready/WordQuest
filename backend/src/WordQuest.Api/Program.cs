@@ -14,6 +14,20 @@ using WordQuest.Infrastructure.Seed;
 using WordQuest.Modules.Learning.Services;
 using WordQuest.Shared.Kernel;
 
+// Dienst certs: laeuft ohne Netz, ohne Secrets und ohne Datenbank und ist der
+// einzige Schreiber der Zertifikate. Deshalb vor dem Builder und vor der Secret-Pruefung.
+if (TlsCommand.IsCommand(args))
+{
+    Environment.ExitCode = await TlsCommand.RunAsync(
+        args,
+        Environment.GetEnvironmentVariable("WQ_TLS_NAMES"),
+        Console.Out,
+        Console.Error,
+        TimeProvider.System,
+        CancellationToken.None);
+    return;
+}
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Ausserhalb von Development keine fehlenden oder bekannten Standard-Secrets
