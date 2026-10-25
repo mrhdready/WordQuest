@@ -82,6 +82,9 @@ services:
     ports:
       - "127.0.0.1:18080:8080"
       - "127.0.0.1:18443:8443"
+    environment:
+      # Ziel der Umleitung von HTTP: der Host-Port fuer HTTPS.
+      WQ_HTTPS_PORT: "18443"
     volumes:
       - e2e-tls:/etc/nginx/tls:ro
     depends_on:
