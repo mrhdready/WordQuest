@@ -8,9 +8,15 @@ import { accessToken, canvasPicture, putPicture } from './pictures'
 const childName = 'Max'
 const demoPin = '1234'
 
-// Fuer den Block "ohne Secure Context" unten: Browser-Optionen gehen nur auf
-// Dateiebene (eigener Worker), localhost bleibt davon unberuehrt.
-test.use({ launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] } })
+// Warnpfad fuer die ganze Datei: Der Browser vertraut der CA nicht (keine
+// SPKI-Liste aus global-setup, launchOptions ersetzt die der Konfiguration), die
+// Warnung ist weggeklickt (ignoreHTTPSErrors). So sieht ein Geraet aus, auf dem die
+// Eltern die CA nicht installiert haben: kein Service Worker, Lernen muss trotzdem
+// gehen. Browser-Optionen gehen nur auf Dateiebene (eigener Worker).
+test.use({
+  ignoreHTTPSErrors: true,
+  launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] },
+})
 
 // Rate-Limit "auth": GET /auth/profiles zaehlt mit, je Test ein Laden von / und eine
 // Anmeldung. Der Teststack hebt das Limit an (Auth__RequestsPerMinute in
@@ -179,7 +185,7 @@ test.describe(() => {
   })
 })
 
-// Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen über HTTP"
+// Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen ohne vertrautes Zertifikat"
 // unberuehrt (das Tagesbudget neuer Karten reicht fuer genau eine Runde).
 test('Schließen in einer angefangenen Runde und Fehlerzustand', async ({ page }) => {
   const item = {
@@ -299,12 +305,12 @@ test('Fehleransicht bei gleichzeitiger Doppel-Antwort', async ({ page }) => {
 })
 
 // FIX-03/FIX-09 im gebauten Stack: eigenes Kind, damit das Tagesbudget des
-// Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt.
+// Demo-Kinds fuer "Lernen ohne vertrautes Zertifikat" unberuehrt bleibt.
 test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, browser, baseURL }) => {
   const name = `Abbruchkind ${Date.now()}`
   const pin = '4711'
 
-  const guardian = await browser.newContext({ baseURL, storageState: guardianStorageState })
+  const guardian = await browser.newContext({ baseURL, storageState: guardianStorageState, ignoreHTTPSErrors: true })
   const manage = await guardian.newPage()
   await manage.goto('/verwalten/kinder/neu')
   await manage.getByLabel('Name', { exact: true }).fill(name)
@@ -342,10 +348,26 @@ test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, brow
   expect(((await second.json()) as SessionView).items[0]?.cardId).toBe(firstCard)
 })
 
-// FIX-07: Heimnetz-HTTP mit nicht-lokalem Hostnamen, also ohne Secure Context
-// (kein crypto.randomUUID, kein Service Worker). Der Hostname zeigt auf den Teststack.
-test.describe('ohne Secure Context', () => {
-  test.use({ baseURL: 'http://wordquest.test:18080' })
+// Heimnetz-Adresse mit nicht-lokalem Hostnamen ueber HTTPS, Zertifikatswarnung
+// weggeklickt: Chromium registriert dann keinen Service Worker, die App laeuft als
+// reine Browser-App. Der Hostname zeigt auf den Teststack. Den Ersatz fuer
+// crypto.randomUUID (FIX-07) behaelt der Code fuer Seiten ohne Secure Context; hier
+// ist der Kontext sicher, den Ersatz prueft QA2-05.
+test.describe('Zertifikat nicht vertraut', () => {
+  test.use({ baseURL: 'https://wordquest.test:18443' })
+
+  // Kein Service Worker, auch nicht nach dem Neuladen (eine erfolgreiche
+  // Registrierung aus dem ersten Laden waere dann sichtbar).
+  async function expectNoServiceWorker(page: Page) {
+    const workers = () =>
+      page.evaluate(async () => ({
+        controller: navigator.serviceWorker.controller !== null,
+        registrations: (await navigator.serviceWorker.getRegistrations()).length,
+      }))
+    expect(await workers()).toEqual({ controller: false, registrations: 0 })
+    await page.reload({ waitUntil: 'load' })
+    expect(await workers()).toEqual({ controller: false, registrations: 0 })
+  }
 
   const isAnswer = (url: string) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(url)
   const sendButton = (page: Page) => page.getByRole('button', { name: /^Antwort(en| senden)$/ })
@@ -393,9 +415,9 @@ test.describe('ohne Secure Context', () => {
     await expect(page.getByRole('button', { name: 'Weiter' })).toHaveCount(0)
   }
 
-  test('Lernen über HTTP', async ({ page }) => {
+  test('Lernen ohne vertrautes Zertifikat', async ({ page }) => {
     await openPicker(page)
-    expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
+    await expectNoServiceWorker(page)
     await loginByKeyboard(page)
 
     // Reihenfolge der Karten wie im Client: Startliste plus nachgereichte Wiederholungen.
@@ -459,7 +481,7 @@ test.describe('ohne Secure Context', () => {
 
   /*
     IMG-01 (D-11, D-12): eigenes Kind wie in "Abgebrochene Runde", damit das Tagesbudget
-    des Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt, und ein Set mit genau einer
+    des Demo-Kinds fuer "Lernen ohne vertrautes Zertifikat" unberuehrt bleibt, und ein Set mit genau einer
     Vokabel, damit jede Karte der Runde ein Bild traegt. Der Eltern-Kontext laeuft auf der
     baseURL des Projekts (dort gilt guardianStorageState) und meldet sich nicht neu an.
     Anmelde-Budget: je Test zwei Anfragen der Policy "auth" (/ mit GET /auth/profiles,
@@ -479,6 +501,7 @@ test.describe('ohne Secure Context', () => {
     const guardian = await browser.newContext({
       baseURL: test.info().project.use.baseURL,
       storageState: guardianStorageState,
+      ignoreHTTPSErrors: true,
     })
     const manage = await guardian.newPage()
     await manage.goto('/verwalten/kinder/neu')
@@ -503,7 +526,7 @@ test.describe('ohne Secure Context', () => {
     await guardian.close()
 
     await openPicker(page)
-    expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
+    await expectNoServiceWorker(page)
     await page.getByRole('button', { name }).click()
     await expect(page.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
     for (const digit of pin.slice(0, -1)) await page.keyboard.press(digit)
@@ -532,7 +555,7 @@ test.describe('ohne Secure Context', () => {
     await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeFocused()
   }
 
-  test('Lernen mit Bild über HTTP', async ({ page, browser }) => {
+  test('Lernen mit Bild ohne vertrautes Zertifikat', async ({ page, browser }) => {
     // Die erste Karte erscheint bei 200 % (640 x 400 CSS-px), wie bei einem Kind mit
     // Zoom: kein waagerechter Scrollbalken, das Antwortfeld hat den Fokus und ist im
     // Bild. Der Rahmen steht schon vor dem Bild, der Fokus scrollt also nicht ins Leere.

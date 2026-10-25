@@ -1,5 +1,8 @@
+import { createHash, X509Certificate } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { checkPage } from './axe'
+import { caFile } from './global-setup'
 
 // Zugang aus DemoDataSeeder (Teststack laeuft mit WQ_SEED_DEMO_DATA).
 const demoEmail = 'demo@wordquest.local'
@@ -65,7 +68,7 @@ function apiCacheEntries(page: Page) {
   )
 }
 
-// D-15 mit aktivem Service Worker (localhost ist ein Secure Context): Abmelden
+// D-15 mit aktivem Service Worker (der Browser vertraut der CA des Teststacks): Abmelden
 // leert wq-api, und ein Eintrag, den der Worker danach noch schreibt, erreicht
 // die naechste Anmeldung nicht (Review 02 MEDIUM).
 test('Abmelden: Tokens und wq-api weg, spaeter Eintrag ueberlebt die Anmeldung nicht', async ({ page }) => {
@@ -94,6 +97,32 @@ test('Abmelden: Tokens und wq-api weg, spaeter Eintrag ueberlebt die Anmeldung n
   expect(await page.evaluate(async () => (await caches.match('/api/v1/spaet')) === undefined)).toBe(
     true,
   )
+})
+
+// TLS-04: Auch unter Kontrolle des Service Workers ist /wordquest-ca.crt ein Download
+// der CA (DER), nicht die App-Seite aus dem Navigations-Fallback; mit und ohne Query.
+test('CA-Download mit aktivem Service Worker', async ({ page, request }) => {
+  await page.goto('/login')
+  if (!(await page.evaluate(() => navigator.serviceWorker.controller !== null))) {
+    await page.reload()
+  }
+  await expect
+    .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+    .toBe(true)
+
+  const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+  const expected = sha256(new X509Certificate(readFileSync(caFile)).raw)
+  for (const path of ['/wordquest-ca.crt', '/wordquest-ca.crt?x=1']) {
+    const downloading = page.waitForEvent('download', { timeout: 10_000 })
+    // Chromium bricht die Navigation beim Download ab; das ist hier das Ziel.
+    await page.goto(path).catch(() => undefined)
+    const bytes = readFileSync(await (await downloading).path())
+    expect(bytes[0], path).toBe(0x30)
+    expect(sha256(bytes), path).toBe(expected)
+
+    const response = await request.get(path)
+    expect(response.headers()['content-type'], path).toBe('application/x-x509-ca-cert')
+  }
 })
 
 // D-07: Der zweite Tab folgt dem Speicher ohne Neuladen.
