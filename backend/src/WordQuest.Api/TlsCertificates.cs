@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 
 namespace WordQuest.Api;
 
@@ -26,6 +28,11 @@ public static class TlsCertificates
     public const int AuthorityYears = 10;
 
     private const string ServerAuthOid = "1.3.6.1.5.5.7.3.1";
+    private const string SubjectAlternativeNameOid = "2.5.29.17";
+
+    // \z statt $: $ liesse ein abschliessendes \n durch.
+    private static readonly Regex DnsName = new(
+        @"\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\z", RegexOptions.Compiled);
 
     public static X509Certificate2 CreateAuthority(string label, DateTimeOffset now)
     {
@@ -94,5 +101,113 @@ public static class TlsCertificates
 
         using X509Certificate2 certificate = request.Create(authority, notBefore, notAfter, serial);
         return certificate.CopyWithPrivateKey(key);
+    }
+
+    /// <summary>
+    /// Ein neues Server-Zertifikat ist noetig, wenn es nicht von genau dieser CA stammt,
+    /// zum Zeitpunkt nicht gueltig ist, unter 30 Tage Rest hat oder andere Namen traegt.
+    /// </summary>
+    public static bool NeedsReissue(
+        X509Certificate2 server,
+        X509Certificate2 authority,
+        IReadOnlyList<string> dnsNames,
+        IReadOnlyList<IPAddress> ipAddresses,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(dnsNames);
+        ArgumentNullException.ThrowIfNull(ipAddresses);
+
+        return !NamesMatch(server, dnsNames, ipAddresses)
+            || new DateTimeOffset(server.NotAfter) - now < RenewBefore
+            || !IssuedBy(server, authority, now);
+    }
+
+    public static bool NamesMatch(X509Certificate2 server, IReadOnlyList<string> dnsNames, IReadOnlyList<IPAddress> ipAddresses)
+    {
+        ArgumentNullException.ThrowIfNull(dnsNames);
+        ArgumentNullException.ThrowIfNull(ipAddresses);
+
+        // Ordinal: die Namensregel laesst nur Kleinbuchstaben zu, IPs in Normalform.
+        return SubjectAlternativeNames(server).SetEquals(dnsNames.Concat(ipAddresses.Select(ip => ip.ToString())));
+    }
+
+    public static IReadOnlySet<string> SubjectAlternativeNames(X509Certificate2 certificate)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+
+        X509Extension? extension = certificate.Extensions[SubjectAlternativeNameOid];
+        if (extension is null)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        var san = new X509SubjectAlternativeNameExtension(extension.RawData, extension.Critical);
+        return san.EnumerateDnsNames()
+            .Concat(san.EnumerateIPAddresses().Select(ip => ip.ToString()))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>SHA-256 ueber DER, Grossbuchstaben, Paare mit Doppelpunkt — wie Browser und openssl es zeigen.</summary>
+    public static string Fingerprint(X509Certificate2 certificate)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        return BitConverter.ToString(SHA256.HashData(certificate.RawData)).Replace('-', ':');
+    }
+
+    /// <summary>
+    /// Namensregel fuer WQ_TLS_NAMES, gleich in setup.sh (Codex 8): Eintraege nur aus Ziffern
+    /// und Punkten muessen IPv4 in Normalform sein, alles andere ein kleingeschriebener DNS-Name.
+    /// </summary>
+    public static bool TryParseNames(
+        string? value,
+        out IReadOnlyList<string> dnsNames,
+        out IReadOnlyList<IPAddress> ipAddresses,
+        out string? invalid)
+    {
+        List<string> dns = [];
+        List<IPAddress> ips = [];
+        dnsNames = dns;
+        ipAddresses = ips;
+        invalid = null;
+
+        foreach (string entry in (value ?? string.Empty).Split(','))
+        {
+            if (entry.Length > 0 && entry.All(c => char.IsAsciiDigit(c) || c == '.'))
+            {
+                if (!IPAddress.TryParse(entry, out IPAddress? ip)
+                    || ip.AddressFamily != AddressFamily.InterNetwork
+                    || ip.ToString() != entry)
+                {
+                    invalid = entry;
+                    return false;
+                }
+
+                ips.Add(ip);
+            }
+            else if (entry.Length <= 253 && DnsName.IsMatch(entry))
+            {
+                dns.Add(entry);
+            }
+            else
+            {
+                invalid = entry;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IssuedBy(X509Certificate2 server, X509Certificate2 authority, DateTimeOffset now)
+    {
+        using var chain = new X509Chain();
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Add(authority);
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.DisableCertificateDownloads = true;
+        chain.ChainPolicy.VerificationTime = now.LocalDateTime;
+        return chain.Build(server);
     }
 }
