@@ -8,6 +8,9 @@
 # Dazu die Sicherheits-Header beider Varianten an jedem Pfad, auch an Fehlerantworten
 # (D-12, D-21), die Einbindung in docker-compose.yml und ein unveraendertes
 # docker-compose.quick.yml.
+# Ausserdem fuer jeden Dienst jeder Compose-Datei: Nur certs bindet das CA-Volume
+# (Name endet auf -ca) ein, /etc/nginx/tls nur schreibgeschuetzt, certs ohne Netz,
+# Ports und Secrets (TLS-01, T-fpi-01, T-fpi-08). Bind-Mounts auf /certs/ca zaehlen mit.
 #
 # Aufruf (aus dem Repo-Root):
 #   bash .planning/phases/02-reliable-learning-clean-family-data/gate/proxy-xff-check.sh
@@ -175,5 +178,29 @@ quick="$(docker compose -f docker-compose.quick.yml config 2>/dev/null)" \
 if grep -q 'realip' <<<"$quick"; then
   fail "docker-compose.quick.yml bindet realip ein; Geraete im Heimnetz koennten ihre Adresse selbst waehlen."
 fi
+
+echo "== CA-Volume nur im Dienst certs"
+# node nur hier im Gate auf dem Entwicklungsrechner, nicht im Betrieb.
+for file in docker-compose*.yml frontend/e2e/docker-compose.e2e.yml; do
+  json="$(docker compose -f "$file" config --format json 2>/dev/null)" \
+    || fail "docker compose -f $file config schlaegt fehl."
+  problem="$(node -e '
+    const config = JSON.parse(require("fs").readFileSync(0, "utf8"))
+    for (const [name, service] of Object.entries(config.services ?? {})) {
+      for (const volume of service.volumes ?? []) {
+        if (name !== "certs" && (/-ca$/.test(volume.source ?? "") || (volume.target ?? "").startsWith("/certs/ca")))
+          console.log(`Dienst ${name} bindet das CA-Volume ${volume.source} ein.`)
+        if (volume.target === "/etc/nginx/tls" && !volume.read_only)
+          console.log(`Dienst ${name} bindet /etc/nginx/tls nicht schreibgeschuetzt ein.`)
+      }
+      if (name === "certs") {
+        if (service.network_mode !== "none") console.log("Dienst certs hat Netz (network_mode ist nicht none).")
+        if ((service.ports ?? []).length > 0) console.log("Dienst certs veroeffentlicht Ports.")
+        if ((service.secrets ?? []).length > 0) console.log("Dienst certs bekommt Secrets.")
+      }
+    }' <<<"$json")" || fail "$file: Pruefung der Volumes schlaegt fehl."
+  [ -z "$problem" ] || fail "$file: $problem"
+  echo "$file: CA-Volume nur in certs"
+done
 
 echo "PROXY-XFF OK"

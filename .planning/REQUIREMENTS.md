@@ -62,6 +62,15 @@
 
 - [ ] **IMG-01**: Parents can give each vocabulary entry its own picture (add, replace, remove); children see it in the learning round; pictures are stored in the database, isolated per family, and survive backup, restore and upgrade
 
+### HTTPS im Heimnetz (Owner-Entscheidung 2026-10-25)
+
+- [ ] **TLS-01**: Jede Installation hat eine eigene Zertifizierungsstelle (10 Jahre, RSA 3072) und ein davon signiertes Server-Zertifikat (RSA 2048, höchstens 800 Tage, EKU serverAuth, alle Namen und IPs im SAN); der CA-Schlüssel verlässt nie das CA-Volume des Dienstes certs, wird nie ausgeliefert und liegt nicht in den Sicherungen.
+- [ ] **TLS-02**: Das Server-Zertifikat wird ohne CA-Wechsel automatisch neu ausgestellt, täglich geprüft bei weniger als 30 Tagen Restlaufzeit und bei geänderter Namensliste mit dem nächsten `./setup.sh`, und nginx übernimmt es ohne Neustart.
+- [ ] **TLS-03**: Die Ports 80 und 443 leiten mit 301 auf HTTPS um, setup.sh prüft vorher, ob sie belegt sind, und weicht auf 8080/8443 aus; es gibt kein HSTS.
+- [ ] **TLS-04**: Die CA lässt sich über HTTP und HTTPS herunterladen, setup.sh zeigt am Ende die Fingerabdrücke, die Doku erklärt Browserwarnung und CA-Installation je Browser und Gerät in Laiensprache, und die Abnahme läuft auf echten Geräten.
+- [ ] **TLS-05**: Traefik und Let's Encrypt sind entfernt, die neue Paketliste ist in release-package.sh, upgrade.sh und dem Release-Smoke konsistent, und Installationen der Version 1.0.x werden nicht migriert.
+- [ ] **TLS-06**: WordQuest erscheint mit diesen Änderungen als Release 1.1.0.
+
 ## v2 Requirements
 
 ### Parents
@@ -168,12 +177,18 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 | HARD-04 | Phase 3.1 | Complete |
 | HARD-05 | Phase 3.1 | Complete |
 | IMG-01 | Phase 3.1.1 | Pending — automatisch belegt 2026-10-23 (END f70271c), manuelle Abnahme A1–A3 offen |
+| TLS-01 | Quick 261025-fpi | Pending |
+| TLS-02 | Quick 261025-fpi | Pending |
+| TLS-03 | Quick 261025-fpi | Pending |
+| TLS-04 | Quick 261025-fpi | Pending |
+| TLS-05 | Quick 261025-fpi | Pending |
+| TLS-06 | Quick 261025-fpi | Pending |
 
 **Coverage:**
-- v1 requirements: 33 total
-- Mapped to phases: 33
+- v1 requirements: 39 total
+- Mapped to phases: 39
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-25 — v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
+*Last updated: 2026-10-25 — TLS-01 bis TLS-06 (HTTPS im Heimnetz mit eigener CA, Quick 261025-fpi) ergänzt; davor am selben Tag v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
