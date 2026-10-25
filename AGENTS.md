@@ -29,7 +29,7 @@ WordQuest ist eine einfache Vokabel-Lern-App für Kinder, die Eltern ohne besond
 - **Einfachheit:** Jede Ergänzung muss Installation und Betrieb für Laien machbar halten. Im Zweifel weglassen.
 - **Stack:** .NET 10 / EF Core / React / PostgreSQL / Docker Compose bleiben.
 - **Hosting:** ARM64-Heimhardware, genau eine API-Instanz (Migration beim Start und In-Memory-Rate-Limiter setzen das voraus).
-- **Standard-Betriebsweg:** Heimnetz über HTTP (`docker-compose.quick.yml`). Die Variante mit Traefik + Let's Encrypt (`docker-compose.yml`) ist für Fortgeschrittene. Ohne HTTPS registriert sich kein Service Worker, die App muss deshalb als reine Browser-App vollständig funktionieren.
+- **Standard-Betriebsweg:** Heimnetz über HTTP (`docker-compose.quick.yml`). Ohne HTTPS registriert sich kein Service Worker, die App muss deshalb als reine Browser-App vollständig funktionieren.
 - **Barrierefreiheit:** WCAG 2.2 AA als Untergrenze bei jeder UI-Änderung.
 
 ## Grundregeln für die Entwicklung

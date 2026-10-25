@@ -279,5 +279,3 @@ Eine Zeile, die mit „Start abgebrochen:“ beginnt, nennt den Grund und den Au
 Fehlt `secrets/jwt_key.txt`, erzeugt `./setup.sh` die Datei neu; eine vorhandene Datei lässt es unverändert. Für `secrets/db_password.txt` hilft das nicht: Die Datenbank behält das Passwort aus der Installation, ein neu erzeugtes passt nicht dazu.
 
 **Früherer Schnelltest.** Hast du WordQuest früher mit der alten Schnelltest-Datei ausprobiert, setzt du es mit dieser Seite neu auf; den alten Test beendest du mit `docker compose -p wordquest-quick down`, seine Daten bleiben in ihrem Docker-Volume, bis du es selbst löschst.
-
-Mit eigener Domain und Zertifikat (nötig, um WordQuest als App aufs Tablet zu legen) gibt es eine Variante für Fortgeschrittene, siehe [README, Variante B](../README.md#variante-b--mit-domain-und-tls-für-fortgeschrittene).

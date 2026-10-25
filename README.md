@@ -35,64 +35,17 @@ visibility** auf *Public* und gibt bei `setup.sh` das eigene Präfix an. Ein
 Fork setzt in `.env` außerdem
 `WQ_RELEASE_URL=https://github.com/<account>/WordQuest/releases/latest/download`.
 
-### Variante B — Mit Domain und TLS (für Fortgeschrittene)
-
-Mit eigener Domain und Let's-Encrypt-Zertifikat über Traefik. Nur damit lässt
-sich die App als PWA installieren.
-
-```bash
-curl -fsSL https://github.com/mrhdready/WordQuest/releases/latest/download/wordquest.tar.gz | tar xz
-cd wordquest
-cp .env.example .env
-```
-
-In `.env` die vorhandenen Zeilen ändern, nicht neue anhängen (sonst stehen sie
-doppelt da): `COMPOSE_FILE` auf `docker-compose.yml`, dazu `WQ_HOST`,
-`WQ_ACME_EMAIL` sowie `WQ_ACME_DNS_PROVIDER` und das Token des DNS-Anbieters
-(siehe unten). `WQ_IMAGE_PREFIX` ändert nur, wer eigene Images baut. Danach
-`./setup.sh`: Es lässt die vorhandene `.env` unverändert,
-erzeugt die Secrets, startet den Stack und legt auch hier das Elternkonto an.
-WordQuest ist dann unter `https://<WQ_HOST>` erreichbar. Update und
-Wiederherstellen gehen wie auf der Installationsseite, weil `docker compose`
-die Variante aus `COMPOSE_FILE` in `.env` liest.
-
-#### Zu TLS — die häufigste Stolperstelle
-
-Eine PWA lässt sich nur über HTTPS installieren. Im Heimnetz führt der
-bequemste Weg über eine **echte Subdomain mit DNS-Challenge**: Der Hostname
-zeigt per lokalem DNS auf die interne IP, das Zertifikat kommt trotzdem von
-Let's Encrypt, weil die Prüfung über einen DNS-Eintrag läuft und nicht über
-eine von außen erreichbare Adresse.
-
-Dafür in `.env` diese Zeilen ändern:
-
-```
-WQ_HOST=wordquest.deine-domain.de
-WQ_ACME_DNS_PROVIDER=cloudflare
-CF_DNS_API_TOKEN=<Token mit Zone:DNS:Edit>
-```
-
-Andere Anbieter brauchen andere Variablen — die
-[Traefik-Providerliste](https://doc.traefik.io/traefik/https/acme/#providers)
-nennt sie je Anbieter; die Variable gehört dann in den `environment`-Block des
-`proxy`-Dienstes.
-
-Der Umweg über ein selbstsigniertes Zertifikat ist möglich, aber schlecht: Ein
-Kind, das erst eine Sicherheitswarnung wegklicken muss, um zu lernen, ist kein
-guter Ausgangspunkt — und iOS installiert eine PWA mit ungültigem Zertifikat
-gar nicht erst.
-
-#### Demo-Daten
+### Demo-Daten
 
 Demo-Daten (Elternkonto, Kind, Beispielset) gibt es nur noch als
 Entwickler-Option: `WQ_SEED_DEMO_DATA=true` legt sie beim Start auf einer
-leeren Datenbank an. In beiden Compose-Dateien und in `.env.example` steht der
+leeren Datenbank an. In `docker-compose.quick.yml` und in `.env.example` steht der
 Wert auf `false`. Steht in einer älteren `.env` noch `true` (auch `True` oder
 `"true"`), bricht `setup.sh` mit einem Hinweis ab, denn das Demo-Konto hat ein
 bekanntes Passwort. Außerhalb des Entwicklungsmodus startet auch die API mit
 eingeschalteten Demo-Daten nicht.
 
-### Variante C — Entwicklung
+### Entwicklung
 
 ```bash
 # 1. Nur die Datenbank im Container
@@ -112,10 +65,11 @@ Der Vite-Dev-Server leitet `/api` an `localhost:5080` weiter. Im
 Entwicklungsmodus legt die API Demo-Daten an (Zugangsdaten in
 `backend/src/WordQuest.Infrastructure/Seed/DemoDataSeeder.cs`).
 
-Images lokal bauen statt ziehen:
+Images lokal bauen statt ziehen (vorher einmal `./setup.sh`, das die Secrets
+und die `.env` anlegt):
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+docker compose -f docker-compose.quick.yml -f docker-compose.build.yml up -d --build
 ```
 
 #### Migrationen

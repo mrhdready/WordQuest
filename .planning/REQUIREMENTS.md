@@ -112,7 +112,6 @@ Source: gap analysis 2026-10-25 against the original concept by mrhdready (`7788
 
 ### Operations
 
-- **OPS2-01**: Domain + Let's Encrypt path documented and tested (PWA install)
 - **OPS2-02**: Off-host backups, CI restore/upgrade tests, Dependabot, pinned infra images
 - **OPS2-03**: Further hardening: service-worker cache allowlist, CSP check on `index.html`, health split, payload limits, no PII in logs, refresh grace window
 - **SEC2-01**: Audit log of parent actions (§15)
@@ -139,6 +138,7 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 | Email / push notifications | No mail infrastructure for non-expert hosters |
 | Passkeys / OIDC | Not needed for a home-network family app |
 | Tracking, leaderboards, streak penalties | Pressure on children (anti-features) |
+| Domain + Let's Encrypt path (former OPS2-01) | Not doable for non-expert parents; replaced by HTTPS with an own CA per install (TLS-01..TLS-06, owner 2026-10-25) |
 
 ## Traceability
 
@@ -191,4 +191,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-25 — TLS-01 bis TLS-06 (HTTPS im Heimnetz mit eigener CA, Quick 261025-fpi) ergänzt; davor am selben Tag v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
+*Last updated: 2026-10-25 — Domain-Variante entfernt, OPS2-01 nach Out of Scope (Quick 261025-fpi-02); davor TLS-01 bis TLS-06 (HTTPS im Heimnetz mit eigener CA, Quick 261025-fpi) ergänzt; davor am selben Tag v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
