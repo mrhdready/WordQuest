@@ -7,7 +7,7 @@
 
 ### Setup & Accounts
 
-- [ ] **SETUP-01**: Home-network operation over plain HTTP (no domain, no certificate) is a full operating mode, not just a trial: `setup.sh` generates DB password and JWT key, and daily backups run
+- [ ] **SETUP-01**: Home-network operation over plain HTTP (no domain, no certificate) is a full operating mode, not just a trial: `setup.sh` generates DB password and JWT key, and daily backups run. Since 1.1.0 the home network runs over HTTPS with an own CA per install (TLS-01..TLS-06, Quick 261025-fpi)
 - [ ] **SETUP-02**: No demo credentials by default; `setup.sh` asks for the parent's email and password and creates the account
 - [ ] **SETUP-03**: Parent can change their password in the app
 - [ ] **SETUP-04**: Operator can reset a parent's password with one CLI command inside the container
@@ -32,7 +32,7 @@
 - [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace), not only by tapping; the 4th digit submits exactly once (2026-10-21)
 - [x] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
 - [x] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
-- [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart
+- [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart. Seit Quick 261025-fpi ersetzt der e2e-Pfad „Zertifikat nicht vertraut“ den Pfad ohne Secure Context; der Ersatz für crypto.randomUUID bleibt (Test: QA2-06)
 
 ### Design
 
@@ -128,6 +128,7 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 - **QA2-03**: Move business logic and direct DB access out of `SetEndpoints.cs` into a service (pattern `LearningService`)
 - **QA2-04**: Split `SetDetailPage.tsx` (about 1040 lines) into smaller components
 - **QA2-05**: Measured test coverage > 90 % for the learning module in CI (§10.2); optional seq log container (§10.1)
+- **QA2-06**: Der Ersatz für crypto.randomUUID (`frontend/src/lib/api.ts`, `frontend/src/features/learn/SessionPage.tsx`) hat einen Test ohne Secure Context (Owner 2026-10-25, Quick 261025-fpi: seit HTTPS läuft kein e2e-Test mehr ohne Secure Context)
 
 ## Out of Scope
 
@@ -177,12 +178,12 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 | HARD-04 | Phase 3.1 | Complete |
 | HARD-05 | Phase 3.1 | Complete |
 | IMG-01 | Phase 3.1.1 | Pending — automatisch belegt 2026-10-23 (END f70271c), manuelle Abnahme A1–A3 offen |
-| TLS-01 | Quick 261025-fpi | Pending |
-| TLS-02 | Quick 261025-fpi | Pending |
-| TLS-03 | Quick 261025-fpi | Pending |
-| TLS-04 | Quick 261025-fpi | Pending |
-| TLS-05 | Quick 261025-fpi | Pending |
-| TLS-06 | Quick 261025-fpi | Pending |
+| TLS-01 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
+| TLS-02 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
+| TLS-03 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
+| TLS-04 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
+| TLS-05 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
+| TLS-06 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
 
 **Coverage:**
 - v1 requirements: 39 total
@@ -191,4 +192,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-25 — Domain-Variante entfernt, OPS2-01 nach Out of Scope (Quick 261025-fpi-02); davor TLS-01 bis TLS-06 (HTTPS im Heimnetz mit eigener CA, Quick 261025-fpi) ergänzt; davor am selben Tag v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
+*Last updated: 2026-10-25 — TLS-01 bis TLS-06 automatisch belegt, VM- und Geräteabnahme offen; SETUP-01 und FIX-07 mit Anmerkung zu HTTPS; QA2-06 ergänzt (Quick 261025-fpi-05); davor Domain-Variante entfernt, OPS2-01 nach Out of Scope (Quick 261025-fpi-02); davor TLS-01 bis TLS-06 (HTTPS im Heimnetz mit eigener CA, Quick 261025-fpi) ergänzt; davor am selben Tag v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
