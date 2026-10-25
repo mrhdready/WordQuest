@@ -1,16 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 01-safe-home-network-install
 source: [01-VERIFICATION.md]
 started: 2026-10-17T12:00:00Z
-updated: 2026-10-24T21:30:00Z
+updated: 2026-10-25T00:05:00Z
 ---
 
 ## Current Test
 
-number: 6
-name: Raspberry Pi 5: Backup-Dienst über mindestens einen Tageswechsel laufen lassen
-awaiting: Tageslauf um 02:00 MESZ (Container-Zeitzone UTC)
+[testing complete]
 
 ## Tests
 
@@ -41,7 +39,8 @@ note: Ersatz fuer den Pi: Debian 13 aarch64 VM. setup.sh nennt als Adresse den e
 
 ### 6. Raspberry Pi 5: Backup-Dienst über mindestens einen Tageswechsel laufen lassen
 expected: backups/daily/wordquest-<Datum>.sql.gz entsteht automatisch, gzip -t ok, Rotation 14/8/6 greift später
-result: [pending]
+result: pass
+note: Ersatz fuer den Pi: Debian 13 aarch64 VM. Tageslauf 2026-10-25 02:00 MESZ (Zeitplan @daily, Container-Zeitzone UTC) legte backups/daily/wordquest-20261025.sql.gz an (root, 6081 Byte); gzip -t ok, Endzeile „-- PostgreSQL database dump complete“ vorhanden, 14 COPY-Bloecke inkl. learner_profile.
 
 ### 7. FIX-07: dieselbe Lernantwort zweimal senden (gleiche clientAnswerId) und Stack neu starten
 expected: Antwort zählt einmal; Lernstand nach docker compose restart unverändert
@@ -56,9 +55,9 @@ note: Agent-UAT 2026-10-24: alle PINs vierstellig, Kindertexte ohne „PIN“ au
 ## Summary
 
 total: 8
-passed: 7
+passed: 8
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
