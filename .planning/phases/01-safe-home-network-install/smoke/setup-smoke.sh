@@ -13,7 +13,8 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 WORK="$(mktemp -d)"
 
 export COMPOSE_PROJECT_NAME=wq-smoke
-export WQ_PORT=18081
+export WQ_HTTP_PORT=18081
+export WQ_HTTPS_PORT=18441
 export COMPOSE_FILE=docker-compose.quick.yml:docker-compose.build.yml
 export WQ_IMAGE_PREFIX=wq-smoke
 # Eindeutiger Tag je Lauf: ein aelteres lokales Image (Default "master")
@@ -45,11 +46,14 @@ demo_password="$(sed -n 's/.*DemoPassword = "\(.*\)";/\1/p' "$seeder")"
 echo "== Build der Images aus dem Arbeitsbaum (Tag ${WQ_VERSION})"
 docker compose build api web </dev/null
 
+# Anfragen an WordQuest per HTTPS, mit der eigenen CA als einzigem Vertrauensanker.
+curl_wq() { curl --cacert "$WORK/ca.pem" "$@"; }
+
 login() {
-  curl -s -o /dev/null -w '%{http_code}' \
+  curl_wq -s -o /dev/null -w '%{http_code}' \
     -H 'Content-Type: application/json' \
     -d "{\"email\":\"$1\",\"password\":\"$2\"}" \
-    "http://localhost:${WQ_PORT}/api/v1/auth/login"
+    "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/login"
 }
 
 tenants() {
@@ -61,7 +65,11 @@ printf '%s\n' wq-smoke keine-mail eltern@example.de kurz geheim-123 geheim-123 \
   | ./setup.sh 2>&1 | tee run1.log
 grep -qF 'Das sieht nicht nach einer E-Mail-Adresse aus. Bitte noch einmal.' run1.log || fail "Kein Hinweis auf ungueltige E-Mail."
 grep -qF 'Das Passwort muss mindestens 8 Zeichen lang sein.' run1.log || fail "Kein Hinweis auf zu kurzes Passwort."
-grep -qF 'Fertig. WordQuest läuft unter: http://' run1.log || fail "Abschlusszeile fehlt."
+grep -qF 'Fertig. WordQuest läuft unter: https://' run1.log || fail "Abschlusszeile fehlt."
+for line in '✓ Zertifikat ist bereit.' '✓ WordQuest antwortet über HTTPS.' \
+  'Fingerabdruck von WordQuest (SHA-256): ' 'Fingerabdruck der Zertifizierungsstelle (SHA-256): '; do
+  grep -qF "$line" run1.log || fail "Lauf 1 ohne Zeile: $line"
+done
 if grep -qF "$demo_email" run1.log; then fail "Ausgabe nennt den Demo-Zugang."; fi
 if grep -qF 'geheim-123' run1.log; then fail "Ausgabe enthaelt das Passwort."; fi
 if grep -qF 'ist schon belegt' run1.log; then fail "Lauf 1 meldet einen belegten Port."; fi
@@ -70,6 +78,8 @@ running="$(docker inspect -f '{{.Image}}' "$(docker compose ps -q api)")"
 built="$(docker image inspect -f '{{.Id}}' "wq-smoke-api:${WQ_VERSION}")"
 [[ "$running" == "$built" ]] || fail "API läuft nicht mit dem frisch gebauten Image."
 echo "IMAGE OK"
+
+docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >"$WORK/ca.pem" || fail "CA nicht lesbar."
 
 echo "== API-Log beim ersten Start (leere Datenbank)"
 # Eltern lesen fail: als Fehler; erwartbare Meldungen der Migration gehoeren nicht dazu.
@@ -98,16 +108,16 @@ grep -qF 'Elternkonto ist schon angelegt' run2.log || fail "Lauf 2 meldet kein b
 [[ "$(tenants)" == 1 ]] || fail "Mehr als ein Mandant nach Lauf 2."
 
 echo "== Port belegt (Setup-Hinweis)"
-# Der Stack wq-smoke haelt WQ_PORT; ein zweites Projekt im selben Ordner bekommt den Port nicht.
+# Der Stack wq-smoke haelt beide Ports; ein zweites Projekt im selben Ordner bekommt den Port nicht.
 status=0
 COMPOSE_PROJECT_NAME=wq-smoke-port ./setup.sh </dev/null >port.log 2>&1 || status=$?
 cat port.log
 [[ "$status" != 0 ]] || fail "setup.sh bei belegtem Port: Exit 0."
-grep -qF "Der Port ${WQ_PORT} ist schon belegt." port.log || fail "Kein deutscher Hinweis auf den belegten Port."
-grep -qF 'WQ_PORT=9000' port.log || fail "Hinweis nennt WQ_PORT=9000 nicht."
+grep -qF "Ein Port für WordQuest ist schon belegt: ${WQ_HTTP_PORT} oder ${WQ_HTTPS_PORT}." port.log || fail "Kein deutscher Hinweis auf den belegten Port."
+grep -qF 'WQ_HTTP_PORT und WQ_HTTPS_PORT' port.log || fail "Hinweis nennt WQ_HTTP_PORT und WQ_HTTPS_PORT nicht."
 grep -qE 'port is already allocated|address already in use' port.log || fail "Dockers eigene Meldung fehlt."
 COMPOSE_PROJECT_NAME=wq-smoke-port docker compose down -v --remove-orphans </dev/null
-code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${WQ_PORT}/")"
+code="$(curl_wq -s -o /dev/null -w '%{http_code}' "https://localhost:${WQ_HTTPS_PORT}/")"
 [[ "$code" == 200 ]] || fail "Stack wq-smoke nach dem Port-Test: HTTP $code statt 200."
 echo "PORT-HINWEIS OK"
 
@@ -183,7 +193,7 @@ echo "BACKUP OK"
 echo "== Seedfreier Erstdurchlauf bis zur Zusammenfassung der ersten Runde (PAR-05)"
 # Playwright aus dem Repo (dort liegen node_modules), gegen diesen Stack. Das
 # Reset-Passwort steht nur fuer diesen einen Aufruf in der Umgebung, nie in der Ausgabe.
-WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
+WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_HTTP_PORT}" \
   WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD="$owner_password" \
   npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
   || fail "Erstdurchlauf auf frischer Installation fehlgeschlagen."
@@ -240,17 +250,17 @@ for attempt in $(seq 1 11); do
   [[ "$code" == 401 ]] || fail "Fehlversuch $attempt vom Host: HTTP $code statt 401."
 done
 [[ "$limited" == 1 ]] || fail "Der Host ist nach 11 Fehlversuchen nicht gesperrt."
-code="$(curl -s -o /dev/null -w '%{http_code}' \
+code="$(curl_wq -s -o /dev/null -w '%{http_code}' \
   -H 'Content-Type: application/json' -H 'X-Forwarded-For: 10.9.9.9' \
-  -d "$wrong_login" "http://localhost:${WQ_PORT}/api/v1/auth/login")"
+  -d "$wrong_login" "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/login")"
 [[ "$code" == 429 ]] || fail "Ein gefaelschter X-Forwarded-For-Kopf oeffnet einen neuen Topf: HTTP $code statt 429."
 # busybox-wget endet bei 401 mit Exit ungleich 0; die Ausgabe wird trotzdem gebraucht.
 second="$(docker compose exec -T db sh -c "wget -S -O /dev/null --header 'Content-Type: application/json' --post-data '$wrong_login' http://web:8080/api/v1/auth/login 2>&1" </dev/null || true)"
 grep -q '401' <<<"$second" || fail "Der zweite Absender bekommt kein 401: $second"
 if grep -q '429' <<<"$second"; then fail "Der zweite Absender ist mitgesperrt (429): $second"; fi
-code="$(curl -s -o /dev/null -w '%{http_code}' \
+code="$(curl_wq -s -o /dev/null -w '%{http_code}' \
   -H 'Content-Type: application/json' -d '{"refreshToken":"ungueltig"}' \
-  "http://localhost:${WQ_PORT}/api/v1/auth/refresh")"
+  "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/refresh")"
 [[ "$code" == 401 ]] || fail "Refresh vom gesperrten Host: HTTP $code statt 401."
 echo "RATE-LIMIT OK"
 

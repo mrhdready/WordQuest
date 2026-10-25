@@ -11,6 +11,11 @@ services:
       context: .
       dockerfile: backend/Dockerfile
 
+  certs:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
   web:
     build:
       context: .
