@@ -54,7 +54,7 @@ Starte die Einrichtung:
 
 1. das **Image-Präfix**. Drück einfach Enter, dann nimmt es den vorgeschlagenen Wert `ghcr.io/mrhdready/wordquest`. Einen anderen Wert brauchst du nur, wenn du eigene Images baust.
 
-Danach lädt es WordQuest in der Version 1.0.1, prüft die Ports (siehe unten), startet WordQuest und legt das Zertifikat für die sichere Verbindung (HTTPS) an; beim ersten Mal kann das ein paar Minuten dauern. Erst dann fragt es nach:
+Danach lädt es WordQuest in der Version 1.1.0, prüft die Ports (siehe unten), startet WordQuest und legt das Zertifikat für die sichere Verbindung (HTTPS) an; beim ersten Mal kann das ein paar Minuten dauern. Erst dann fragt es nach:
 
 2. der **E-Mail-Adresse** für dein Elternkonto,
 3. dem **Passwort** dafür, zweimal, mindestens 8 Zeichen. Die Eingabe bleibt unsichtbar.
@@ -212,6 +212,8 @@ Wenn etwas schiefgeht:
   Das Skript fragt wie unter „Wiederherstellen“ nach `ja` und startet WordQuest danach mit der Version aus `.env` und dem Stand von vor dem Update. Rufe `./upgrade.sh` vorher nicht noch einmal auf: Ein neuer Aufruf sichert den Stand nach dem Update und nennt dann diese neue Datei. Die Sicherung von vor dem Update ist die aus der ersten Meldung; in der Liste von `./restore.sh` steht sie unter der neueren.
 
 `upgrade.sh` gilt für Installationen, die mit `setup.sh` eingerichtet sind. Einen früheren Schnelltest setzt du neu auf (siehe „Früherer Schnelltest“ unter Hilfe bei Problemen).
+
+Eine Installation mit 1.0.x setzt du für 1.1.0 neu auf: `upgrade.sh` aus 1.0.x lehnt das neue Paket mit „Das WordQuest-Paket enthält andere Dateien als erwartet. Es wurde nichts geändert.“ ab und ändert nichts.
 
 ## Sicherung und Wiederherstellung
 

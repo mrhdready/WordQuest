@@ -32,7 +32,7 @@ export COMPOSE_FILE=docker-compose.quick.yml:docker-compose.build.yml
 # setup-smoke.sh): Eine Shell-Variable schlaegt .env, dann pruefte der Smoke
 # die Werte aus .env gar nicht (03-RESEARCH Pitfall 3).
 
-EXPECTED_VERSION=1.0.1
+EXPECTED_VERSION=1.1.0
 EXPECTED_PREFIX=ghcr.io/mrhdready/wordquest
 API_TAG="${EXPECTED_PREFIX}-api:${EXPECTED_VERSION}"
 WEB_TAG="${EXPECTED_PREFIX}-web:${EXPECTED_VERSION}"
