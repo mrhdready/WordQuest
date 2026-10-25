@@ -112,7 +112,8 @@ choose_ports() {
 # Startet den Stack. Dockers englische Meldung zum belegten Port laesst Laien ohne Ausweg.
 # tee in eine Datei statt Variable: Der Fortschritt bleibt live sichtbar (Warten auf db).
 start_stack() {
-  local log status=0 taken=0
+  local log status=0 taken=0 certs_before
+  certs_before="$(docker compose ps -q certs </dev/null 2>/dev/null || true)"
   log="$(mktemp)"
   docker compose up -d </dev/null 2>&1 | tee "$log" >&2 || status=$?
   if grep -qE 'port is already allocated|address already in use' "$log"; then taken=1; fi
@@ -124,9 +125,13 @@ start_stack() {
     exit "$status"
   fi
   # Neustart, damit certs die Namensliste bei jedem Lauf sofort prueft; schreiben
-  # darf nur certs selbst (`tls watch`), setup.sh liest danach nur.
-  docker compose restart certs </dev/null >/dev/null 2>&1 \
-    || die "Der Zertifikatsdienst ließ sich nicht neu starten. Sieh mit \`docker compose logs certs\` nach, was fehlt."
+  # darf nur certs selbst (`tls watch`), setup.sh liest danach nur. Nur fuer einen
+  # Container, den up unveraendert gelassen hat: Ein neuer prueft ohnehin sofort, und
+  # ein Neustart mitten im Anlegen der CA hinterliesse sie unvollstaendig.
+  if [[ -n "$certs_before" && "$(docker compose ps -q certs </dev/null 2>/dev/null || true)" == "$certs_before" ]]; then
+    docker compose restart certs </dev/null >/dev/null 2>&1 \
+      || die "Der Zertifikatsdienst ließ sich nicht neu starten. Sieh mit \`docker compose logs certs\` nach, was fehlt."
+  fi
 }
 
 # Wartet, bis `tls show` das Zertifikat fuer die aktuelle Namensliste meldet, und merkt

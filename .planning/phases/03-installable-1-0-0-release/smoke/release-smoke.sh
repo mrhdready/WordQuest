@@ -269,7 +269,7 @@ docker compose logs certs — nur Ansehen im Fehlerfall; die Meldungen von certs
 sudo apt install curl — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat curl
 sudo usermod -aG docker $USER — Gruppe docker, wirkt erst nach neuer Anmeldung
 docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D-06)
-sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
+sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh zum Ordner backups, braucht sudo
 docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.de — belegt in setup-smoke.sh (RESET OK)
 docker compose logs api — nur Ansehen im Fehlerfall; die Startabbrueche belegt setup-smoke.sh (STARTABBRUCH OK)
 hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht
