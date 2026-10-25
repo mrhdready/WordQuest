@@ -87,12 +87,29 @@
 - **SPL2-04**: Spaced repetition, XP, streak and progress apply to Lernwörter sets as to vocabulary sets
 - **SPL2-05**: "Anhören" button in a Lernwörter round reads the word aloud via the browser's speech synthesis (dictation, no new dependency, no internet), keyboard-reachable; without a voice for the language the button is disabled with a German hint (Dennis 2026-10-25; cloud TTS such as ElevenLabs and server-side Piper rejected; the picture requirement stays)
 - **SPL2-06**: Later stage: parents record their own pronunciation per word; it plays instead of speech synthesis and is stored, backed up and restored like pictures
+- **LRN2-03**: Further games from the concept: Monster-Duell, Buchstaben-Chaos, Zeitrennen (§4 Should, §7.2)
+- **LRN2-04**: Read-aloud for vocabulary items via the browser's speech synthesis (§4 Should), same mechanism as `SPL2-05`
+- **LRN2-05**: Quest rules from the concept: a round also ends after 5 minutes (M5); streak counter shown from day 3 (§8); the child sees that parents can see the progress (§9)
+- **LRN2-06**: Card type "hear → write" (`AudioToSource`, §5.1), after `LRN2-04`
+- **CNT2-02**: CSV import with column mapping in the UI (M2) and quick entry `Hund = dog` (M1)
+- **CNT2-03**: Parents maintain answer alternatives, part of speech and example sentences in the UI and CSV (fields exist, §5.2)
+
+### Gamification
+
+Source: gap analysis 2026-10-25 against the original concept by mrhdready (`7788890`, changes in `3d0684a`/`233ccd9`); section numbers refer to that concept. Prioritisation open in the GitHub issue "Offene Punkte aus dem Ursprungskonzept".
+
+- **GAM2-01**: Spend coins: avatar items and treasure chests, avatar customisation (§8, §4 Should)
+- **GAM2-02**: Collectible cards, daily missions, trophies/achievements, theme worlds (§8, §18); asset licences depend on O5 (licence)
 
 ### Operations
 
 - **OPS2-01**: Domain + Let's Encrypt path documented and tested (PWA install)
 - **OPS2-02**: Off-host backups, CI restore/upgrade tests, Dependabot, pinned infra images
 - **OPS2-03**: Further hardening: service-worker cache allowlist, CSP check on `index.html`, health split, payload limits, no PII in logs, refresh grace window
+- **SEC2-01**: Audit log of parent actions (§15)
+- **SEC2-02**: CSP without `'unsafe-inline'` for styles (§15)
+- **SEC2-03**: TOTP second factor for the owner (§3)
+- **AI2-01**: AI provider interfaces with a no-op default and `WQ_AI_PROVIDER` (§11, ADR-005); later OCR import, pronunciation check, sentence generator, coach (§4 Could)
 
 ### Code quality
 
@@ -102,6 +119,7 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 - **QA2-02**: Frontend formatter checked in the gate (scope and tool need approval: new dependency)
 - **QA2-03**: Move business logic and direct DB access out of `SetEndpoints.cs` into a service (pattern `LearningService`)
 - **QA2-04**: Split `SetDetailPage.tsx` (about 1040 lines) into smaller components
+- **QA2-05**: Measured test coverage > 90 % for the learning module in CI (§10.2); optional seq log container (§10.1)
 
 ## Out of Scope
 
@@ -158,4 +176,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-25 — v2-Kandidaten SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
+*Last updated: 2026-10-25 — v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
