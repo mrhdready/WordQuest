@@ -350,8 +350,12 @@ test.describe('ohne Secure Context', () => {
   const isAnswer = (url: string) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(url)
   const sendButton = (page: Page) => page.getByRole('button', { name: /^Antwort(en| senden)$/ })
 
+  // "Weiter" gibt es nur, wenn das Kind etwas korrigiert sehen muss.
+  const needsWeiter = (result: AnswerResult) => !result.correct || result.hadTypo
+
   // Prueft die angezeigte Rueckmeldung gegen die Serverantwort; "Weiter" (hat
   // nach der Antwort den Fokus) beschreibt sie per aria-describedby (WCAG 4.1.3).
+  // Richtig ohne Tippfehler prueft expectAdvanced.
   async function answer(page: Page, action: () => Promise<void>) {
     const [response] = await Promise.all([
       page.waitForResponse((candidate) => isAnswer(candidate.url())),
@@ -359,6 +363,7 @@ test.describe('ohne Secure Context', () => {
     ])
     expect(response.status()).toBe(200)
     const result = (await response.json()) as AnswerResult
+    if (!needsWeiter(result)) return result
     const headline = result.correct ? 'Richtig!' : 'Fast!'
     const weiter = page.getByRole('button', { name: 'Weiter' })
     await expect(weiter).toBeFocused()
@@ -369,6 +374,23 @@ test.describe('ohne Secure Context', () => {
       await expect(weiter).toHaveAccessibleDescription(new RegExp(`Es heißt: ${result.correctAnswer}`))
     }
     return result
+  }
+
+  // Richtig ohne Tippfehler: ohne Tipp die naechste Aufgabe, die Bestaetigung mit den XP
+  // steht im Statusbereich ueber dem leeren, fokussierten Antwortfeld; nach der letzten
+  // Aufgabe kommt direkt die Zusammenfassung.
+  async function expectAdvanced(page: Page, result: AnswerResult, last: boolean) {
+    if (last) {
+      await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    } else {
+      await expect(page.getByRole('status')).toHaveText(
+        result.xpAwarded > 0 ? `Richtig! +${result.xpAwarded} XP` : 'Richtig!',
+      )
+      const field = page.getByRole('textbox', { name: 'Deine Antwort' })
+      await expect(field).toBeFocused()
+      await expect(field).toHaveValue('')
+    }
+    await expect(page.getByRole('button', { name: 'Weiter' })).toHaveCount(0)
   }
 
   test('Lernen über HTTP', async ({ page }) => {
@@ -401,19 +423,29 @@ test.describe('ohne Secure Context', () => {
     await page.getByRole('button', { name: 'Weiter' }).click()
     await expect(page.getByRole('textbox')).toHaveValue('')
     await page.getByRole('textbox').fill('falsch')
-    record(queue[1]!, await answer(page, () => sendButton(page).click()))
+    let result = await answer(page, () => sendButton(page).click())
+    record(queue[1]!, result)
 
     // Rest der Runde: unbekannte Karten falsch, Wiederholungen richtig.
     // Danach steht jede Karte in "Review", fuer heute ist nichts mehr faellig.
+    let advanced = false
     for (let index = 2; index < queue.length; index += 1) {
-      await page.getByRole('button', { name: 'Weiter' }).click()
+      if (needsWeiter(result)) {
+        await page.getByRole('button', { name: 'Weiter' }).click()
+      } else {
+        await expectAdvanced(page, result, false)
+        advanced = true
+      }
       const item = queue[index]!
       await page.getByRole('textbox').fill(solutions.get(item.cardId) ?? 'falsch')
-      record(item, await answer(page, () => page.getByRole('textbox').press('Enter')))
+      result = await answer(page, () => page.getByRole('textbox').press('Enter'))
+      record(item, result)
     }
+    expect(advanced, 'keine automatische Weiterschaltung').toBe(true)
 
-    await page.getByRole('button', { name: 'Weiter' }).click()
-    await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    // Die letzte Aufgabe ist eine richtig beantwortete Wiederholung: ohne "Weiter" zur Zusammenfassung.
+    expect(needsWeiter(result)).toBe(false)
+    await expectAdvanced(page, result, true)
     await checkPage(page)
 
     await page.getByRole('button', { name: 'Fertig' }).click()
@@ -526,25 +558,47 @@ test.describe('ohne Secure Context', () => {
     }
 
     // Ganze Runde per Tastatur: neue Karten falsch, Wiederholungen richtig, jeweils
-    // Enter im Antwortfeld; Enter auf "Weiter" (hat den Fokus) holt die naechste Karte.
+    // Enter im Antwortfeld; Enter auf "Weiter" (hat den Fokus) holt nach einer falschen
+    // Antwort die naechste Karte, nach einer richtigen kommt sie von selbst.
     let retryChecked = false
+    let zoomChecked = false
+    let result: AnswerResult | null = null
     for (let index = 0; index < queue.length; index += 1) {
       const item = queue[index]!
-      if (index > 0) {
+      if (result && needsWeiter(result)) {
         await page.keyboard.press('Enter')
         await expectPictureCard(page)
         if (item.isRetry && !retryChecked) {
           await checkPage(page)
           retryChecked = true
         }
+      } else if (result) {
+        await expectAdvanced(page, result, false)
+        await expectPictureCard(page)
+        if (!zoomChecked) {
+          // 200 %: Bestaetigung und fokussiertes Antwortfeld im Bild, kein waagerechtes
+          // Scrollen; danach axe, Kontrast und Reflow auf genau diesem Zustand.
+          await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeInViewport({ ratio: 1 })
+          await expect(page.getByRole('status')).toBeInViewport({ ratio: 1 })
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640)
+          if (original) await page.setViewportSize(original)
+          await checkPage(page)
+          zoomChecked = true
+        }
       }
-      await page.keyboard.type(solutions.get(item.cardId) ?? 'falsch')
-      record(item, await answer(page, () => page.keyboard.press('Enter')))
+      const solution = solutions.get(item.cardId)
+      // Das Kind mit Zoom tippt die Antwort, die gleich automatisch weiterschaltet, bei 200 %.
+      if (solution && !zoomChecked && index < queue.length - 1) await page.setViewportSize({ width: 640, height: 400 })
+      await page.keyboard.type(solution ?? 'falsch')
+      result = await answer(page, () => page.keyboard.press('Enter'))
+      record(item, result)
     }
     expect(retryChecked).toBe(true)
+    expect(zoomChecked, '200 % nach automatischer Weiterschaltung nicht geprueft').toBe(true)
 
-    await page.keyboard.press('Enter')
-    await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    // Letzte Aufgabe richtig: die Zusammenfassung kommt ohne Enter auf "Weiter".
+    expect(needsWeiter(result!)).toBe(false)
+    await expectAdvanced(page, result!, true)
     await checkPage(page)
   })
 

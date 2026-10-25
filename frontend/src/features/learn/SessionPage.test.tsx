@@ -56,16 +56,17 @@ function stubFetch(
   answer: () => Promise<Response>,
   { items, picture = png }: { items?: object[]; picture?: () => Promise<Response> } = {},
 ) {
-  const calls = { answers: 0, complete: 0, pictures: 0 }
+  const calls = { answers: 0, complete: 0, pictures: 0, bodies: [] as Record<string, unknown>[] }
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('/pictures/')) {
         calls.pictures += 1
         return picture()
       }
       if (url.endsWith('/answers')) {
         calls.answers += 1
+        calls.bodies.push(JSON.parse(init!.body as string) as Record<string, unknown>)
         return answer()
       }
       if (url.endsWith('/complete')) {
@@ -109,12 +110,15 @@ async function typeAnswer() {
 }
 
 beforeEach(() => {
+  // jsdom kennt scrollIntoView nicht.
+  Element.prototype.scrollIntoView = vi.fn()
   localStorage.setItem('wq.user', JSON.stringify({ id: 'kind-1', displayName: 'Mia', role: 'Learner', tenantId: 't' }))
 })
 
 afterEach(() => {
   localStorage.clear()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('Lernrunde', () => {
@@ -129,7 +133,7 @@ describe('Lernrunde', () => {
     fireEvent.click(send)
     answer.release(Response.json(result))
 
-    await screen.findByRole('button', { name: 'Weiter' })
+    await screen.findByText('2 von 2')
     expect(calls.answers).toBe(1)
     expect(screen.queryByRole('alert')).toBeNull()
   })
@@ -144,9 +148,17 @@ describe('Lernrunde', () => {
     await user.keyboard('{Enter}{Enter}')
     answer.release(Response.json(result))
 
-    await screen.findByRole('button', { name: 'Weiter' })
+    await screen.findByText('2 von 2')
     expect(calls.answers).toBe(1)
     expect(screen.queryByRole('alert')).toBeNull()
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Deine Antwort' })
+    expect(input.value).toBe('')
+    expect(document.activeElement).toBe(input)
+
+    // Enter im leeren Feld der neuen Aufgabe sendet nichts und ueberspringt nichts.
+    await user.keyboard('{Enter}')
+    expect(calls.answers).toBe(1)
+    expect(screen.getByText('2 von 2')).toBeTruthy()
   })
 
   it('409 zeigt den Server-Text, "Zurück" hat den Fokus', async () => {
@@ -194,11 +206,140 @@ describe('Lernrunde', () => {
     render()
     await typeAnswer()
     fireEvent.click(screen.getByRole('button', { name: 'Antwort senden' }))
-    await screen.findByRole('button', { name: 'Weiter' })
+    await screen.findByText('2 von 2')
     fireEvent.click(screen.getByRole('button', { name: 'Schließen' }))
 
     expect(await screen.findByText('/')).toBeTruthy()
     expect(calls.complete).toBe(1)
+  })
+})
+
+describe('Weiter nur bei Korrektur', () => {
+  const second = { ...item, itemId: 'item-2', prompt: 'cat' }
+  const answerField = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Deine Antwort' })
+
+  it('richtig ohne Tippfehler: sofort die naechste Aufgabe, "Richtig! +10 XP" im Statusbereich, Fokus im leeren Feld', async () => {
+    stubFetch(async () => Response.json(result), { items: [item, second] })
+    render()
+    await typeAnswer()
+    const status = screen.getByRole('status')
+    expect(status.textContent).toBe('')
+
+    await userEvent.setup({ delay: null }).keyboard('{Enter}')
+
+    expect(await screen.findByText('cat')).toBeTruthy()
+    expect(screen.getByText('2 von 2')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Weiter' })).toBeNull()
+    expect(screen.getByRole('status')).toBe(status)
+    expect(status.textContent).toBe('Richtig! +10 XP')
+    expect(answerField().value).toBe('')
+    expect(document.activeElement).toBe(answerField())
+    // Die Bestaetigung schiebt das Feld nach unten; bei 200 % holt es sich zurueck ins Bild.
+    expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(answerField())
+  })
+
+  it('Klick auf "Antwort senden", richtig: Fokus danach im neuen, leeren Antwortfeld', async () => {
+    stubFetch(async () => Response.json(result), { items: [item, second] })
+    render()
+    await typeAnswer()
+
+    await userEvent.setup({ delay: null }).click(screen.getByRole('button', { name: 'Antwort senden' }))
+
+    await screen.findByText('2 von 2')
+    expect(answerField().value).toBe('')
+    expect(document.activeElement).toBe(answerField())
+  })
+
+  it('zweite Antwort traegt Item-ID und Text der neuen Aufgabe, die Bestaetigung ist beim Senden weg', async () => {
+    // answerMs zaehlt ab Anzeige der jeweiligen Aufgabe: Start bei 1000, erste Antwort bei 5000.
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const pending = held()
+    let answered = 0
+    const calls = stubFetch(() => (answered++ === 0 ? Promise.resolve(Response.json(result)) : pending.answer()), {
+      items: [item, second],
+    })
+    render()
+    await typeAnswer()
+    const user = userEvent.setup({ delay: null })
+    now.mockReturnValue(5_000)
+    await user.keyboard('{Enter}')
+    await screen.findByText('2 von 2')
+
+    now.mockReturnValue(5_300)
+    await user.keyboard('Katze{Enter}')
+
+    await waitFor(() => expect(calls.answers).toBe(2))
+    expect(calls.bodies[0]).toMatchObject({ itemId: 'item-1', answerMs: 4_000 })
+    expect(calls.bodies[1]).toMatchObject({ itemId: 'item-2', clientAnswerId: 'item-2', givenAnswer: 'Katze', answerMs: 300 })
+    expect(screen.getByRole('status').textContent).toBe('')
+    pending.release(Response.json(result))
+    expect(await screen.findByRole('heading', { name: 'Geschafft!' })).toBeTruthy()
+  })
+
+  it('letzte Aufgabe richtig: direkt die Zusammenfassung, genau ein /complete', async () => {
+    const calls = stubFetch(async () => Response.json(result), { items: [item] })
+    render()
+    await typeAnswer()
+    fireEvent.click(screen.getByRole('button', { name: 'Antwort senden' }))
+
+    expect(await screen.findByRole('heading', { name: 'Geschafft!' })).toBeTruthy()
+    expect(calls.complete).toBe(1)
+    expect(screen.queryByRole('button', { name: 'Weiter' })).toBeNull()
+  })
+
+  it('falsch: "Fast!" mit Loesung, "Weiter" fokussiert, Aufgabe wechselt erst danach', async () => {
+    const wrong = {
+      ...result,
+      correct: false,
+      grade: 'Again',
+      xpAwarded: 0,
+      coinsAwarded: 0,
+      retryItem: { ...item, itemId: 'item-3', isRetry: true },
+    }
+    stubFetch(async () => Response.json(wrong), { items: [item, second] })
+    render()
+    await typeAnswer()
+    fireEvent.click(screen.getByRole('button', { name: 'Antwort senden' }))
+
+    const next = await screen.findByRole('button', { name: 'Weiter' })
+    expect(screen.getByText('Fast!')).toBeTruthy()
+    expect(screen.getByText('Es heißt: Hund')).toBeTruthy()
+    expect(document.activeElement).toBe(next)
+    expect(next.getAttribute('aria-describedby')).toBe('rueckmeldung')
+    // Die Wiederholung wird wie bisher hinten angehaengt.
+    expect(screen.getByText('1 von 3')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('')
+
+    fireEvent.click(next)
+    expect(await screen.findByText('2 von 3')).toBeTruthy()
+  })
+
+  it('richtig mit Tippfehler: Hinweis mit Schreibweise, "Weiter" fokussiert, Aufgabe wechselt erst danach', async () => {
+    const typo = { ...result, hadTypo: true, message: 'Fast perfekt! Richtig geschrieben: Hund' }
+    stubFetch(async () => Response.json(typo), { items: [item, second] })
+    render()
+    await typeAnswer()
+    fireEvent.click(screen.getByRole('button', { name: 'Antwort senden' }))
+
+    const next = await screen.findByRole('button', { name: 'Weiter' })
+    expect(screen.getByText('Fast perfekt! Richtig geschrieben: Hund')).toBeTruthy()
+    expect(document.activeElement).toBe(next)
+    expect(screen.getByText('1 von 2')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('')
+  })
+
+  it('Auswahl richtig: naechste Aufgabe sofort, "Richtig!" ohne XP, Fokus auf der ersten Auswahl', async () => {
+    const choice = { ...item, expectedAnswerType: 'choice', choices: ['Hund', 'Katze', 'Maus'] }
+    const choice2 = { ...choice, itemId: 'item-2', prompt: 'cat', choices: ['Katze', 'Hund', 'Maus'] }
+    stubFetch(async () => Response.json({ ...result, xpAwarded: 0 }), { items: [choice, choice2] })
+    render()
+
+    await userEvent.setup({ delay: null }).click(await screen.findByRole('button', { name: 'Hund' }))
+
+    await screen.findByText('2 von 2')
+    expect(screen.queryByRole('button', { name: 'Weiter' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe('Richtig!')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Katze' }))
   })
 })
 

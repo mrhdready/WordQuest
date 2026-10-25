@@ -314,11 +314,11 @@ Durchgehend weich: Bedienelemente als Kapsel oder Kreis (`full`), Karten `lg` (3
 - **Neben-Button:** Glas-Kapsel (`button-glass`).
 - **Runde Buttons:** Zurück, Schließen, Abmelden oben (`button-round`); Senden im Quiz und „+“ neben der Eltern-Tab-Leiste getönt (`button-round-primary`, „+“ 64 px).
 - **PIN-Tastatur:** 3×4-Raster aus `keypad-key`, Löschen ohne Glas.
-- **Quiz:** Fortschritt als Glas-Kapsel neben dem Schließen-Button, Wort auf `card-quiz`, Antwortfeld als Kapsel mit rundem Senden-Button. Rückmeldung (richtig, Tippfehler, „Fast!“) als `sheet` von unten.
+- **Quiz:** Fortschritt als Glas-Kapsel neben dem Schließen-Button, Wort auf `card-quiz`, Antwortfeld als Kapsel mit rundem Senden-Button. Rückmeldung bei Tippfehler und „Fast!“ als `sheet` von unten mit „Weiter“; ist die Antwort ohne Tippfehler richtig, kommt sofort die nächste Aufgabe, und „Richtig!“ mit den XP steht als `note-success` (`role="status"`) über dem Antwortfeld bis zur nächsten Antwort.
 - **Listen:** gruppiert in `list-group`, Trennlinien `list-separator`, Zeilen `list-row`.
 - **Vokabelbild:** fester Rahmen, damit beim Laden nichts springt: in der Vokabelliste rund als `vocab-thumb` (48 px, Bild füllt den Kreis), groß als `vocab-picture` (160 px, Bild vollständig sichtbar). Kann der Browser das Bild nicht laden oder dekodieren, steht das Emoji im selben Rahmen.
 - **Formulare:** Felder gruppiert in einer Glasfläche, Beschriftung über dem Feld (`input-label`), sichtbar, nie nur Platzhalter. Jedes Feld hat eine 1-px-Grenze in `border-control` (WCAG 1.4.11), damit die Feldgrenze unabhängig vom durchscheinenden Hintergrund erkennbar bleibt.
-- **Hinweise:** `note-error` (`role="alert"`) und `note-success` (`role="status"`) auf deckender Fläche, unter dem auslösenden Element.
+- **Hinweise:** `note-error` (`role="alert"`) und `note-success` (`role="status"`) auf deckender Fläche, unter dem auslösenden Element; im Quiz steht die Bestätigung über dem Antwortfeld (siehe Quiz).
 - **Eltern-Navigation:** `tab-bar` unten mit Vokabeln, Fortschritt, Kinder und Konto, aktiver Tab `tab-active`; bei 320 px bricht sie neben dem „+“ in zwei Zeilen um.
 - **Fokus:** global `:focus-visible` mit 3 px Ring in `primary-deep`, 3 px Abstand. `primary` hält gegen `backdrop-blue` keine 3:1 (WCAG 1.4.11), `primary-deep` schon.
 

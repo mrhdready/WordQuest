@@ -32,6 +32,9 @@ export function SessionPage() {
   const [result, setResult] = useState<AnswerResult | null>(null)
   const [summary, setSummary] = useState<SessionSummary | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // XP der letzten richtigen Antwort ohne Tippfehler; steht ueber dem
+  // Antwortfeld der naechsten Aufgabe, bis wieder gesendet wird.
+  const [confirmedXp, setConfirmedXp] = useState<number | null>(null)
 
   // 0 heisst "noch nicht angezeigt"; gesetzt wird der Zeitstempel erst im
   // Effekt, damit das Rendern frei von Seiteneffekten bleibt.
@@ -40,6 +43,14 @@ export function SessionPage() {
   // Ref statt nur isPending: das greift erst nach dem naechsten Rendern, ein
   // zweiter Tipp oder ein zweites Enter kaeme vorher noch durch.
   const sending = useRef(false)
+  const lastSentItem = useRef<string | null>(null)
+  const answerInput = useRef<HTMLInputElement>(null)
+
+  // Die Bestaetigung schiebt das Antwortfeld nach unten. Bei 200 % Zoom laege
+  // das fokussierte Feld sonst unter dem Bildrand (WCAG 1.4.10, 2.4.11).
+  useEffect(() => {
+    if (confirmedXp !== null) answerInput.current?.scrollIntoView({ block: 'nearest' })
+  }, [confirmedXp])
 
   const current = queue[index]
   const total = Math.max(queue.length, session?.totalItems ?? 0)
@@ -82,9 +93,18 @@ export function SessionPage() {
         },
       }),
     onSuccess: (data) => {
+      if (data.retryItem) setQueue((previous) => [...previous, data.retryItem!])
+      // Eine richtige Antwort bringt nie eine Wiederholung (Grade.Again, LearningService),
+      // next() rechnet also mit der aktuellen Laenge der Liste.
+      // Richtig ohne Tippfehler: nichts zu korrigieren, also ohne "Weiter"
+      // direkt zur naechsten Aufgabe (Wunsch Dennis, 2026-10-25).
+      if (data.correct && !data.hadTypo) {
+        setConfirmedXp(data.xpAwarded)
+        next()
+        return
+      }
       setResult(data)
       setPhase('feedback')
-      if (data.retryItem) setQueue((previous) => [...previous, data.retryItem!])
     },
     onError: (caught: unknown) => {
       setErrorMessage(caught instanceof Error ? caught.message : GENERIC)
@@ -98,7 +118,14 @@ export function SessionPage() {
   // Gemeinsamer Weg fuer Auswahl, Senden-Button und Enter.
   function send(itemId: string, givenAnswer: string) {
     if (sending.current) return
+    // Absicherung: onSettled gibt sending frei, bevor React die neue Aufgabe
+    // zeichnet. Kaeme in diesem Fenster trotz deaktiviertem Button ein Handler
+    // durch, truege er alte Item-ID und alte Eingabe; die Item-ID ist je Aufgabe
+    // eindeutig.
+    if (lastSentItem.current === itemId) return
     sending.current = true
+    lastSentItem.current = itemId
+    setConfirmedXp(null)
     answer.mutate({ itemId, givenAnswer })
   }
 
@@ -148,6 +175,10 @@ export function SessionPage() {
     setIndex(index + 1)
     setPhase('question')
     shownAt.current = Date.now()
+    // Dasselbe Feld behaelt den Fokus, die Tablet-Tastatur bleibt offen. Nach
+    // einem Tipp auf den (dann deaktivierten) Senden-Knopf holt das den Fokus
+    // zurueck; aus dem Sheet kommend ist der Ref leer und autoFocus greift.
+    answerInput.current?.focus()
   }
 
   if (phase === 'loading') return <Spinner label="Deine Quest wird vorbereitet …" />
@@ -231,54 +262,69 @@ export function SessionPage() {
         ) : null}
       </div>
 
-      {phase === 'feedback' && result ? (
-        <FeedbackPanel result={result} onNext={next} />
-      ) : current.expectedAnswerType === 'choice' && current.choices ? (
-        <div className="mt-auto grid gap-4">
-          {current.choices.map((choice) => (
-            <Button
-              key={choice}
-              variant="outline"
-              size="xl"
-              disabled={answer.isPending}
-              onClick={() => send(current.itemId, choice)}
-            >
-              {choice}
-            </Button>
-          ))}
+      <div className="mt-auto flex flex-col">
+        {/* Immer im DOM, damit Screenreader die Bestaetigung zuverlaessig ansagen
+            (ein erst mit dem Text eingehaengtes role="status" wird oft ueberhoert). */}
+        <div role="status">
+          {confirmedXp === null ? null : (
+            <p className="animate-pop mb-4 rounded-sm bg-surface-success p-4 text-center type-body-md text-success-text">
+              {confirmedXp > 0 ? `Richtig! +${confirmedXp} XP` : 'Richtig!'}
+            </p>
+          )}
         </div>
-      ) : (
-        <form
-          className="mt-auto flex items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            send(current.itemId, typed)
-          }}
-        >
-          <Input
-            autoFocus
-            value={typed}
-            onChange={(event) => setTyped(event.target.value)}
-            aria-label="Deine Antwort"
-            placeholder="Deine Antwort"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="send"
-            className="min-w-0 flex-1"
-          />
-          <Button
-            type="submit"
-            variant="roundPrimary"
-            size="icon"
-            className="size-13 shrink-0"
-            aria-label="Antwort senden"
-            disabled={answer.isPending || typed.trim().length === 0}
+
+        {phase === 'feedback' && result ? (
+          <FeedbackPanel result={result} onNext={next} />
+        ) : current.expectedAnswerType === 'choice' && current.choices ? (
+          // key je Aufgabe: das Raster haengt neu ein, autoFocus greift auf der ersten Auswahl.
+          <div key={current.itemId} className="grid gap-4">
+            {current.choices.map((choice, position) => (
+              <Button
+                key={choice}
+                autoFocus={position === 0}
+                variant="outline"
+                size="xl"
+                disabled={answer.isPending}
+                onClick={() => send(current.itemId, choice)}
+              >
+                {choice}
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              send(current.itemId, typed)
+            }}
           >
-            <ArrowUp className="size-6" />
-          </Button>
-        </form>
-      )}
+            <Input
+              ref={answerInput}
+              autoFocus
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              aria-label="Deine Antwort"
+              placeholder="Deine Antwort"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="send"
+              className="min-w-0 flex-1"
+            />
+            <Button
+              type="submit"
+              variant="roundPrimary"
+              size="icon"
+              className="size-13 shrink-0"
+              aria-label="Antwort senden"
+              disabled={answer.isPending || typed.trim().length === 0}
+            >
+              <ArrowUp className="size-6" />
+            </Button>
+          </form>
+        )}
+      </div>
     </main>
   )
 }
@@ -294,7 +340,7 @@ function FeedbackPanel({ result, onNext }: { result: AnswerResult; onNext: () =>
   return (
     <div
       className={cn(
-        'glass-sheet mt-auto flex flex-col gap-4 rounded-sheet p-6',
+        'glass-sheet flex flex-col gap-4 rounded-sheet p-6',
         result.correct ? '' : 'animate-nudge',
       )}
     >
