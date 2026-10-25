@@ -97,12 +97,20 @@ async function createAndOpen(page: Page, name: string) {
 }
 
 // FIX-05: Ein neues Kind hat keine Serie; die erste abgeschlossene Runde startet sie.
+// Die Runde laeuft mit aktivem Service Worker (vertrauter Pfad, NetworkFirst auf
+// /api); learn.spec deckt den Warnpfad ohne Worker ab.
 // Eigenes Kind, zum Schluss geloescht. 2 Aufrufe der Policy "auth".
 test('Serie startet bei 0 und zählt nach der ersten Runde', async ({ page, browser, baseURL }) => {
   const name = `Zz E2E Serie ${Date.now()}`
   await createAndOpen(page, name)
 
   const child = await openAsLearner(browser, baseURL, name, '2468')
+  if (!(await child.evaluate(() => navigator.serviceWorker.controller !== null))) {
+    await child.reload()
+  }
+  await expect
+    .poll(() => child.evaluate(() => navigator.serviceWorker.controller !== null))
+    .toBe(true)
   const noStreak = child.getByText('Starte heute deine Serie!', { exact: true })
   await expect(noStreak).toBeVisible()
   await expect(noStreak.locator('svg')).toHaveCount(0)

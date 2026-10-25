@@ -352,7 +352,7 @@ test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, brow
 // weggeklickt: Chromium registriert dann keinen Service Worker, die App laeuft als
 // reine Browser-App. Der Hostname zeigt auf den Teststack. Den Ersatz fuer
 // crypto.randomUUID (FIX-07) behaelt der Code fuer Seiten ohne Secure Context; hier
-// ist der Kontext sicher, den Ersatz prueft QA2-05.
+// ist der Kontext sicher, den Ersatz prueft QA2-06.
 test.describe('Zertifikat nicht vertraut', () => {
   test.use({ baseURL: 'https://wordquest.test:18443' })
 
