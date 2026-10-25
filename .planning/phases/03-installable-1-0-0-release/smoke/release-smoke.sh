@@ -319,6 +319,10 @@ running="$(docker inspect -f '{{.Config.Image}}' "$(docker compose ps -q web </d
 
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "Login mit dem neuen Elternkonto: HTTP $code statt 200."
+# HTTP leitet auf HTTPS um, Pfad und Query bleiben (OD-2, TLS-03).
+redirect="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:${WQ_HTTP_PORT}/verwalten?x=1")"
+[[ "$redirect" == "301 https://localhost:${WQ_HTTPS_PORT}/verwalten?x=1" ]] \
+  || fail "HTTP leitet nicht auf HTTPS um: $redirect"
 echo "INSTALL OK"
 
 echo "== Weitere Seitenschritte"
@@ -403,7 +407,7 @@ restore_run() {
 # Anmelde-Limit: globalSetup, Profilwahl und learner-login (first-run.spec.ts:11-12).
 auth_budget 3
 # Das Passwort steht nur fuer diesen einen Aufruf in der Umgebung.
-WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_HTTP_PORT}" \
+WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="https://localhost:${WQ_HTTPS_PORT}" \
   WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD=geheim-123 \
   npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
   || fail "Erstdurchlauf auf der Release-Installation fehlgeschlagen."

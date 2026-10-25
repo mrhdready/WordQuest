@@ -137,6 +137,10 @@ ca1="$(ca_fp run1.log)"
 # Download der CA: dieselbe CA wie im Fingerabdruck (T-fpi-14).
 curl -fsS -o ca-download.crt "http://localhost:${WQ_HTTP_PORT}/wordquest-ca.crt" || fail "CA-Download fehlgeschlagen."
 [[ "$(fp_of ca-download.crt)" == "$ca1" ]] || fail "CA-Download: SHA-256 $(fp_of ca-download.crt) statt $ca1."
+# Jeder andere Pfad ueber HTTP leitet auf HTTPS um, Pfad und Query bleiben (OD-2, TLS-03).
+redirect="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:${WQ_HTTP_PORT}/verwalten?x=1")"
+[[ "$redirect" == "301 https://localhost:${WQ_HTTPS_PORT}/verwalten?x=1" ]] \
+  || fail "HTTP leitet nicht auf HTTPS um: $redirect"
 
 # Rechte und Einbindung (Codex 10, T-fpi-17).
 [[ "$(docker compose exec -T certs stat -c '%a' /certs/ca/ca.key </dev/null)" == 600 ]] || fail "ca.key hat nicht die Rechte 600."
@@ -326,7 +330,7 @@ echo "BACKUP OK"
 echo "== Seedfreier Erstdurchlauf bis zur Zusammenfassung der ersten Runde (PAR-05)"
 # Playwright aus dem Repo (dort liegen node_modules), gegen diesen Stack. Das
 # Reset-Passwort steht nur fuer diesen einen Aufruf in der Umgebung, nie in der Ausgabe.
-WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_HTTP_PORT}" \
+WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="https://localhost:${WQ_HTTPS_PORT}" \
   WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD="$owner_password" \
   npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
   || fail "Erstdurchlauf auf frischer Installation fehlgeschlagen."
@@ -388,7 +392,10 @@ code="$(curl_wq -s -o /dev/null -w '%{http_code}' \
   -d "$wrong_login" "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/login")"
 [[ "$code" == 429 ]] || fail "Ein gefaelschter X-Forwarded-For-Kopf oeffnet einen neuen Topf: HTTP $code statt 429."
 # busybox-wget endet bei 401 mit Exit ungleich 0; die Ausgabe wird trotzdem gebraucht.
-second="$(docker compose exec -T db sh -c "wget -S -O /dev/null --header 'Content-Type: application/json' --post-data '$wrong_login' http://web:8080/api/v1/auth/login 2>&1" </dev/null || true)"
+# Zweiter Absender ist 127.0.0.1 im web-Container: HTTP leitet nur noch um, und das
+# busybox-wget im web-Image kann HTTPS (wie sein Healthcheck); fuer nginx ist das
+# eine andere Absenderadresse als der Host.
+second="$(docker compose exec -T web sh -c "wget -S --no-check-certificate -O /dev/null --header 'Content-Type: application/json' --post-data '$wrong_login' https://127.0.0.1:8443/api/v1/auth/login 2>&1" </dev/null || true)"
 grep -q '401' <<<"$second" || fail "Der zweite Absender bekommt kein 401: $second"
 if grep -q '429' <<<"$second"; then fail "Der zweite Absender ist mitgesperrt (429): $second"; fi
 code="$(curl_wq -s -o /dev/null -w '%{http_code}' \
