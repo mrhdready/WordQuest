@@ -81,6 +81,10 @@
 - **LRN2-01**: Additional game modes in the frontend (backend already defines `wordcatcher`, `memory`, `cram`)
 - **LRN2-02**: Offline learning with outbox + sync
 - **CNT2-01**: Vocabulary library: curated CC0 sets by grade and topic in the repo, checked in CI, offered next to the CSV import ("Aus der Bibliothek", served from the web image); proposal in `.planning/research/VOKABEL-REGISTRY.md`
+- **SPL2-01**: Set type "Lernwörter": parents create a spelling set (one language, setting "article required" yes/no); every entry is a word plus a picture or an emoji, without both it cannot be saved (Dennis 2026-10-25, module proposal `.planning/research/LERNWOERTER-MODUL.md`)
+- **SPL2-02**: In a Lernwörter round the child sees only the picture (or emoji) and types the word; the screen-reader text does not reveal the word
+- **SPL2-03**: Strict server-side grading for Lernwörter: case matters, every typo is wrong, article per set setting; on a mistake the feedback shows the correct spelling
+- **SPL2-04**: Spaced repetition, XP, streak and progress apply to Lernwörter sets as to vocabulary sets
 
 ### Operations
 
@@ -152,4 +156,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-24 — v2-Kandidaten QA2-01 bis QA2-04 aus der Codebase-Map und PAR2-04 (Tablet-Dashboard) ergänzt.*
+*Last updated: 2026-10-25 — v2-Kandidaten SPL2-01 bis SPL2-04 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
