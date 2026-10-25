@@ -85,6 +85,8 @@
 - **SPL2-02**: In a Lernwörter round the child sees only the picture (or emoji) and types the word; the screen-reader text does not reveal the word
 - **SPL2-03**: Strict server-side grading for Lernwörter: case matters, every typo is wrong, article per set setting; on a mistake the feedback shows the correct spelling and marks the letters where the input differs (not by color alone)
 - **SPL2-04**: Spaced repetition, XP, streak and progress apply to Lernwörter sets as to vocabulary sets
+- **SPL2-05**: "Anhören" button in a Lernwörter round reads the word aloud via the browser's speech synthesis (dictation, no new dependency, no internet), keyboard-reachable; without a voice for the language the button is disabled with a German hint (Dennis 2026-10-25; cloud TTS such as ElevenLabs and server-side Piper rejected; the picture requirement stays)
+- **SPL2-06**: Later stage: parents record their own pronunciation per word; it plays instead of speech synthesis and is stored, backed up and restored like pictures
 
 ### Operations
 
@@ -156,4 +158,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-25 — v2-Kandidaten SPL2-01 bis SPL2-04 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
+*Last updated: 2026-10-25 — v2-Kandidaten SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*

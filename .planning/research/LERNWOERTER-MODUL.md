@@ -1,4 +1,4 @@
-# Lernwörter — Modul-Vorschlag (v2, `SPL2-01` bis `SPL2-04`)
+# Lernwörter — Modul-Vorschlag (v2, `SPL2-01` bis `SPL2-06`)
 
 Stand 2026-10-25. Idee und Entscheidungen von Dennis, zur Diskussion mit dem Owner. Kein v1-Scope.
 
@@ -12,6 +12,7 @@ Das Kind sieht nur ein Bild und schreibt das Wort dazu. Es geht um die richtige 
 2. Ob der Artikel („das Fahrrad“) Pflicht ist, stellen die Eltern pro Set ein.
 3. Jedes Wort braucht ein Bild. Ein Emoji am Eintrag reicht als Bild (wie heute bei Farben oder „Hund“ 🐶); fehlt es, muss ein Elternteil ein Bild hochladen.
 4. Die Rückmeldung markiert die falschen Buchstaben (Dennis, 2026-10-25).
+5. Barrierefreiheit über Anhören (Diktat): Stufe 1 ist ein Knopf „Anhören“, der das Wort mit der Sprachausgabe des Browsers vorliest (Web Speech API `speechSynthesis`, keine neue Abhängigkeit, kein Internet). Stufe 2 (später): Eltern sprechen das Wort selbst ein; die Aufnahme wird wie ein Bild gespeichert und gesichert. Cloud-Dienste (z. B. ElevenLabs) und eine Sprachsynthese auf dem Server (Piper) sind verworfen: Konto, Schlüssel, Kosten bzw. zusätzlicher Container widersprechen dem Kernwert. Die Bildpflicht bleibt; Anhören ergänzt das Bild, ersetzt es nicht.
 
 ## Zuschnitt als Modul
 
@@ -34,9 +35,11 @@ Kein eigenes Backend-Projekt neben `Content` und `Learning`: Das Modul ist ein S
 - **SPL2-02**: In der Lernrunde eines Lernwörter-Sets sieht das Kind nur das Bild (bzw. das Emoji) und tippt das Wort. Der Bildtext für Screenreader verrät das Wort nicht.
 - **SPL2-03**: Der Server bewertet streng: Groß- und Kleinschreibung zählt, jeder Tippfehler ist falsch, der Artikel nach der Set-Einstellung. Bei einem Fehler zeigt die Rückmeldung die richtige Schreibweise und markiert die Stellen, an denen die Eingabe abweicht.
 - **SPL2-04**: Wiederholung, XP, Serie und Fortschritt gelten wie bei Vokabel-Sets; die Eltern sehen Lernwörter-Sets in der Fortschrittsansicht.
+- **SPL2-05**: Knopf „Anhören“ in der Lernwörter-Runde liest das Wort mit der Sprachausgabe des Browsers vor (Diktat), per Tastatur erreichbar; fehlt eine Stimme für die Sprache, wird der Knopf mit einem deutschen Hinweis deaktiviert statt still zu versagen.
+- **SPL2-06** (später): Eltern können pro Wort eine eigene Aufnahme hinterlegen; sie wird statt der Sprachausgabe abgespielt und wie Bilder gespeichert, gesichert und wiederhergestellt.
 
 ## Offene Punkte für die Diskussion
 
-- Barrierefreiheit: Ein Kind, das das Bild nicht sehen kann, kann die Aufgabe nicht lösen. Bleibt das als bekannte Grenze stehen, oder gibt es eine Alternative (z. B. Vorlesen)?
+- Anhören: Die Qualität deutscher Stimmen auf Android-Geräten ist an echten Geräten zu prüfen.
 - Emoji als Bild: Mehrdeutige Emojis (🐶 als „Hund“ oder „Welpe“) gehen zu Lasten der Eltern. Reicht ein Hinweis beim Anlegen?
 - Eine mitgelieferte Bildersammlung wäre bequemer, ist aber eine Lizenzfrage (vgl. `CNT2-01`, `VOKABEL-REGISTRY.md`).
