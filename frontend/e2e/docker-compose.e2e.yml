@@ -44,8 +44,8 @@ services:
       WQ_SEED_DEMO_DATA: "true"
       # NUR FUER DEN TESTSTACK: Playwright schickt alle Anfragen von einer IP, ein
       # Gesamtlauf aller Specs braucht mehr als 10 Auth-Aufrufe pro Minute. Im Betrieb
-      # hat seit FIX-01 jedes Geraet einen eigenen Topf; docker-compose.quick.yml und
-      # docker-compose.yml bleiben beim Standard 10.
+      # hat seit FIX-01 jedes Geraet einen eigenen Topf; docker-compose.quick.yml
+      # bleibt beim Standard 10.
       Auth__RequestsPerMinute: "1000"
     depends_on:
       db:

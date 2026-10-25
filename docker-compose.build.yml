@@ -1,6 +1,6 @@
 # Overlay zum Bauen der Images aus dem Quellcode statt sie zu ziehen.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#   docker compose -f docker-compose.quick.yml -f docker-compose.build.yml up -d --build
 #
 # Nur noetig, wenn du eine Aenderung testen willst, bevor die CI sie gebaut hat.
 # Im Normalfall reicht `docker compose pull`.

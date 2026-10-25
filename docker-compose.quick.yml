@@ -15,7 +15,6 @@
 #   - Die App laesst sich nicht als PWA aufs Tablet legen. Service Worker
 #     brauchen HTTPS (Ausnahme: localhost). Im Browser laeuft alles, aber
 #     ohne Installation und ohne Offlinebetrieb.
-# Mit Domain und Zertifikat (fuer Fortgeschrittene): docker-compose.yml.
 
 name: wordquest
 

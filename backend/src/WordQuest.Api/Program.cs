@@ -137,10 +137,9 @@ builder.Services.AddAuthorizationBuilder()
 
 // Begrenzt Rateversuche auf Login und PIN (Konzept §12), Standard 10 pro Minute,
 // Partition pro echter Client-IP (FIX-01). nginx setzt X-Forwarded-For selbst auf
-// die Adresse seines Absenders (im Traefik-Stack auf die Adresse, die Traefik
-// meldet). Vertraut werden nur private Netze: Die API ist in keinem Stack
-// veroeffentlicht, nur nginx erreicht sie, und Docker-Pools weichen je nach Host
-// ab. ForwardLimit = 1, weil genau eine Stufe (nginx) direkt vor der API steht;
+// die Adresse seines Absenders. Vertraut werden nur private Netze: Die API ist
+// in keinem Stack veroeffentlicht, nur nginx erreicht sie, und Docker-Pools
+// weichen je nach Host ab. ForwardLimit = 1, weil genau eine Stufe (nginx) direkt vor der API steht;
 // ein vom Geraet vorangestellter Wert zaehlt so nie. Der e2e-Teststack setzt
 // einen hoeheren Wert, weil Playwright alle Anfragen von einer IP schickt.
 int authRequestsPerMinute = builder.Configuration.GetValue("Auth:RequestsPerMinute", 10);
@@ -227,14 +226,12 @@ app.UseStatusCodePages();
 // Vor dem Rate-Limiter: setzt Connection.RemoteIpAddress auf die Adresse des Geraets.
 app.UseForwardedHeaders();
 
+// Kein HSTS (Owner-Entscheidung 2026-10-25): Ein Browser mit HSTS verbietet das
+// Wegklicken einer Zertifikatswarnung.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.UseCors();
-}
-else
-{
-    app.UseHsts();
 }
 
 app.UseRateLimiter();

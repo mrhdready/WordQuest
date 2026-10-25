@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
-# Prueft die X-Forwarded-For-Kette beider nginx-Varianten (FIX-01, T-02-22, T-02-36)
-# gegen einen Echo-Upstream, der den Kopf zurueckgibt, den nginx an die API schickt.
-#   Heimnetz-Stack: nur frontend/nginx.conf; die API sieht genau die Adresse des
-#     Absenders, ein gefaelschter Kopf kommt nicht an.
-#   Traefik-Stack: zusaetzlich frontend/nginx-traefik-realip.conf; die API sieht
-#     genau den letzten Wert (den von Traefik), ein vorangestellter kommt nicht an.
-# Dazu die Sicherheits-Header beider Varianten an jedem Pfad, auch an Fehlerantworten
-# (D-12, D-21), die Einbindung in docker-compose.yml und ein unveraendertes
-# docker-compose.quick.yml.
+# Prueft die X-Forwarded-For-Kette von nginx (frontend/nginx.conf; FIX-01, T-02-22,
+# T-02-36) gegen einen Echo-Upstream, der den Kopf zurueckgibt, den nginx an die API
+# schickt: Die API sieht genau die Adresse des Absenders, ein gefaelschter Kopf kommt
+# nicht an. Dazu die Sicherheits-Header an jedem Pfad, auch an Fehlerantworten
+# (D-12, D-21).
 # Ausserdem fuer jeden Dienst jeder Compose-Datei: Nur certs bindet das CA-Volume
 # (Name endet auf -ca) ein, /etc/nginx/tls nur schreibgeschuetzt, certs ohne Netz,
 # Ports und Secrets (TLS-01, T-fpi-01, T-fpi-08). Bind-Mounts auf /certs/ca zaehlen mit.
@@ -25,7 +21,7 @@ NET="wq-xff-$$"
 TMP="$(mktemp -d)"
 
 cleanup() {
-  docker rm -f "$NET-api" "$NET-home" "$NET-traefik" >/dev/null 2>&1 || true
+  docker rm -f "$NET-api" "$NET-home" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   rm -rf "$TMP"
 }
@@ -107,29 +103,6 @@ seen="$(sed -n 2p <<<"$out")"
   || fail "Heimnetz /health/: die API sieht '$seen' statt der Absenderadresse '$sender'."
 echo "Heimnetz /health/: Absender $sender, die API sieht $seen"
 
-echo "== Traefik-Variante (zusaetzlich frontend/nginx-traefik-realip.conf)"
-[[ -f frontend/nginx-traefik-realip.conf ]] || fail "frontend/nginx-traefik-realip.conf fehlt."
-docker run -d --name "$NET-traefik" --network "$NET" \
-  --mount "type=bind,src=$ROOT/frontend/nginx.conf,dst=/etc/nginx/conf.d/default.conf,readonly" \
-  --mount "type=bind,src=$ROOT/frontend/nginx-security-headers.conf,dst=/etc/nginx/security-headers.conf,readonly" \
-  --mount "type=bind,src=$ROOT/frontend/nginx-traefik-realip.conf,dst=/etc/nginx/conf.d/realip.conf,readonly" \
-  --mount "type=bind,src=$TMP/html,dst=/usr/share/nginx/html,readonly" \
-  "$IMAGE" >/dev/null
-wait_ready "$NET-traefik"
-# Der Absender steht an Stelle von Traefik; 203.0.113.9 hat das Geraet vorangestellt.
-out="$(send "$NET-traefik" '203.0.113.9, 198.51.100.7')"
-seen="$(sed -n 2p <<<"$out")"
-[[ "$seen" == "198.51.100.7" ]] \
-  || fail "Traefik: die API sieht '$seen' statt genau 198.51.100.7."
-echo "Traefik: die API sieht $seen"
-# Im Heimnetz ist die Geraeteadresse selbst privat; mit real_ip_recursive on
-# wuerde nginx sie als Proxy ueberspringen und den vorangestellten Wert nehmen.
-out="$(send "$NET-traefik" '203.0.113.9, 192.168.178.20')"
-seen="$(sed -n 2p <<<"$out")"
-[[ "$seen" == "192.168.178.20" ]] \
-  || fail "Traefik: bei privater Geraeteadresse sieht die API '$seen' statt genau 192.168.178.20."
-echo "Traefik (private Geraeteadresse): die API sieht $seen"
-
 echo "== Sicherheits-Header (D-12, D-21)"
 # Prueft je Pfad die Koepfe der Antwort von Container $1 (Variante $2).
 check_headers() {
@@ -161,23 +134,6 @@ check_headers() {
   echo "$2: Sicherheits-Header an allen Pfaden, auch an 404"
 }
 check_headers "$NET-home" Heimnetz
-check_headers "$NET-traefik" Traefik
-
-echo "== Einbindung in den Compose-Dateien"
-config="$(docker compose -f docker-compose.yml config 2>/dev/null)" \
-  || fail "docker compose -f docker-compose.yml config schlaegt fehl."
-grep -q 'nginx-traefik-realip.conf' <<<"$config" \
-  || fail "docker-compose.yml bindet frontend/nginx-traefik-realip.conf nicht ein."
-grep -q '/etc/nginx/conf.d/realip.conf' <<<"$config" \
-  || fail "docker-compose.yml bindet die Datei nicht nach /etc/nginx/conf.d/realip.conf ein."
-git diff --quiet HEAD -- docker-compose.quick.yml \
-  || fail "docker-compose.quick.yml hat nicht committete Aenderungen."
-# Auch committet darf der Heimnetz-Stack realip nie einbinden.
-quick="$(docker compose -f docker-compose.quick.yml config 2>/dev/null)" \
-  || fail "docker compose -f docker-compose.quick.yml config schlaegt fehl."
-if grep -q 'realip' <<<"$quick"; then
-  fail "docker-compose.quick.yml bindet realip ein; Geraete im Heimnetz koennten ihre Adresse selbst waehlen."
-fi
 
 echo "== CA-Volume nur im Dienst certs"
 # node nur hier im Gate auf dem Entwicklungsrechner, nicht im Betrieb.
