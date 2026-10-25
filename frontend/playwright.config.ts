@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test'
 // Laeuft gegen den gebauten Teststack (e2e/docker-compose.e2e.yml), nicht gegen
 // den Vite-Dev-Server: CSP, nginx und Produktions-Build sollen mitgeprueft werden.
 // HTTPS wie im Betrieb: global-setup setzt WQ_E2E_SPKI, die Worker vertrauen damit
-// genau dem ausgelieferten Zertifikat (vertrauter Pfad mit Service Worker).
+// genau dem Schluessel des ausgelieferten Zertifikats (vertrauter Pfad mit Service Worker).
 // learn.spec ersetzt launchOptions und prueft den Warnpfad ohne Vertrauen.
 const spki = process.env.WQ_E2E_SPKI
 

@@ -68,8 +68,8 @@ export default async function globalSetup(config: FullConfig) {
   const email = process.env.WQ_E2E_GUARDIAN_EMAIL ?? 'demo@wordquest.local'
   const password = process.env.WQ_E2E_GUARDIAN_PASSWORD ?? 'demo1234'
 
-  // Vertraut wird genau das ausgelieferte Server-Zertifikat, und nur, wenn die CA
-  // des Stacks es signiert hat. Ein pauschales --ignore-certificate-errors wuerde
+  // Vertraut wird genau dem Schluessel (SPKI) des ausgelieferten Server-Zertifikats,
+  // und nur, wenn die CA des Stacks dieses Zertifikat signiert hat. Ein pauschales --ignore-certificate-errors wuerde
   // jeden Zertifikatsfehler verdecken und den Service Worker trotzdem zulassen;
   // so sieht der Browser denselben Zustand wie ein Geraet mit installierter CA.
   const url = new URL(baseURL)
