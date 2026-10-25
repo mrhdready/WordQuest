@@ -26,10 +26,10 @@ version_in() {
 
 # Dateien des Release-Pakets (.github/release-package.sh). Nur sie werden
 # ersetzt; .env, secrets/ und backups/ bleiben unberuehrt.
-PKG_FILES='docker-compose.quick.yml docker-compose.yml .env.example setup.sh upgrade.sh restore.sh frontend/nginx-traefik-realip.conf'
+PKG_FILES='docker-compose.quick.yml .env.example setup.sh upgrade.sh restore.sh'
 # Erwarteter Paketinhalt aus derselben Liste: Typzeichen und Name je Eintrag,
 # sortiert (GNU- und BSD-tar liefern dieselben Typzeichen; 03.1-05).
-PKG_LISTING="$( { echo 'd wordquest/'; echo 'd wordquest/frontend/'; for f in $PKG_FILES; do echo "- wordquest/$f"; done; } | LC_ALL=C sort)"
+PKG_LISTING="$( { echo 'd wordquest/'; for f in $PKG_FILES; do echo "- wordquest/$f"; done; } | LC_ALL=C sort)"
 RELEASE_URL_DEFAULT=https://github.com/mrhdready/WordQuest/releases/latest/download
 
 command -v docker >/dev/null || die "Docker ist nicht installiert."
@@ -185,7 +185,7 @@ trap 'start_failed "Abgebrochen."' INT TERM
 
 # BSD/GNU sed kompatibel: temporaere Datei statt -i (wie setup.sh). cp -p
 # zuerst: Die Umleitung in eine bestehende Datei behaelt deren Rechte, sonst
-# waere .env danach fuer alle lesbar (Traefik-Variante: DNS-Token, WR-01).
+# waere .env danach fuer alle lesbar (WR-01).
 if grep -qE '^WQ_VERSION=' .env; then
   { cp -p .env .env.tmp && sed -e "s|^WQ_VERSION=.*|WQ_VERSION=${target}|" .env >.env.tmp && mv .env.tmp .env; } \
     || { rm -f .env.tmp; die "Die Datei .env ließ sich nicht schreiben. WordQuest läuft unverändert mit der bisherigen Version weiter. Die Sicherung liegt in $backup."; }

@@ -100,7 +100,7 @@ example_value() { sed -n "s/^$1=//p" .env.example; }
   || fail ".env.example: WQ_IMAGE_PREFIX ist '$(example_value WQ_IMAGE_PREFIX)' statt '$EXPECTED_PREFIX'."
 # Standardwerte ${NAME:-wert} einer Compose-Datei, je Fundstelle eine Zeile.
 compose_defaults() { grep -o "\${$1:-[^}]*}" "$2" | sed "s/^\${$1:-//; s/}\$//" || true; }
-for file in docker-compose.quick.yml docker-compose.yml; do
+for file in docker-compose.quick.yml; do
   for pair in "WQ_VERSION $EXPECTED_VERSION" "WQ_IMAGE_PREFIX $EXPECTED_PREFIX"; do
     name="${pair% *}"; expected="${pair#* }"
     found="$(compose_defaults "$name" "$file")"
@@ -161,13 +161,10 @@ pkg_listing() {
 }
 PKG_EXPECTED='- wordquest/.env.example
 - wordquest/docker-compose.quick.yml
-- wordquest/docker-compose.yml
-- wordquest/frontend/nginx-traefik-realip.conf
 - wordquest/restore.sh
 - wordquest/setup.sh
 - wordquest/upgrade.sh
-d wordquest/
-d wordquest/frontend/'
+d wordquest/'
 listing="$(pkg_listing "$WORK/release-base/wordquest.tar.gz")"
 [[ "$listing" == "$PKG_EXPECTED" ]] \
   || fail "Paketinhalt weicht ab: $(printf '%s' "$listing" | tr '\n' '|')"
@@ -677,7 +674,7 @@ check_upd_backup() {
 # Ausgeliefertes Paket: das aus der CI-Nachbildung oben, mit anderer Version in
 # .env.example (grep -v und angehaengte Zeile: ein | verduerbe einen sed-Ersatz).
 # Mit "falsch" passt die Pruefsumme nicht zum Paket.
-PKG_FILES='docker-compose.quick.yml docker-compose.yml .env.example setup.sh upgrade.sh restore.sh frontend/nginx-traefik-realip.conf'
+PKG_FILES='docker-compose.quick.yml .env.example setup.sh upgrade.sh restore.sh'
 pkg_unpack() {
   rm -rf "$WORK/pkg"
   mkdir "$WORK/pkg"
@@ -697,10 +694,10 @@ serve_pkg() {
   mv "$WORK/pkg/env-example" "$WORK/pkg/wordquest/.env.example"
   pkg_pack "${2:-}"
 }
-# Summen der sieben Paketdateien im Installationsordner und von secrets/.
+# Summen der fuenf Paketdateien im Installationsordner und von secrets/.
 pkg_sums() { for f in $PKG_FILES; do shasum "$f" 2>&1 || true; done; ls -l $PKG_FILES 2>&1 | cut -c1-10; }
 secrets_sum() { (cd secrets && ls -ln | cut -c1-10 && shasum ./*) 2>&1 || true; }
-# Jede der sieben Dateien gleicht der im ausgelieferten Paket.
+# Jede der fuenf Dateien gleicht der im ausgelieferten Paket.
 pkg_is_served() {
   local f
   for f in $PKG_FILES; do
@@ -765,7 +762,7 @@ serve_pkg "$EXPECTED_VERSION"
 # Die installierte Fassung weicht vom Paket ab: Danach muss sie ersetzt sein.
 echo '# Smoke: installierte Fassung vor dem Update' >>upgrade.sh
 page_cmd './upgrade.sh'
-# Die .env behaelt ihre Rechte (WR-01): In der Traefik-Variante steht dort ein Token.
+# Die .env behaelt ihre Rechte (WR-01): upgrade.sh darf sie nicht fuer alle lesbar machen.
 chmod 600 .env
 env_mode="$(ls -l .env | cut -c1-10)"
 secrets_before="$(secrets_sum)"
