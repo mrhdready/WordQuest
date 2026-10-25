@@ -356,17 +356,26 @@ test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, brow
 test.describe('Zertifikat nicht vertraut', () => {
   test.use({ baseURL: 'https://wordquest.test:18443' })
 
-  // Kein Service Worker, auch nicht nach dem Neuladen (eine erfolgreiche
-  // Registrierung aus dem ersten Laden waere dann sichtbar).
+  // Kein Service Worker: Chromium lehnt das Skript des Workers wegen des Zertifikats
+  // ab, und keine Registrierung bleibt, auch nach dem Neuladen (eine erfolgreiche
+  // Registrierung aus dem ersten Laden waere dann sichtbar). Gepollt, weil die
+  // Registrierung der App beim Laden noch laufen kann und so lange mitgezaehlt wird.
   async function expectNoServiceWorker(page: Page) {
+    const rejected = await page.evaluate(() =>
+      navigator.serviceWorker.register('/sw.js').then(
+        () => '',
+        (error: Error) => error.message,
+      ),
+    )
+    expect(rejected).toContain('SSL certificate error')
     const workers = () =>
       page.evaluate(async () => ({
         controller: navigator.serviceWorker.controller !== null,
         registrations: (await navigator.serviceWorker.getRegistrations()).length,
       }))
-    expect(await workers()).toEqual({ controller: false, registrations: 0 })
+    await expect.poll(workers).toEqual({ controller: false, registrations: 0 })
     await page.reload({ waitUntil: 'load' })
-    expect(await workers()).toEqual({ controller: false, registrations: 0 })
+    await expect.poll(workers).toEqual({ controller: false, registrations: 0 })
   }
 
   const isAnswer = (url: string) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(url)
