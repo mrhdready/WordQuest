@@ -78,7 +78,7 @@ Startest du `./setup.sh` nach einer fertigen Einrichtung ein zweites Mal, steht 
 hostname -I
 ```
 
-Der Befehl zeigt oft mehrere Einträge. Die Adresse in deinem Heimnetz beginnt meist mit `192.168.`, die anderen Einträge kannst du ignorieren. Beginnt die Adresse in der Zeile „Fertig.“ nicht mit `192.168.`, nimm die aus `hostname -I`, die damit beginnt, und hänge wie in der Zeile „Fertig.“ den Port an, zum Beispiel `:8080`.
+Der Befehl zeigt oft mehrere Einträge. Die Adresse in deinem Heimnetz beginnt meist mit `192.168.`, die anderen Einträge kannst du ignorieren. Beginnt die Adresse in der Zeile „Fertig.“ nicht mit `192.168.`, nimm die aus `hostname -I`, die damit beginnt, und hänge wie in der Zeile „Fertig.“ den Port an, zum Beispiel `:8080`. Damit sich die Adresse später nicht ändert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
 
 WordQuest nutzt den Port 8080. Ist er schon belegt, bricht `setup.sh` mit „Der Port 8080 ist schon belegt. …“ ab. Dann hängst du im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` eine Zeile an die Datei `.env` an und startest `./setup.sh` noch einmal. Steht in `.env` schon eine Zeile `WQ_PORT=`, änderst du stattdessen deren Wert, zum Beispiel auf `9001`. Die Datei `.env` beginnt mit einem Punkt und ist deshalb versteckt: `ls` zeigt sie nicht, `ls -a` schon.
 
@@ -101,6 +101,16 @@ Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter La
 Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
 
 Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig. Gib den Port von WordQuest (8080 oder deinen Wert bei `WQ_PORT`) im Router nicht ins Internet frei, WordQuest ist nur für dein Heimnetz gedacht.
+
+### Feste Adresse im Heimnetz
+
+Dein Router vergibt die Adressen im Heimnetz automatisch (DHCP). Nach einem Neustart des Routers oder des Geräts, etwa nach einem Stromausfall, kann WordQuest eine andere Adresse bekommen. Lesezeichen auf den Tablets führen dann ins Leere.
+
+Am einfachsten richtest du die feste Adresse im Router ein. Bei einer FRITZ!Box gehst du unter „Heimnetz“ → „Netzwerk“ beim Gerät auf „Bearbeiten“, schaltest die Option „Diesem Netzwerkgerät immer die gleiche IPv4-Adresse zuweisen“ ein und übernimmst die Änderung. Andere Router nennen das „DHCP-Reservierung“, „feste IP-Adresse“ oder „statische Zuordnung“. Stell die Adresse bewusst nicht auf dem Gerät selbst fest ein: Im Router ist es einfacher, und es gibt keinen Konflikt mit den Adressen, die der Router vergibt. Starte das Gerät danach einmal neu und prüfe mit `hostname -I`, ob die Adresse noch dieselbe ist; falls nicht, setz die Lesezeichen neu.
+
+Alternativ erreichst du WordQuest über den Namen des Geräts, aber nicht auf jedem Gerät garantiert. Den Gerätenamen zeigt der Befehl `hostname`. Mit einer FRITZ!Box geht `http://<Gerätename>.fritz.box:8080`. Ein Raspberry Pi mit Raspberry Pi OS meldet sich im Heimnetz zusätzlich selbst als `http://<Gerätename>.local:8080`. Die Adresse mit `.local` klappt auf iPhone, iPad und Mac und meist auch unter Windows, auf Android nicht immer und nicht bei aktivem VPN; dann nimm die feste Adresse. Statt 8080 gilt der Port aus der Zeile „Fertig.“ bzw. dein Wert bei `WQ_PORT`.
+
+Die Anmeldung im Browser gilt nur für die Adresse, unter der du dich angemeldet hast. Wechselst du zum Namen oder zu einer neuen Adresse, meldest du dich dort einmal neu an; Kinder wählen ihr Profil und geben ihre PIN ein.
 
 ## Update
 
@@ -229,6 +239,8 @@ Prüfe die Internetverbindung des Geräts. Hast du beim Präfix etwas anderes al
 > Der Port 8080 ist schon belegt. Trage in .env eine Zeile WQ_PORT=9000 ein (oder ändere die vorhandene Zeile WQ_PORT=) und starte ./setup.sh noch einmal.
 
 Dann nutzt schon etwas anderes diesen Port. Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst häng im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` die Zeile an und starte `./setup.sh` noch einmal. Steht in `.env` schon eine Zeile `WQ_PORT=`, ändere stattdessen deren Wert. WordQuest läuft dann unter dem neuen Port.
+
+**Die Adresse geht nicht mehr.** Führe auf dem Gerät `hostname -I` aus, nimm den Eintrag, der meist mit `192.168.` beginnt, häng den Port an wie in der Zeile „Fertig.“ und setz die Lesezeichen auf den Tablets neu. Damit das nicht wieder passiert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
 
 **Der Ordner `backups` gehört nicht dir.** `setup.sh` bricht dann ab mit:
 
