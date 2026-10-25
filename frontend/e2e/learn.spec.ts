@@ -357,9 +357,10 @@ test.describe('Zertifikat nicht vertraut', () => {
   test.use({ baseURL: 'https://wordquest.test:18443' })
 
   // Kein Service Worker: Chromium lehnt das Skript des Workers wegen des Zertifikats
-  // ab, und keine Registrierung bleibt, auch nach dem Neuladen (eine erfolgreiche
-  // Registrierung aus dem ersten Laden waere dann sichtbar). Gepollt, weil die
-  // Registrierung der App beim Laden noch laufen kann und so lange mitgezaehlt wird.
+  // ab, und keine Registrierung bleibt, auch nach erneutem Laden der Profilwahl (eine
+  // erfolgreiche Registrierung aus dem ersten Laden waere dann sichtbar). Gepollt,
+  // weil die Registrierung der App beim Laden noch laufen kann und so lange
+  // mitgezaehlt wird. openPicker wartet auf die Profile, bevor der Test weitertippt.
   async function expectNoServiceWorker(page: Page) {
     const rejected = await page.evaluate(() =>
       navigator.serviceWorker.register('/sw.js').then(
@@ -374,7 +375,7 @@ test.describe('Zertifikat nicht vertraut', () => {
         registrations: (await navigator.serviceWorker.getRegistrations()).length,
       }))
     await expect.poll(workers).toEqual({ controller: false, registrations: 0 })
-    await page.reload({ waitUntil: 'load' })
+    await openPicker(page)
     await expect.poll(workers).toEqual({ controller: false, registrations: 0 })
   }
 
