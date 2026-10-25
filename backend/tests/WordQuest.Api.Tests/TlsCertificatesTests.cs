@@ -16,6 +16,9 @@ public sealed class TlsCertificatesTests
     private static readonly X509Certificate2 ShortAuthority =
         TlsCertificates.CreateAuthority("pi", Now.AddYears(-10).AddDays(100));
 
+    // Neu angelegt am selben Tag mit demselben Namen: gleicher Subject-DN, anderer Schluessel (Review 1).
+    private static readonly X509Certificate2 TwinAuthority = TlsCertificates.CreateAuthority("pi", Now);
+
     private static readonly string[] Dns = ["pi", "pi.local", "localhost"];
     private static readonly IPAddress[] Ips = [IPAddress.Parse("192.168.178.20"), IPAddress.Parse("127.0.0.1")];
 
@@ -77,6 +80,22 @@ public sealed class TlsCertificatesTests
 
         Assert.False(Extension<X509BasicConstraintsExtension>(server).CertificateAuthority);
         Assert.Equal(TimeSpan.FromDays(800), server.NotAfter - server.NotBefore);
+
+        Assert.Equal(
+            Extension<X509SubjectKeyIdentifierExtension>(Authority).SubjectKeyIdentifierBytes.ToArray(),
+            Extension<X509AuthorityKeyIdentifierExtension>(server).KeyIdentifier!.Value.ToArray());
+    }
+
+    [Fact]
+    public void Authority_common_name_stays_within_64_characters()
+    {
+        // RFC 5280 begrenzt den CN auf 64 Zeichen; ein langer Hostname wird gekuerzt (Review 4).
+        using X509Certificate2 authority = TlsCertificates.CreateAuthority(new string('a', 63), Now);
+
+        string commonName = authority.GetNameInfo(X509NameType.SimpleName, false);
+        Assert.True(commonName.Length <= 64, commonName);
+        Assert.StartsWith("WordQuest Zertifizierungsstelle aaaa", commonName);
+        Assert.EndsWith(" 2026-10-25", commonName);
     }
 
     [Fact]
@@ -137,6 +156,16 @@ public sealed class TlsCertificatesTests
         using X509Certificate2 server = TlsCertificates.IssueServer(ShortAuthority, Dns, Ips, Now);
 
         Assert.True(TlsCertificates.NeedsReissue(server, Authority, Dns, Ips, Now));
+    }
+
+    [Fact]
+    public void NeedsReissue_is_true_for_foreign_authority_with_same_name()
+    {
+        using X509Certificate2 server = TlsCertificates.IssueServer(TwinAuthority, Dns, Ips, Now);
+
+        Assert.Equal(TwinAuthority.SubjectName.RawData, Authority.SubjectName.RawData);
+        Assert.True(TlsCertificates.NeedsReissue(server, Authority, Dns, Ips, Now));
+        Assert.False(TlsCertificates.NeedsReissue(server, TwinAuthority, Dns, Ips, Now));
     }
 
     // Gemeinsame Beispieltabelle mit setup.sh (Plan 03, Codex 8).

@@ -42,7 +42,9 @@ public static class TlsCertificates
         var name = new X500DistinguishedNameBuilder();
         name.AddOrganizationName("WordQuest");
         // Datum und Name machen die CA auf den Geraeten erkennbar und je Installation eindeutig.
-        name.AddCommonName($"WordQuest Zertifizierungsstelle {label} {now.UtcDateTime:yyyy-MM-dd}");
+        // RFC 5280 erlaubt 64 Zeichen im CN; 43 belegen Text und Datum, der Name wird notfalls gekuerzt.
+        string shortLabel = label.Length > 21 ? label[..21] : label;
+        name.AddCommonName($"WordQuest Zertifizierungsstelle {shortLabel} {now.UtcDateTime:yyyy-MM-dd}");
 
         var request = new CertificateRequest(name.Build(), key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, true, 0, true));

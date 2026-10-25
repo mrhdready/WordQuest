@@ -158,6 +158,14 @@ public static class TlsCommand
             if (Files.HasAnyAuthorityFile)
             {
                 X509Certificate2 existing = Files.LoadAuthority();
+                // Ein Server-Zertifikat endet nie nach der CA: kurz vor ihrem Ende hilft nur eine neue CA.
+                DateTime end = existing.NotAfter;
+                if (new DateTimeOffset(end) - now < TlsCertificates.RenewBefore)
+                {
+                    existing.Dispose();
+                    throw new AuthorityException($"Die Zertifizierungsstelle läuft am {Day(end)} ab.{Way}");
+                }
+
                 if (initial)
                 {
                     Output.WriteLine("✓ Zertifizierungsstelle existiert bereits — unverändert.");
@@ -263,12 +271,13 @@ public static class TlsCommand
                 return null;
             }
 
-            string pem = File.ReadAllText(ServerPem);
             try
             {
+                string pem = File.ReadAllText(ServerPem);
                 return X509Certificate2.CreateFromPem(pem, pem);
             }
-            catch (Exception exception) when (exception is CryptographicException or ArgumentException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                                                  or CryptographicException or ArgumentException)
             {
                 return null;
             }

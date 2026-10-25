@@ -228,6 +228,27 @@ public sealed class TlsCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Watch_stops_when_authority_expires_within_30_days()
+    {
+        // Sonst stellte jeder Takt neu aus, und nach dem Ablauf stuerzte IssueServer ab (Review 2).
+        using X509Certificate2 authority = TlsCertificates.CreateAuthority("pi", Start.AddYears(-10).AddDays(20));
+        using RSA key = authority.GetRSAPrivateKey()!;
+        Directory.CreateDirectory(PathOf("ca"));
+        File.WriteAllText(PathOf("ca/ca.key"), key.ExportPkcs8PrivateKeyPem());
+        File.WriteAllText(PathOf("ca/ca.crt"), authority.ExportCertificatePem());
+        Dictionary<string, byte[]> before = Snapshot();
+
+        Watch watch = StartWatch();
+
+        Assert.Equal(1, await watch.Task.WaitAsync(Limit));
+        Assert.Equal(
+            $"Die Zertifizierungsstelle läuft am {Day(new DateTimeOffset(authority.NotAfter))} ab.{Way}",
+            _errorText.ToString().Trim());
+        Assert.Equal(0, watch.Time.TimerCount);
+        AssertSame(before, Snapshot());
+    }
+
+    [Fact]
     public async Task Missing_names_is_usage_error()
     {
         Assert.Equal(64, await RunAsync(["tls", "watch", "--dir", _root.FullName], null));
