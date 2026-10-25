@@ -139,8 +139,12 @@ check_headers "$NET-home" Heimnetz
 echo "== CA-Volume nur im Dienst certs"
 # node nur hier im Gate auf dem Entwicklungsrechner, nicht im Betrieb.
 for file in docker-compose*.yml frontend/e2e/docker-compose.e2e.yml; do
-  json="$(docker compose -f "$file" config --format json 2>/dev/null)" \
-    || fail "docker compose -f $file config schlaegt fehl."
+  # Das Build-Overlay gilt nur zusammen mit der Betriebsdatei; allein fehlten certs
+  # dort network_mode und Volumes.
+  files=(-f "$file")
+  [ "$file" != docker-compose.build.yml ] || files=(-f docker-compose.quick.yml -f "$file")
+  json="$(docker compose "${files[@]}" config --format json 2>/dev/null)" \
+    || fail "docker compose ${files[*]} config schlaegt fehl."
   problem="$(node -e '
     const config = JSON.parse(require("fs").readFileSync(0, "utf8"))
     for (const [name, service] of Object.entries(config.services ?? {})) {

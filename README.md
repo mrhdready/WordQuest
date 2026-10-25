@@ -20,7 +20,9 @@ Für den Betrieb im Heimnetz auf einem Raspberry Pi 5 oder einem NAS gibt es
 genau eine Anleitung: [`Documentation/Installation.md`](Documentation/Installation.md).
 Sie führt vom leeren Gerät bis zur ersten Anmeldung, erklärt Update
 (`./upgrade.sh` holt das neueste Release selbst) und Wiederherstellen
-(`./restore.sh`) und hilft bei Problemen.
+(`./restore.sh`) und hilft bei Problemen. WordQuest läuft dort über HTTPS mit
+einer eigenen Zertifizierungsstelle je Installation; `setup.sh` nennt am Ende die
+Fingerabdrücke zum Prüfen.
 
 **Für Entwickler und Forks:** Die CI baut bei jedem Push auf `master` und bei
 jedem Tag `v*` die Images `ghcr.io/<account>/wordquest-api` und `-web` für
@@ -174,6 +176,7 @@ Drei Bremsen tragen das ganze System:
 | | |
 |---|---|
 | Hardware | 2 vCPU, 2 GB RAM, 10 GB Storage — läuft auf einem Raspberry Pi 5 |
+| Zugriff | HTTPS mit eigener Zertifizierungsstelle (Dienst `certs`), Ports 80/443, belegt → 8080/8443 (`WQ_HTTP_PORT`, `WQ_HTTPS_PORT`) |
 | Backups | täglich per `pg_dump` nach `./backups`, 14 Tage / 8 Wochen / 6 Monate |
 | Healthchecks | `/health/live`, `/health/ready` |
 | Secrets | Dateien unter `./secrets/`, nie als Umgebungsvariable |

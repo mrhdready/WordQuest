@@ -54,7 +54,7 @@ Starte die Einrichtung:
 
 1. das **Image-Präfix**. Drück einfach Enter, dann nimmt es den vorgeschlagenen Wert `ghcr.io/mrhdready/wordquest`. Einen anderen Wert brauchst du nur, wenn du eigene Images baust.
 
-Danach lädt es WordQuest in der Version 1.0.1 und startet es; beim ersten Mal kann das ein paar Minuten dauern. Erst dann fragt es nach:
+Danach lädt es WordQuest in der Version 1.0.1, prüft die Ports (siehe unten), startet WordQuest und legt das Zertifikat für die sichere Verbindung (HTTPS) an; beim ersten Mal kann das ein paar Minuten dauern. Erst dann fragt es nach:
 
 2. der **E-Mail-Adresse** für dein Elternkonto,
 3. dem **Passwort** dafür, zweimal, mindestens 8 Zeichen. Die Eingabe bleibt unsichtbar.
@@ -64,23 +64,29 @@ Dann legt es dein Elternkonto an. Am Ende siehst du unter anderem diese Zeilen:
 ```text
 ✓ .env angelegt.
 ✓ API ist bereit.
+✓ Zertifikat ist bereit.
+✓ WordQuest antwortet über HTTPS.
 ✓ Elternkonto angelegt.
 Fertig. WordQuest läuft unter: <Adresse> — Melde dich dort mit <deine E-Mail-Adresse> und deinem Passwort an.
+Beim ersten Besuch warnt der Browser vor dem Zertifikat. Prüfe dann den Fingerabdruck, wie es die Installationsanleitung unter „Zertifikat prüfen“ beschreibt:
+Fingerabdruck von WordQuest (SHA-256): <Fingerabdruck>
+Fingerabdruck der Zertifizierungsstelle (SHA-256): <Fingerabdruck>
+Ohne Warnung geht es, wenn du die Zertifizierungsstelle auf dem Gerät installierst: http://<Adresse>/wordquest-ca.crt
 Als Nächstes: Lege unter „Kinder“ das erste Kind an, dann unter „Vokabeln“ ein Vokabelset.
 Tägliche Sicherungen liegen in: <Ordner>/backups
 ```
 
 Startest du `./setup.sh` nach einer fertigen Einrichtung ein zweites Mal, steht statt „✓ .env angelegt.“ die Zeile „✓ .env existiert bereits — unverändert.“ und statt „✓ Elternkonto angelegt.“ die Zeile „✓ Elternkonto ist schon angelegt — unverändert.“. Die Zeile „Fertig.“ endet dann mit „Melde dich dort mit deinem Elternkonto an.“
 
-Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `http://192.168.178.20:8080`, und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. `setup.sh` nimmt dafür den ersten Eintrag, den `hostname -I` ausgibt. Brauchst du die Adresse später wieder, zeigt dir derselbe Befehl sie:
+Öffne die Adresse aus der Zeile „Fertig.“ im Browser eines Geräts in deinem Heimnetz, zum Beispiel `https://192.168.178.20`, prüfe beim ersten Besuch den Fingerabdruck (siehe [Zertifikat prüfen](#zertifikat-prüfen)) und melde dich mit deiner E-Mail-Adresse und deinem Passwort an. `setup.sh` nimmt dafür die erste Adresse, die `hostname -I` ausgibt und die nicht zu Docker gehört. Brauchst du die Adresse später wieder, zeigt dir derselbe Befehl sie:
 
 ```bash
 hostname -I
 ```
 
-Der Befehl zeigt oft mehrere Einträge. Die Adresse in deinem Heimnetz beginnt meist mit `192.168.`, die anderen Einträge kannst du ignorieren. Beginnt die Adresse in der Zeile „Fertig.“ nicht mit `192.168.`, nimm die aus `hostname -I`, die damit beginnt, und hänge wie in der Zeile „Fertig.“ den Port an, zum Beispiel `:8080`. Damit sich die Adresse später nicht ändert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
+Der Befehl zeigt oft mehrere Einträge. Die Adresse in deinem Heimnetz beginnt meist mit `192.168.`, die anderen Einträge kannst du ignorieren. Beginnt die Adresse in der Zeile „Fertig.“ nicht mit `192.168.`, nimm die aus `hostname -I`, die damit beginnt, und hänge einen Port an, wenn die Zeile „Fertig.“ einen nennt, zum Beispiel `:8443`. Das Zertifikat gilt für die IPv4-Adressen, die `hostname -I` beim letzten Lauf von `./setup.sh` gezeigt hat, außer denen von Docker. Damit sich die Adresse später nicht ändert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
 
-WordQuest nutzt den Port 8080. Ist er schon belegt, bricht `setup.sh` mit „Der Port 8080 ist schon belegt. …“ ab. Dann hängst du im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` eine Zeile an die Datei `.env` an und startest `./setup.sh` noch einmal. Steht in `.env` schon eine Zeile `WQ_PORT=`, änderst du stattdessen deren Wert, zum Beispiel auf `9001`. Die Datei `.env` beginnt mit einem Punkt und ist deshalb versteckt: `ls` zeigt sie nicht, `ls -a` schon.
+WordQuest nutzt die Ports 80 (HTTP) und 443 (HTTPS). Vor dem Start prüft `setup.sh`, ob beide frei sind. Ist einer belegt, fragt es, ob WordQuest stattdessen 8080 und 8443 nutzen darf. Mit Enter oder `j` trägt es beide Ports in die Datei `.env` ein, und die Adresse endet dann auf `:8443`, zum Beispiel `https://192.168.178.20:8443`. Läuft `setup.sh` ohne Terminal, etwa mit umgeleiteter Eingabe, fragt es nicht, sondern bricht mit einem Hinweis ab. Eigene Ports trägst du in `.env` bei `WQ_HTTP_PORT` und `WQ_HTTPS_PORT` ein (siehe „Der Port ist belegt“ unter Hilfe bei Problemen). Die Datei `.env` beginnt mit einem Punkt und ist deshalb versteckt: `ls` zeigt sie nicht, `ls -a` schon.
 
 Ob alles läuft, zeigt dir jederzeit:
 
@@ -88,7 +94,7 @@ Ob alles läuft, zeigt dir jederzeit:
 docker compose ps
 ```
 
-Die Liste zeigt die vier Dienste `api`, `backup`, `db` und `web`. In der Spalte `STATUS` beginnt jeder Eintrag mit `Up`. Steht dahinter `(health: starting)`, ist das in der ersten Minute nach dem Start normal.
+Die Liste zeigt die fünf Dienste `api`, `backup`, `certs`, `db` und `web`. Der Dienst `certs` legt das Zertifikat an und erneuert es rechtzeitig. In der Spalte `STATUS` beginnt jeder Eintrag mit `Up`. Steht dahinter `(health: starting)`, ist das in der ersten Minute nach dem Start normal.
 
 Im Ordner `wordquest` sind dabei entstanden:
 
@@ -96,19 +102,38 @@ Im Ordner `wordquest` sind dabei entstanden:
 - `.env` mit den Einstellungen,
 - `backups/` für die täglichen Sicherungen.
 
-Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter Lauf von `./setup.sh` lässt Secrets, `.env` und Konto unverändert.
+Diese Dateien gehören zu deiner Installation. Lösche sie nicht. Ein zweiter Lauf von `./setup.sh` lässt Secrets und Konto unverändert. In `.env` ändert er nur die Zeile `WQ_TLS_NAMES` mit den Namen und Adressen für das Zertifikat, und das nur, wenn sich Name oder Adressen des Geräts geändert haben. Starte `./setup.sh` nicht zweimal gleichzeitig; das wird nicht unterstützt.
 
 Nach der Anmeldung siehst du die Bereiche „Vokabeln“, „Fortschritt“, „Kinder“ und „Konto“. Als Nächstes legst du unter „Kinder“ das erste Kind mit einer PIN an und unter „Vokabeln“ ein Set. Danach wählt das Kind auf der Startseite sein Profil und lernt. Auf einem Gerät, auf dem du als Elternteil angemeldet bist, erscheint die Profilauswahl erst, nachdem du dich abgemeldet hast.
 
-Im Heimnetz läuft WordQuest ohne HTTPS. Deshalb lässt es sich nicht als App auf das Tablet legen; im Browser funktioniert es vollständig. Gib den Port von WordQuest (8080 oder deinen Wert bei `WQ_PORT`) im Router nicht ins Internet frei, WordQuest ist nur für dein Heimnetz gedacht.
+WordQuest läuft im Heimnetz über HTTPS mit einer eigenen Zertifizierungsstelle, die `setup.sh` bei der ersten Einrichtung auf deinem Gerät anlegt. Kein Browser kennt sie von Haus aus, deshalb warnt er beim ersten Besuch (siehe [Zertifikat prüfen](#zertifikat-prüfen)). Als App auf das Tablet legen lässt sich WordQuest erst, wenn die Zertifizierungsstelle auf dem Tablet installiert ist; im Browser funktioniert es auch ohne sie vollständig. Installiere die Zertifizierungsstelle nur auf den Geräten deiner Familie: Wer ihren Schlüssel von deinem WordQuest-Gerät stiehlt, kann sich auf diesen Geräten als beliebige Webseite ausgeben. Gib die Ports von WordQuest im Router nicht ins Internet frei, WordQuest ist nur für dein Heimnetz gedacht.
+
+### Zertifikat prüfen
+
+Beim ersten Besuch zeigt der Browser eine Warnung, zum Beispiel „Diese Verbindung ist nicht privat“. Sie bedeutet nur: Der Browser kennt die Zertifizierungsstelle von WordQuest noch nicht. Ob du wirklich mit deinem WordQuest verbunden bist, zeigt der Fingerabdruck. Öffne in der Warnung die Angaben zum Zertifikat und vergleiche den Fingerabdruck SHA-256 mit der Zeile „Fingerabdruck von WordQuest (SHA-256)“ aus `setup.sh`. Stimmen beide überein, kannst du weitergehen. Stimmen sie nicht überein, brich ab und gib dort kein Passwort ein.
+
+Die Fingerabdrücke zeigt dir im Ordner `wordquest` jederzeit:
+
+```bash
+docker compose exec certs dotnet WordQuest.Api.dll tls show
+```
+
+Die Ausgabe sieht so aus:
+
+```text
+Fingerabdruck von WordQuest (SHA-256): <Fingerabdruck>
+Fingerabdruck der Zertifizierungsstelle (SHA-256): <Fingerabdruck>
+```
+
+Der Fingerabdruck von WordQuest ändert sich, sobald das Zertifikat erneuert wird: etwa alle zwei Jahre und wenn sich Name oder Adresse des Geräts ändern. Der Fingerabdruck der Zertifizierungsstelle bleibt gleich. Bis die Zertifizierungsstelle auf dem Gerät installiert ist, kann der Browser bei einem späteren Besuch erneut warnen. Die Datei dafür lädst du unter `http://<Adresse>/wordquest-ca.crt` herunter, die genaue Adresse nennt `setup.sh` in der Zeile vor „Als Nächstes:“.
 
 ### Feste Adresse im Heimnetz
 
 Dein Router vergibt die Adressen im Heimnetz automatisch (DHCP). Nach einem Neustart des Routers oder des Geräts, etwa nach einem Stromausfall, kann WordQuest eine andere Adresse bekommen. Lesezeichen auf den Tablets führen dann ins Leere.
 
-Am einfachsten richtest du die feste Adresse im Router ein. Bei einer FRITZ!Box gehst du unter „Heimnetz“ → „Netzwerk“ beim Gerät auf „Bearbeiten“, schaltest die Option „Diesem Netzwerkgerät immer die gleiche IPv4-Adresse zuweisen“ ein und übernimmst die Änderung. Andere Router nennen das „DHCP-Reservierung“, „feste IP-Adresse“ oder „statische Zuordnung“. Stell die Adresse bewusst nicht auf dem Gerät selbst fest ein: Im Router ist es einfacher, und es gibt keinen Konflikt mit den Adressen, die der Router vergibt. Starte das Gerät danach einmal neu und prüfe mit `hostname -I`, ob die Adresse noch dieselbe ist; falls nicht, setz die Lesezeichen neu.
+Am einfachsten richtest du die feste Adresse im Router ein. Bei einer FRITZ!Box gehst du unter „Heimnetz“ → „Netzwerk“ beim Gerät auf „Bearbeiten“, schaltest die Option „Diesem Netzwerkgerät immer die gleiche IPv4-Adresse zuweisen“ ein und übernimmst die Änderung. Andere Router nennen das „DHCP-Reservierung“, „feste IP-Adresse“ oder „statische Zuordnung“. Stell die Adresse bewusst nicht auf dem Gerät selbst fest ein: Im Router ist es einfacher, und es gibt keinen Konflikt mit den Adressen, die der Router vergibt. Starte das Gerät danach einmal neu und prüfe mit `hostname -I`, ob die Adresse noch dieselbe ist; falls nicht, setz die Lesezeichen neu. Hat das Gerät eine neue Adresse oder einen neuen Namen bekommen, starte `./setup.sh` noch einmal, damit das Zertifikat sie enthält.
 
-Alternativ erreichst du WordQuest über den Namen des Geräts, aber nicht auf jedem Gerät garantiert. Den Gerätenamen zeigt der Befehl `hostname`. Mit einer FRITZ!Box geht `http://<Gerätename>.fritz.box:8080`. Ein Raspberry Pi mit Raspberry Pi OS meldet sich im Heimnetz zusätzlich selbst als `http://<Gerätename>.local:8080`. Die Adresse mit `.local` klappt auf iPhone, iPad und Mac und meist auch unter Windows, auf Android nicht immer und nicht bei aktivem VPN; dann nimm die feste Adresse. Statt 8080 gilt der Port aus der Zeile „Fertig.“ bzw. dein Wert bei `WQ_PORT`.
+Alternativ erreichst du WordQuest über den Namen des Geräts, aber nicht auf jedem Gerät garantiert. Den Gerätenamen zeigt der Befehl `hostname`. Mit einer FRITZ!Box geht `https://<Gerätename>.fritz.box`. Ein Raspberry Pi mit Raspberry Pi OS meldet sich im Heimnetz zusätzlich selbst als `https://<Gerätename>.local`. Die Adresse mit `.local` klappt auf iPhone, iPad und Mac und meist auch unter Windows, auf Android nicht immer und nicht bei aktivem VPN; dann nimm die feste Adresse. Nennt die Zeile „Fertig.“ einen Port, zum Beispiel `:8443`, hängst du ihn auch hier an. Das Zertifikat enthält die Namen nur, wenn der Gerätename aus Kleinbuchstaben, Ziffern und Bindestrichen besteht; sonst warnt `setup.sh` und WordQuest ist nur über die Adresse erreichbar.
 
 Die Anmeldung im Browser gilt nur für die Adresse, unter der du dich angemeldet hast. Wechselst du zum Namen oder zu einer neuen Adresse, meldest du dich dort einmal neu an; Kinder wählen ihr Profil und geben ihre PIN ein.
 
@@ -138,7 +163,7 @@ Fertig. WordQuest läuft jetzt mit Version <neue Version>. Die Sicherung von vor
 
 Die Sicherung steht danach in der Liste von `./restore.sh` (siehe „Wiederherstellen“). Gibt es keine neue Version, legt `./upgrade.sh` eine weitere Sicherung an und lädt für alle Dienste die Images, die sich seit dem letzten Laden geändert haben; deine Daten bleiben unverändert.
 
-Einstellungen gehören nur in `.env`, zum Beispiel `WQ_PORT=9000` für einen anderen Port. `upgrade.sh` ersetzt seine eigenen Dateien durch die aus dem Paket und lässt `.env`, `secrets/` und `backups/` unverändert; eigene Änderungen an den Compose-Dateien gehen beim Update verloren. Dateien, die eine neue Version nicht mehr braucht, bleiben im Ordner liegen und stören nicht.
+Einstellungen gehören nur in `.env`, zum Beispiel `WQ_HTTPS_PORT=8444` für einen anderen HTTPS-Port. `upgrade.sh` ersetzt seine eigenen Dateien durch die aus dem Paket und lässt `.env`, `secrets/` und `backups/` unverändert; eigene Änderungen an den Compose-Dateien gehen beim Update verloren. Dateien, die eine neue Version nicht mehr braucht, bleiben im Ordner liegen und stören nicht.
 
 Wenn etwas schiefgeht:
 
@@ -185,6 +210,8 @@ SQL backup created successfully
 ```
 
 Danach liegt in `backups/daily/` eine Datei `wordquest-<Datum>.sql.gz`.
+
+Die Zertifizierungsstelle liegt nicht in den Sicherungen, sondern nur auf dem Gerät. Ziehst du WordQuest auf ein neues Gerät um, legt `./setup.sh` dort eine neue an; auf Geräten, die die alte installiert haben, ersetzt du sie durch die neue.
 
 Der Ordner `backups/` muss auf einem Linux-Dateisystem liegen (zum Beispiel auf der SD-Karte oder einer Platte mit ext4), nicht auf einer Windows-Freigabe oder einem exFAT-Stick. Der Sicherungsdienst läuft als root; unter Linux gehören die Sicherungsdateien deshalb root, und alte Stände löschst du mit `sudo`.
 
@@ -234,13 +261,47 @@ Nach der Wiederherstellung müssen sich alle Geräte neu anmelden, Kinder wieder
 
 Prüfe die Internetverbindung des Geräts. Hast du beim Präfix etwas anderes als Enter eingegeben, korrigiere den Wert bei `WQ_IMAGE_PREFIX` in der Datei `.env` (Standard `ghcr.io/mrhdready/wordquest`). Starte danach `./setup.sh` noch einmal.
 
-**Der Port ist belegt.** `setup.sh` bricht dann ab mit:
+**Der Port ist belegt.** `setup.sh` prüft die Ports vor dem Start. Sind deine eigenen Ports in `.env` belegt oder auch 8080 und 8443, bricht es ab, zum Beispiel mit:
 
-> Der Port 8080 ist schon belegt. Trage in .env eine Zeile WQ_PORT=9000 ein (oder ändere die vorhandene Zeile WQ_PORT=) und starte ./setup.sh noch einmal.
+> Auf diesem Gerät ist schon belegt: 80 und 8080. Trage in .env bei WQ_HTTP_PORT und WQ_HTTPS_PORT freie Werte ein, zum Beispiel 8081 und 8444, und starte ./setup.sh noch einmal.
 
-Dann nutzt schon etwas anderes diesen Port. Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst häng im Ordner `wordquest` mit `echo "WQ_PORT=9000" >> .env` die Zeile an und starte `./setup.sh` noch einmal. Steht in `.env` schon eine Zeile `WQ_PORT=`, ändere stattdessen deren Wert. WordQuest läuft dann unter dem neuen Port.
+Ohne Terminal fragt es nicht nach 8080 und 8443, sondern meldet:
 
-**Die Adresse geht nicht mehr.** Führe auf dem Gerät `hostname -I` aus, nimm den Eintrag, der meist mit `192.168.` beginnt, häng den Port an wie in der Zeile „Fertig.“ und setz die Lesezeichen auf den Tablets neu. Damit das nicht wieder passiert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
+> Port 80 oder 443 ist auf diesem Gerät schon belegt, und ohne Terminal fragt setup.sh nicht nach. Trage in .env WQ_HTTP_PORT=8080 und WQ_HTTPS_PORT=8443 ein und starte ./setup.sh noch einmal.
+
+Belegt etwas einen Port erst zwischen Prüfung und Start, meldet es:
+
+> Ein Port für WordQuest ist schon belegt: 80 oder 443. Trage in .env bei WQ_HTTP_PORT und WQ_HTTPS_PORT freie Werte ein, zum Beispiel 8081 und 8444, und starte ./setup.sh noch einmal.
+
+Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schnelltest“ unten). Sonst häng im Ordner `wordquest` mit `echo "WQ_HTTP_PORT=8081" >> .env` und `echo "WQ_HTTPS_PORT=8444" >> .env` die beiden Zeilen an und starte `./setup.sh` noch einmal. Stehen in `.env` schon solche Zeilen, ändere stattdessen deren Werte. WordQuest läuft dann unter dem neuen HTTPS-Port, zum Beispiel `https://192.168.178.20:8444`.
+
+**Die Adresse geht nicht mehr.** Führe auf dem Gerät `hostname -I` aus, nimm den Eintrag, der meist mit `192.168.` beginnt, und starte `./setup.sh` noch einmal, damit das Zertifikat die neue Adresse enthält. Öffne dann `https://` mit dieser Adresse, häng einen Port an, wenn die Zeile „Fertig.“ einen nennt, und setz die Lesezeichen auf den Tablets neu. Damit das nicht wieder passiert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
+
+**Zertifizierungsstelle neu anlegen.** Ist die Zertifizierungsstelle unvollständig, beschädigt oder läuft sie bald ab, ändert WordQuest nichts an ihr und `setup.sh` bricht ab, zum Beispiel mit:
+
+> Die Zertifizierungsstelle ist unvollständig (es fehlt: ca/ca.crt). Es wurde nichts geändert. Wie es weitergeht, steht in der Installationsanleitung unter „Zertifizierungsstelle neu anlegen“.
+
+Statt „ist unvollständig (…)“ kann dort auch „ist beschädigt (…)“ oder „läuft am <Datum> ab.“ stehen. Dann legst du im Ordner `wordquest` eine neue Zertifizierungsstelle an:
+
+```bash
+docker compose down
+docker volume rm wordquest_tls-ca wordquest_tls
+./setup.sh
+```
+
+Deine Kinder, Vokabeln und der Lernstand bleiben dabei erhalten. Danach gibt es neue Fingerabdrücke; auf Geräten, die die alte Zertifizierungsstelle installiert haben, ersetzt du sie durch die neue.
+
+**Das Zertifikat ist nicht bereit.** `setup.sh` meldet dann:
+
+> Das Zertifikat ist nach zwei Minuten nicht bereit. Sieh mit `docker compose logs certs` nach, was fehlt.
+
+Sieh nach, was der Dienst `certs` meldet:
+
+```bash
+docker compose logs certs
+```
+
+Meldet `setup.sh` stattdessen „WordQuest antwortet nicht über HTTPS.“, sieh mit `docker compose logs web` nach und starte `./setup.sh` danach noch einmal.
 
 **Der Ordner `backups` gehört nicht dir.** `setup.sh` bricht dann ab mit:
 
