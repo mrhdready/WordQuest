@@ -52,7 +52,8 @@ tls_names() {
   else
     warn "Der Gerätename ${name} passt nicht in das Zertifikat. WordQuest ist dann nur über die IP-Adresse erreichbar." >&2
   fi
-  gateways=" $(bridge_gateways) "
+  # docker gibt je Netz eine eigene Zeile aus; ohne tr fiele nur das erste Netz heraus.
+  gateways=" $(bridge_gateways | tr '\n' ' ') "
   for ip in $(hostname -I 2>/dev/null || true); do
     [[ "$ip" =~ $ipv4 && "$ip" != 127.0.0.1 && "$gateways" != *" $ip "* ]] || continue
     list="${list}${ip},"

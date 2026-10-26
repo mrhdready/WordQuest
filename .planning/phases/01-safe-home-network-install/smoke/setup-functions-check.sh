@@ -51,7 +51,8 @@ export PATH="$T/bin:$PATH"
 load() {
   # shellcheck disable=SC1090
   . "$T/functions.sh"
-  bridge_gateways() { echo "${STUB_GW:-}"; }
+  # Wie docker network inspect mit mehreren Netzen: eine Zeile je Netz (VM-Abnahme 2026-10-26).
+  bridge_gateways() { [[ -z "${STUB_GW:-}" ]] || printf '%s \n' $STUB_GW; }
   is_terminal() { [[ "${STUB_TTY:-0}" == 1 ]]; }
   own_port() { if [[ "$1" == 8080 ]]; then echo "${STUB_OWN_HTTP:-}"; else echo "${STUB_OWN_HTTPS:-}"; fi; }
 }
@@ -70,7 +71,7 @@ done
 
 echo "== tls_names"
 names() { (load; tls_names) 2>"$T/names.err"; }
-got="$(STUB_NAME=Pi-Wohnzimmer STUB_ADDR='192.168.178.20 172.17.0.1 127.0.0.1 10.0.0.01 fd00::1' STUB_GW='172.17.0.1 172.18.0.1' names)"
+got="$(STUB_NAME=Pi-Wohnzimmer STUB_ADDR='192.168.178.20 172.17.0.1 172.18.0.1 127.0.0.1 10.0.0.01 fd00::1' STUB_GW='172.17.0.1 172.18.0.1' names)"
 [[ "$got" == pi-wohnzimmer,pi-wohnzimmer.local,pi-wohnzimmer.fritz.box,192.168.178.20,localhost,127.0.0.1 ]] \
   || fail "tls_names fuer Pi-Wohnzimmer: $got"
 [[ ! -s "$T/names.err" ]] || fail "tls_names fuer Pi-Wohnzimmer warnt: $(cat "$T/names.err")"
