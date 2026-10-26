@@ -150,6 +150,20 @@ describe('Set-Seite Kopf', () => {
     expect(screen.queryByText(setGone)).toBeNull()
   })
 
+  // Codex-Befund 261026: nach dem Spinner blieb die Liste ohne Meldung leer.
+  it('Ladefehler der Vokabeln: Fehlertext statt leerer Liste', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/entries') ? new Response('', { status: 500 }) : Response.json([unit]),
+      ),
+    )
+    renderPage()
+    expect((await screen.findByRole('alert')).textContent).toBe(generic)
+    expect(screen.getByRole('heading', { level: 2, name: 'Unit 3' })).toBeTruthy()
+    expect(screen.queryByText('Noch keine Vokabeln in diesem Set')).toBeNull()
+  })
+
   it('Set gefunden: Titel als Überschrift, beide Aktionen', async () => {
     stubSets()
     renderPage()

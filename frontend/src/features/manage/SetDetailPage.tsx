@@ -205,6 +205,7 @@ export function SetDetailPage() {
       ) : null}
 
       {entries.isLoading ? <Spinner /> : null}
+      {entries.isError && !entries.data ? <ErrorNote message={entries.error.message} /> : null}
 
       {entries.data?.length === 0 ? <EmptyState title="Noch keine Vokabeln in diesem Set" /> : null}
 
