@@ -301,9 +301,11 @@ Läuft noch der frühere Schnelltest, beende ihn zuerst (siehe „Früherer Schn
 
 **Die Adresse geht nicht mehr.** Führe auf dem Gerät `hostname -I` aus, nimm den Eintrag, der meist mit `192.168.` beginnt, und starte `./setup.sh` noch einmal, damit das Zertifikat die neue Adresse enthält. Öffne dann `https://` mit dieser Adresse, häng einen Port an, wenn die Zeile „Fertig.“ einen nennt, und setz die Lesezeichen auf den Tablets neu. Damit das nicht wieder passiert, richte eine feste Adresse ein, siehe [Feste Adresse im Heimnetz](#feste-adresse-im-heimnetz).
 
-**Zertifizierungsstelle neu anlegen.** Ist die Zertifizierungsstelle unvollständig, beschädigt oder läuft sie bald ab, ändert WordQuest nichts an ihr und `setup.sh` bricht ab, zum Beispiel mit:
+**Zertifizierungsstelle neu anlegen.** Ist die Zertifizierungsstelle unvollständig, beschädigt oder läuft sie bald ab, ändert WordQuest nichts an ihr. `setup.sh`, `upgrade.sh` und `restore.sh` brechen dann ab, zum Beispiel mit:
 
 > Die Zertifizierungsstelle ist unvollständig (es fehlt: ca/ca.crt). Es wurde nichts geändert. Wie es weitergeht, steht in der Installationsanleitung unter „Zertifizierungsstelle neu anlegen“.
+
+Bei `restore.sh` ist die gewählte Sicherung dann schon eingespielt, bei `upgrade.sh` die neue Version schon installiert; nach dem Neuanlegen läuft WordQuest mit beidem weiter.
 
 Statt „ist unvollständig (…)“ kann dort auch „ist beschädigt (…)“ oder „läuft am <Datum> ab.“ stehen. Dann legst du im Ordner `wordquest` eine neue Zertifizierungsstelle an:
 

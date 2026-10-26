@@ -174,10 +174,49 @@ WQ_VERSION="$target" docker compose pull --ignore-buildable </dev/null \
   || die "Die Version $target ließ sich nicht laden. Wenn sie gerade erst erschienen ist, versuche es in einer Viertelstunde erneut; sonst prüfe die Internetverbindung und WQ_IMAGE_PREFIX in .env. WordQuest läuft unverändert mit der bisherigen Version weiter; ein neuer Aufruf von ./upgrade.sh setzt das Update fort. Die Sicherung liegt in $backup."
 
 # Ab dem Schreiben der .env endet jeder Fehler mit dem Weg zurueck.
+# $2: der Dienst, dessen Log den Ausweg nennt (Standard api).
 start_failed() {
   local back="Spiele die Sicherung mit ./restore.sh $backup ein."
   [[ -z "$current" ]] || back="Zurück zur Version $current: Trage in .env WQ_VERSION=$current ein und spiele danach die Sicherung mit ./restore.sh $backup ein."
-  die "$1 Deine Daten von vorher liegen in $backup. Sieh mit \`docker compose logs api\` nach; die Meldung dort nennt meist den Ausweg. $back"
+  die "$1 Deine Daten von vorher liegen in $backup. Sieh mit \`docker compose logs ${2:-api}\` nach; die Meldung dort nennt meist den Ausweg. $back"
+}
+
+# Wartelogik aus setup.sh (own_port, wait_cert, wait_https), Fehlerweg start_failed
+# ausser bei kaputter CA (siehe wait_cert):
+# "Fertig" erst nach einem gueltigen Zertifikat und einem echten TLS-Handshake.
+own_port() { docker compose port web "$1" </dev/null 2>/dev/null | head -n 1 | sed 's/.*://' || true; }
+wait_cert() {
+  local last
+  for _ in $(seq 1 60); do
+    if docker compose exec -T certs dotnet WordQuest.Api.dll tls show </dev/null >/dev/null 2>&1; then
+      say "✓ Zertifikat ist bereit."
+      return 0
+    fi
+    last="$(docker compose logs --no-color --no-log-prefix --tail 1 certs </dev/null 2>/dev/null || true)"
+    # Kaputte CA: Der Weg zurueck zur alten Version hilft nicht (restore.sh prueft
+    # dasselbe), nur das Neuanlegen aus der Anleitung (Review 261026-j98).
+    if [[ "$last" == *"Es wurde nichts geändert."* ]]; then
+      die "Der Zertifikatsdienst meldet: $last Version $target ist installiert, deine Daten sind erhalten; nach dem Neuanlegen läuft WordQuest damit. Die Sicherung von vorher liegt in $backup."
+    fi
+    sleep 2
+  done
+  start_failed "Das Zertifikat ist nach zwei Minuten nicht bereit." certs
+}
+wait_https() {
+  local ca ok=0
+  ca="$(mktemp)"
+  if docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >"$ca" 2>/dev/null; then
+    for _ in $(seq 1 30); do
+      if curl -fsS -o /dev/null --cacert "$ca" --resolve "localhost:$1:127.0.0.1" "https://localhost:$1/" 2>/dev/null; then
+        ok=1
+        break
+      fi
+      sleep 2
+    done
+  fi
+  rm -f "$ca"
+  [[ "$ok" == 1 ]] || start_failed "WordQuest antwortet nicht über HTTPS." web
+  say "✓ WordQuest antwortet über HTTPS."
 }
 
 # Strg+C ab hier: .env und Container koennen halb umgestellt sein.
@@ -199,7 +238,16 @@ fi
 say "Starte Version $target …"
 # Mit ||: set -e beendete das Skript hier sonst vor der Meldung mit dem Weg
 # zurueck (Review 03-03 HIGH).
+certs_before="$(docker compose ps -q certs </dev/null 2>/dev/null || true)"
 docker compose up -d </dev/null || start_failed "Der Start der Version $target ist fehlgeschlagen."
+# Wie start_stack in setup.sh: certs prueft die CA nur beim Start. Ein Container, den
+# up unveraendert gelassen hat, startet neu, damit eine kaputte CA sofort auffaellt;
+# ein neuer prueft ohnehin, und ihn mitten im Anlegen der CA neu zu starten,
+# hinterliesse sie unvollstaendig.
+if [[ -n "$certs_before" && "$(docker compose ps -q certs </dev/null 2>/dev/null || true)" == "$certs_before" ]]; then
+  docker compose restart certs </dev/null >/dev/null 2>&1 \
+    || start_failed "Der Zertifikatsdienst ließ sich nicht neu starten." certs
+fi
 
 say "Warte auf die API …"
 ready=0
@@ -214,7 +262,10 @@ done
 # nginx loest api nur beim Start auf (Block location /api/ in frontend/nginx.conf, wie restore.sh):
 # Wurde nur api neu erzeugt, liefe web sonst ins Leere.
 docker compose restart web </dev/null || start_failed "Der Start der Version $target ist fehlgeschlagen."
-trap - INT TERM
 say "✓ API ist bereit."
+say "Warte auf das Zertifikat …"
+wait_cert
+wait_https "$(own_port 8443)"
+trap - INT TERM
 
 say "Fertig. WordQuest läuft jetzt mit Version $target. Die Sicherung von vorher liegt in $backup."

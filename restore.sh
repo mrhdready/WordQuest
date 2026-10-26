@@ -140,8 +140,16 @@ load_dump() {
 # Startet alles und wartet auf die API; nginx loest api nur beim Start auf
 # (Block location /api/ in frontend/nginx.conf), deshalb danach web neu starten.
 start_app() {
-  local _
+  local _ certs_before
+  certs_before="$(docker compose ps -q certs </dev/null 2>/dev/null || true)"
   docker compose up -d </dev/null || return 1
+  # Wie start_stack in setup.sh: certs prueft die CA nur beim Start. Neu gestartet
+  # wird nur ein Container, den up unveraendert gelassen hat; ein neuer prueft
+  # ohnehin, und ein Neustart mitten im Anlegen hinterliesse die CA unvollstaendig.
+  if [[ -n "$certs_before" && "$(docker compose ps -q certs </dev/null 2>/dev/null || true)" == "$certs_before" ]]; then
+    docker compose restart certs </dev/null >/dev/null 2>&1 \
+      || die "Der Zertifikatsdienst ließ sich nicht neu starten. Sieh mit \`docker compose logs certs\` nach, was fehlt. Der Stand von vorher liegt in $before."
+  fi
   for _ in $(seq 1 60); do
     if docker compose exec -T api wget -qO- http://localhost:8080/health/ready </dev/null >/dev/null 2>&1; then
       docker compose restart web </dev/null || return 1
@@ -150,6 +158,40 @@ start_app() {
     sleep 2
   done
   return 1
+}
+
+# Wartelogik aus setup.sh (own_port, wait_cert, wait_https): "Fertig" erst nach einem
+# gueltigen Zertifikat und einem echten TLS-Handshake. Die Meldung sagt dazu, dass die
+# Daten schon eingespielt sind.
+own_port() { docker compose port web "$1" </dev/null 2>/dev/null | head -n 1 | sed 's/.*://' || true; }
+wait_cert() {
+  local last
+  for _ in $(seq 1 60); do
+    if docker compose exec -T certs dotnet WordQuest.Api.dll tls show </dev/null >/dev/null 2>&1; then
+      say "✓ Zertifikat ist bereit."
+      return 0
+    fi
+    last="$(docker compose logs --no-color --no-log-prefix --tail 1 certs </dev/null 2>/dev/null || true)"
+    if [[ "$last" == *"Es wurde nichts geändert."* ]]; then die "Der Zertifikatsdienst meldet: $last $1"; fi
+    sleep 2
+  done
+  die "Das Zertifikat ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs certs\` nach, was fehlt. $1"
+}
+wait_https() {
+  local ca ok=0
+  ca="$(mktemp)"
+  if docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >"$ca" 2>/dev/null; then
+    for _ in $(seq 1 30); do
+      if curl -fsS -o /dev/null --cacert "$ca" --resolve "localhost:$1:127.0.0.1" "https://localhost:$1/" 2>/dev/null; then
+        ok=1
+        break
+      fi
+      sleep 2
+    done
+  fi
+  rm -f "$ca"
+  [[ "$ok" == 1 ]] || die "WordQuest antwortet nicht über HTTPS. Sieh mit \`docker compose logs web\` nach, was fehlt. $2"
+  say "✓ WordQuest antwortet über HTTPS."
 }
 
 # Strg+C mitten im Einspielen: psql committet den bis dahin gelesenen Teil.
@@ -170,5 +212,8 @@ trap - INT TERM
 
 say "Starte WordQuest …"
 start_app || die "Die API ist nach zwei Minuten nicht bereit. Sieh mit \`docker compose logs api\` nach. Der Stand von vorher liegt in $before."
+loaded="Der Stand aus $file ist eingespielt, der Stand von vorher liegt in $before."
+wait_cert "$loaded"
+wait_https "$(own_port 8443)" "$loaded"
 
 say "Fertig. WordQuest zeigt jetzt den Stand aus $file. Der Stand von vorher liegt in $before."

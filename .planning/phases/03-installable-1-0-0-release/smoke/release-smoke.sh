@@ -963,6 +963,42 @@ wait_api
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "API nicht bereit, Weg zurueck: Login HTTP $code statt 200."
 
+# Unvollstaendige CA (Codex-Befund 261026): Die API wird bereit, HTTPS aber nicht.
+# restore.sh und upgrade.sh melden dann keinen Erfolg, sondern den Ausweg aus der
+# Anleitung. Beide Faelle laufen, bevor der Smoke scheitert, damit er beide nennt.
+# Danach kommt dieselbe ca.crt zurueck, die Geraete vertrauen ihr weiter.
+ca_ok() { docker compose exec -T certs dotnet WordQuest.Api.dll tls show </dev/null >/dev/null 2>&1; }
+ca_errors=""
+expect_ca_way() {
+  local e=""
+  [[ "$status" != 0 ]] || e="$e Exit 0."
+  grep -qF 'Die Zertifizierungsstelle ist unvollständig (es fehlt: ca/ca.crt).' "$1" || e="$e Keine Meldung zur CA."
+  grep -qF 'Zertifizierungsstelle neu anlegen' "$1" || e="$e Kein Ausweg."
+  if grep -qF 'Fertig.' "$1"; then e="$e Meldet Erfolg."; fi
+  [[ -z "$e" ]] || ca_errors="$ca_errors $2:$e"
+}
+docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >.smoke/ca-gerettet.pem
+docker compose exec -T certs rm /certs/ca/ca.crt </dev/null
+restore_run .smoke/restore-ca.log "$upd_way_back" < <(printf 'ja\n')
+expect_ca_way .smoke/restore-ca.log restore.sh
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "CA unvollstaendig: Fingerabdruck nach restore.sh ungleich vorher."
+serve_pkg "$EXPECTED_VERSION"
+upd_snapshot
+upgrade_run .smoke/upgrade-ca.log ok
+expect_ca_way .smoke/upgrade-ca.log upgrade.sh
+[[ -z "$ca_errors" ]] || fail "CA unvollstaendig:$ca_errors"
+# Statt des Wegs zurueck (der an derselben CA scheitert) nennt upgrade.sh die Sicherung.
+ca_upd="$(upd_file .smoke/upgrade-ca.log)"
+check_upd_backup "$ca_upd"
+expect_msg .smoke/upgrade-ca.log "Die Sicherung von vorher liegt in $ca_upd."
+docker compose run --rm --no-deps -T --entrypoint sh certs -c 'cat >/certs/ca/ca.crt && chmod 644 /certs/ca/ca.crt' \
+  <.smoke/ca-gerettet.pem >/dev/null 2>&1 || fail "ca.crt liess sich nicht zuruecklegen."
+docker compose restart certs </dev/null >/dev/null 2>&1 || fail "certs startet nach dem Zuruecklegen nicht."
+for _ in $(seq 1 30); do ca_ok && break; sleep 2; done
+ca_ok || fail "CA nach dem Zuruecklegen nicht bereit."
+wait_web
+echo "Fall CA unvollstaendig: restore.sh und upgrade.sh mit Ausweg"
+
 # Zweiter Aufruf ohne neue Version: harmlos. Dazu fehlen in .env die Zeile
 # WQ_VERSION und das letzte Zeilenende (IN-02): Die neue Zeile darf nicht an
 # der letzten Variable kleben.
