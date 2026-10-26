@@ -165,3 +165,15 @@ Keine neue Angriffsflaeche. Der Plan aendert Versionsnummern, Doku, Planungsdoku
 
 - Commits dbc0da0, 6fac063, 0507995 sind in HEAD; `git rev-list --count c066d16..HEAD` = 3.
 - `docker-compose.quick.yml` enthaelt dreimal `${WQ_VERSION:-1.1.0}`, `.env.example` enthaelt `WQ_VERSION=1.1.0`, REQUIREMENTS.md enthaelt `QA2-06` und sechsmal `END 6fac063`, PROJECT.md enthaelt `own CA per install`.
+
+## VM-Abnahme (Orchestrator, 2026-10-26)
+
+Debian aarch64 (NAT, 10.0.2.15), Images api/web/certs aus 05bb8df auf der VM gebaut, Paket `release-package.sh … v1.1.0`, Build-Overlay daneben.
+
+- `setup.sh` (80/443 frei): Exit 0, `https://10.0.2.15`, beide Fingerabdruecke und Download-Zeile; Fingerabdruecke gleich dem ausgelieferten Server-Zertifikat und `/wordquest-ca.crt` (DER, 200 ueber HTTP). CA bis 2036, Server-Zertifikat 800 Tage mit SAN und EKU serverAuth.
+- `http://…/kinder` → 301 `https://10.0.2.15:443/kinder`; HTTPS mit `--cacert` 200, kein HSTS, Eltern-Login 200.
+- Portprobe: Listener nur auf 127.0.0.1 gilt als belegt; zweite Installation bei belegtem 80/443 ohne Terminal Exit 1 mit Hinweis, mit Terminal und „J“ auf 8080/8443, Umleitung auf `:8443`.
+- **Befund, behoben in 11220f7:** Gateways fremder Docker-Netze (172.18/19/20/30.0.1) standen im Zertifikat, weil `docker network inspect` je Netz eine Zeile ausgibt und `tls_names` nur das erste Netz ausschloss. Test-Stub auf echtes Zeilenformat umgestellt (rot, dann `FUNKTIONEN OK`, 31 Faelle). Erneutes `setup.sh` auf der VM: SAN nur noch debian, .local, .fritz.box, 10.0.2.15, localhost, 127.0.0.1; CA unveraendert (B9:6D:…:D0:51), vorhandenes Vertrauen bleibt gueltig.
+- Review (Subagent): keine HIGH/MEDIUM. LOW SC2086 im Stub zurueckgewiesen (Wortaufspaltung gewollt, Shellcheck laeuft nicht im Gate); Testluecke „mehrere IPAM-Configs je Netz“ offen gelassen (Code behandelt sie korrekt).
+
+Offen: Geraeteabnahme (iPhone/iPad, Android, Browser ohne CA) durch den Owner spaeter auf einem echten Pi; Tag v1.1.0 und Push warten darauf.
