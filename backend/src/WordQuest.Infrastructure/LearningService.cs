@@ -352,7 +352,10 @@ public sealed class LearningService(
         }
 
         GamificationProfile profile = await GetOrCreateProfileAsync(learnerId, ct);
-        int levelBefore = LevelCurve.LevelFor(profile.Xp);
+        // Stand vor der Runde: Die Antwort-XP sind schon gebucht, ein Aufstieg durch
+        // eine Antwort zaehlt aber zu dieser Runde. Beim wiederholten Abschluss steckt
+        // der Bonus mit in XpAwarded, die Antwort bleibt dieselbe.
+        int levelBefore = LevelCurve.LevelFor(profile.Xp - session.XpAwarded);
 
         int answered = session.Items.Count(i => i.AnsweredAt is not null);
         int correct = session.Items.Count(i => i.Grade is not null and not Grade.Again);

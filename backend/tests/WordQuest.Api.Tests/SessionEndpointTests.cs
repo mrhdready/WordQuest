@@ -512,6 +512,60 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         Assert.NotNull(stored.CompletedAt);
     }
 
+    private async Task<SessionSummary> AnswerOneAndCompleteAsync(SeededFamily family, int startXp)
+    {
+        SeededSet set = await SeedSetAsync(_factory, family);
+        await using (var db = _factory.CreateSystemDbContext())
+        {
+            GamificationProfile profile = await db.GamificationProfiles.SingleAsync(g => g.Id == family.Child.Id);
+            profile.Xp = startXp;
+            await db.SaveChangesAsync();
+        }
+
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        SessionView session = await StartAsync(child, family.Child.Id);
+        SessionItemView item = session.Items[0];
+        AnswerResult answered = await ReadAnswerAsync(
+            await AnswerAsync(child, session.SessionId, item.ItemId, set.AnswerFor(item.Prompt)));
+        Assert.True(answered.XpAwarded > 0);
+
+        HttpResponseMessage response = await child.PostAsync($"{Sessions}/{session.SessionId}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        SessionSummary? summary = await response.Content.ReadFromJsonAsync<SessionSummary>(Json);
+        Assert.NotNull(summary);
+        return summary;
+    }
+
+    // Codex-Befund 261026: Antwort-XP sind beim Abschluss schon gebucht. Der Aufstieg,
+    // den eine Antwort in der Runde ausloest, muss trotzdem gefeiert werden.
+    [Fact]
+    public async Task Levelaufstieg_durch_Antwort_in_der_Runde_ergibt_LeveledUp()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+
+        SessionSummary summary = await AnswerOneAndCompleteAsync(family, LevelCurve.XpRequiredFor(2) - 1);
+
+        Assert.True(summary.LeveledUp);
+        Assert.Equal(2, summary.Level);
+
+        // Ein wiederholter Abschluss (z. B. nach verlorener Antwort) meldet dasselbe.
+        using HttpClient child = _factory.CreateClientFor(family.Child);
+        HttpResponseMessage again = await child.PostAsync($"{Sessions}/{summary.SessionId}/complete", null);
+        SessionSummary? repeated = await again.Content.ReadFromJsonAsync<SessionSummary>(Json);
+        Assert.Equal(summary, repeated);
+    }
+
+    [Fact]
+    public async Task Runde_ohne_Levelgrenze_ergibt_kein_LeveledUp()
+    {
+        SeededFamily family = await SeedFamilyAsync(_factory);
+
+        SessionSummary summary = await AnswerOneAndCompleteAsync(family, 0);
+
+        Assert.False(summary.LeveledUp);
+        Assert.Equal(1, summary.Level);
+    }
+
     [Fact]
     public async Task Sync_ohne_Antworten_ergibt_400_und_fremde_Aufgabe_404_ohne_Schreiben()
     {
