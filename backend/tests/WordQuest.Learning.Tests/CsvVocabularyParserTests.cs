@@ -70,6 +70,18 @@ public sealed class CsvVocabularyParserTests
         Assert.Equal("go", result.Rows[0].Target);
     }
 
+    // Kommas in Anfuehrungszeichen duerfen die Erkennung nicht auf Komma kippen.
+    [Fact]
+    public void IgnoresDelimitersInsideQuotesWhenDetecting()
+    {
+        CsvParseResult result = CsvVocabularyParser.Parse("\"gehen, laufen, spazieren\";go\n\"rennen, eilen, sausen\";run");
+
+        Assert.Equal(';', result.Delimiter);
+        Assert.Equal(2, result.ValidCount);
+        Assert.Equal("gehen, laufen, spazieren", result.Rows[0].Source);
+        Assert.Equal("go", result.Rows[0].Target);
+    }
+
     [Fact]
     public void ReadsTheOptionalEmojiColumn()
     {
