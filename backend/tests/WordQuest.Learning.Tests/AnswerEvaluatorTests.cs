@@ -74,6 +74,8 @@ public sealed class AnswerEvaluatorTests
     [InlineData("becuase", "because")]
     [InlineData("beautifull", "beautiful")]
     [InlineData("kitchn", "kitchen")]
+    [InlineData("the elephnt", "the elephant")]
+    [InlineData("elephnt", "the elephant")]
     public void TreatsASingleTypoAsCorrectButNotEasy(string given, string expected)
     {
         AnswerEvaluation result = _evaluator.Evaluate(given, ExpectedAnswer.Of(expected), 1000);
@@ -87,6 +89,9 @@ public sealed class AnswerEvaluatorTests
     [Theory]
     [InlineData("cat", "car")]   // zu kurz fuer Tippfehlertoleranz
     [InlineData("dig", "dog")]
+    // Der Artikel zaehlt nicht zur Wortlaenge: "the dog" ist so kurz wie "dog".
+    [InlineData("dig", "the dog")]
+    [InlineData("the dig", "the dog")]
     public void DoesNotApplyTypoToleranceToShortWords(string given, string expected)
     {
         AnswerEvaluation result = _evaluator.Evaluate(given, ExpectedAnswer.Of(expected), 1000);

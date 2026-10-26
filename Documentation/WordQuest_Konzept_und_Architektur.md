@@ -342,8 +342,8 @@ Serverseitig, nicht im Client (der Client kennt die Antwort nicht — sonst ist 
    "ein/eine/…") und "sich "/"zu " werden entfernt
 3. Exakter Vergleich gegen die erwartete Antwort und alle Alternativen
    (auch mit ",", ";", "/", "|" getrennte Varianten) → Easy/Good/Hard nach Zeit
-4. Damerau-Levenshtein-Distanz ≤ 1 bei erwarteter Antwort ≥ 5 Zeichen, bzw. = 0
-   bei kürzeren → als richtig werten, aber Grade auf Hard deckeln und Hinweis zeigen:
+4. Damerau-Levenshtein-Distanz ≤ 1 bei erwarteter Antwort ≥ 5 Zeichen ohne den
+   Artikel aus Schritt 2 ("the dog" zählt wie "dog"), bzw. = 0 bei kürzeren → als richtig werten, aber Grade auf Hard deckeln und Hinweis zeigen:
      "Richtig — achte auf die Schreibweise: beautiful"
 5. Sonst falsch.
 ```
