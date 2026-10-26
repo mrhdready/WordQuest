@@ -1,88 +1,83 @@
 ---
-last_mapped_commit: a397d4db9d120da68a269a147900eabb05e0a42e
-last_mapped_at: 2026-10-24
+last_mapped_commit: 00d6615b8a97d9dc54b7a0451f777fbfa6e91621
+last_mapped_at: 2026-10-26
 ---
 # External Integrations
 
-**Analysis Date:** 2026-10-24
+**Analysis Date:** 2026-10-26
 
 ## APIs & External Services
 
-**Laufzeit-APIs:**
-- Keine. Das Backend ruft keine externen Dienste auf (kein `HttpClient` in `backend/src/`). Das Frontend spricht nur die eigene API über `fetch` in `frontend/src/lib/api.ts` (`${BASE}${path}`, Refresh über `${BASE}/auth/refresh`); die CSP in `frontend/nginx-security-headers.conf` erlaubt nur `connect-src 'self'`.
+**Third-party runtime APIs:**
+- None. The API has no outbound HTTP calls; no AI, mail, or analytics service is integrated.
+  - `WQ_AI_PROVIDER: none` in `docker-compose.quick.yml` is not consumed by code.
 
-**Zertifikate (nur `docker-compose.yml`):**
-- Let's Encrypt über Traefik `traefik:v3` - ACME per DNS-Challenge, Resolver `le`
-  - Provider: `WQ_ACME_DNS_PROVIDER` (Default `manual`)
-  - Auth: provider-spezifisch, vorgesehen `CF_DNS_API_TOKEN` (Cloudflare); Kontakt `WQ_ACME_EMAIL`
-
-**Container-Registry:**
-- GitHub Container Registry `ghcr.io/mrhdready/wordquest-api` und `-web` (überschreibbar über `WQ_IMAGE_PREFIX`, Tag `WQ_VERSION`, Default `1.0.0`)
+**Distribution:**
+- GitHub Container Registry - images `ghcr.io/mrhdready/wordquest-api` and `-web` (`docker-compose.quick.yml`, prefix/version via `WQ_IMAGE_PREFIX`, `WQ_VERSION`)
+- GitHub Releases - `wordquest.tar.gz` + `.sha256`, built by `.github/release-package.sh`; `upgrade.sh` downloads from `https://github.com/mrhdready/WordQuest/releases/latest/download` (override `WQ_RELEASE_URL`, http(s) only; https enforced with `--proto '=https'`)
 
 ## Data Storage
 
 **Databases:**
-- PostgreSQL 17 (`postgres:17-alpine` in allen Compose-Dateien)
-  - Connection: `WQ_DB_HOST`, `WQ_DB_PORT`, `WQ_DB_NAME`, `WQ_DB_USER`, `WQ_DB_PASSWORD`/`WQ_DB_PASSWORD_FILE` (`backend/src/WordQuest.Api/Program.cs`)
-  - Client: EF Core + Npgsql, `EnableRetryOnFailure(3)`; `WordQuestDbContext` mit Global Query Filters für `ITenantOwned`
-  - Migrationen in `backend/src/WordQuest.Infrastructure/Migrations/`, beim API-Start angewendet
+- PostgreSQL 17 (`postgres:17-alpine`)
+  - Connection: `WQ_DB_HOST`, `WQ_DB_PORT`, `WQ_DB_NAME`, `WQ_DB_USER`, `WQ_DB_PASSWORD` / `WQ_DB_PASSWORD_FILE` (Docker secret `./secrets/db_password.txt`)
+  - Client: EF Core 10 + Npgsql (`backend/src/WordQuest.Infrastructure/WordQuestDbContext.cs`), entity configs in `backend/src/WordQuest.Infrastructure/Configurations/`
+  - Migrations in `backend/src/WordQuest.Infrastructure/Migrations/`, applied at API start
+  - Tenant isolation: EF Global Query Filters on `ITenantOwned` entities; bypass only in auth/seed (`SystemTenantContext.cs`)
 
 **File Storage:**
-- Kein Dateispeicher. Vokabelbilder liegen als `byte[] Data` in der Datenbank (`backend/src/WordQuest.Modules.Content/Entities/VocabularyPicture.cs`), Auslieferung über `MapPictureEndpoints`.
-- Backups: `prodrigestivill/postgres-backup-local:17` in `docker-compose.quick.yml` und `docker-compose.yml` (`SCHEDULE: "@daily"`, 14 Tage / 8 Wochen / 6 Monate); Wiederherstellung über `restore.sh`
+- Vocabulary pictures stored as `byte[]` in PostgreSQL (`backend/src/WordQuest.Infrastructure/PictureService.cs`)
+- TLS material in Docker volumes `tls-ca` (CA key, only mounted into `certs`) and `tls` (read-only into `web`)
+- Backups to host directory `./backups`
 
 **Caching:**
-- Server: keiner.
-- Browser: Workbox-Cache `wq-api` (NetworkFirst, 5 s Timeout, 200 Einträge, 7 Tage) in `frontend/vite.config.ts`; greift nur mit Service Worker, also nur unter HTTPS.
+- None server-side. Client: TanStack Query cache; Workbox precache via `vite-plugin-pwa` (only active with trusted HTTPS).
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Eigenbau, kein externer IdP
-  - Implementation: JWT-Bearer (`AddJwtBearer`, `MapInboundClaims = false`) mit Signing-Key aus `WQ_JWT_SIGNING_KEY`/`_FILE`; Refresh-Token als SHA256-Hash (`TokenHasher.cs`); Passwörter/PINs mit PBKDF2-HMAC-SHA256 (`PasswordHasher.cs`)
-  - Endpoints: `MapAuthEndpoints`, `MapAccountEndpoints` in `backend/src/WordQuest.Api/`
-  - Rate-Limiting In-Memory (`AddRateLimiter`, `Auth:RequestsPerMinute`, Default 10/min)
-  - Frontend hält Token im `localStorage` (dokumentierter Kompromiss, `frontend/src/lib/api.ts`)
+- Custom
+  - Implementation: JWT bearer (`Microsoft.AspNetCore.Authentication.JwtBearer`), signing key `WQ_JWT_SIGNING_KEY(_FILE)` (secret `./secrets/jwt_key.txt`), refresh tokens hashed with SHA256 (`TokenHasher.cs`), passwords PBKDF2-HMAC-SHA256 (`PasswordHasher.cs`), auth code in `backend/src/WordQuest.Api/Auth/`
+  - Parent login by email/password; child login by profile selection + PIN
+  - Fixed-window rate limiter policy `auth` (in-memory, `Program.cs` line ~161)
+  - Frontend keeps tokens in `localStorage` and refreshes via `/api/auth/refresh` (`frontend/src/lib/api.ts`); strict CSP in `frontend/nginx-security-headers.conf`
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- Keins. `UseExceptionHandler()` + `AddProblemDetails()` in `Program.cs`.
+- None
 
 **Logs:**
-- ASP.NET-Core-Standardlogging auf stdout (Container-Logs); keine personenbezogenen Daten.
-- Health-Checks: `/health/live`, `/health/ready` (inkl. `AddDbContextCheck`).
+- Default ASP.NET Core console logging (`appsettings.json`); container stdout. No PII in logs.
+- Health checks: `/health/live`, `/health/ready` (EF DbContext check), used by compose `api` healthcheck via `wget`; `web` image healthcheck probes `https://127.0.0.1:8443/`
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Selbst gehostet per Docker Compose im Heimnetz; Installation `setup.sh`, Update `upgrade.sh`.
+- Self-hosted Docker Compose on home hardware (`docker-compose.quick.yml`), set up via `setup.sh`, updated via `upgrade.sh`, restored via `restore.sh`
+- Services: `db`, `api`, `certs` (`tls watch`, `network_mode: none`, user `0:101`), `web` (nginx, ports `WQ_HTTP_PORT:-80` -> 8080 redirect, `WQ_HTTPS_PORT:-443` -> 8443, `proxy_pass http://api:8080`), `backup` (`prodrigestivill/postgres-backup-local:17`, daily; keep 14 days / 8 weeks / 6 months)
 
 **CI Pipeline:**
-- GitHub Actions `.github/workflows/ci.yml` (Push/PR auf `master`, Tags `v*`), Actions per Commit-SHA gepinnt
-  - Job `backend`: Build mit `/warnaserror`, Tests gegen Service `postgres:17-alpine`
-  - Job `frontend`: `npm ci`, lint, typecheck, build, test, `design:check`, `design:classes`
-  - Images: Buildx + QEMU, `linux/amd64,linux/arm64`, Push nach GHCR (nur bei Push)
-  - Release (nur Tags `v*`): `.github/release-package.sh` erzeugt `wordquest.tar.gz` + `.sha256`, Upload per `gh release`
+- GitHub Actions `.github/workflows/ci.yml` (push/PR on `master`, tags `v*`): backend build+test with Postgres service, frontend lint/typecheck/build/test/design checks, multi-arch image build/push to ghcr.io (QEMU + Buildx, `linux/amd64,linux/arm64`), release job uploading the tarball via `gh release`. Actions pinned by commit SHA.
 
 ## Environment Configuration
 
 **Required env vars:**
-- `WQ_JWT_SIGNING_KEY` bzw. `WQ_JWT_SIGNING_KEY_FILE` (Start bricht ab bei fehlendem/schwachem Key, `SecretCheck`)
-- `WQ_DB_PASSWORD` bzw. `WQ_DB_PASSWORD_FILE`
-- Optional: `WQ_HOST`, `WQ_TIMEZONE`, `WQ_SEED_DEMO_DATA`, `WQ_PORT`, `WQ_ACME_*`, `CF_DNS_API_TOKEN`
+- API: `WQ_DB_HOST`, `WQ_DB_NAME`, `WQ_DB_USER`, `WQ_DB_PASSWORD_FILE`, `WQ_JWT_SIGNING_KEY_FILE`, `WQ_TIMEZONE` (default `Europe/Berlin`)
+- certs: `WQ_TLS_NAMES` (comma-separated host names/IPv4s, written by `setup.sh`; Docker bridge gateways excluded)
+- Tests: `WQ_TEST_DB`
 
 **Secrets location:**
-- Docker-Secrets `db_password`, `jwt_key` gemountet unter `/run/secrets/` (`docker-compose.quick.yml`); Quelldateien legt `setup.sh` an. Inhalt nicht Teil dieser Analyse.
+- `./secrets/` (`db_password.txt`, `jwt_key.txt`), generated by `setup.sh` (openssl or `/dev/urandom`), mounted as Docker secrets. `.env` present per install (template `.env.example`). Contents not read.
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- Keine.
+- None
 
 **Outgoing:**
-- Keine.
+- None
 
 ---
 
-*Integration audit: 2026-10-24*
+*Integration audit: 2026-10-26*
