@@ -548,11 +548,12 @@ public sealed class SessionEndpointTests : IClassFixture<ApiFactory>
         Assert.True(summary.LeveledUp);
         Assert.Equal(2, summary.Level);
 
-        // Ein wiederholter Abschluss (z. B. nach verlorener Antwort) meldet dasselbe.
+        // Ein wiederholter Abschluss feiert nicht noch einmal: Den heutigen Profilstand
+        // koennen inzwischen andere Runden veraendert haben (Review 261026-j98).
         using HttpClient child = _factory.CreateClientFor(family.Child);
         HttpResponseMessage again = await child.PostAsync($"{Sessions}/{summary.SessionId}/complete", null);
         SessionSummary? repeated = await again.Content.ReadFromJsonAsync<SessionSummary>(Json);
-        Assert.Equal(summary, repeated);
+        Assert.Equal(summary with { LeveledUp = false }, repeated);
     }
 
     [Fact]
