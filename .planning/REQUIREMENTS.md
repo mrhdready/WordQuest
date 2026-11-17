@@ -3,22 +3,26 @@
 **Defined:** 2026-09-24
 **Core Value:** Parents without special know-how can set up WordQuest in their home network and their children can learn with it safely and reliably.
 
+## Statuskonvention (Abgleich 2026-11-17)
+
+`[x]` bedeutet: implementiert und durch vorhandene Nachweise historisch belegt. Es bedeutet weder ein neues grünes Gate auf `9627760` noch eine vollständige Geräte-/Phasenabnahme. `[ ]` bleibt bei Anforderungen mit noch ausstehender Abnahme oder Veröffentlichung erhalten, auch wenn der Code umgesetzt ist. Die Traceability nennt die Grenzen pro Anforderung. Alle fünf Phasenverifikationen sind aktuell `stale`; Details und überholte Prüfszenarien stehen in [STATE.md](STATE.md#abgleich-am-2026-11-17).
+
 ## v1 Requirements
 
 ### Setup & Accounts
 
-- [ ] **SETUP-01**: Home-network operation over plain HTTP (no domain, no certificate) is a full operating mode, not just a trial: `setup.sh` generates DB password and JWT key, and daily backups run. Since 1.1.0 the home network runs over HTTPS with an own CA per install (TLS-01..TLS-06, Quick 261025-fpi)
-- [ ] **SETUP-02**: No demo credentials by default; `setup.sh` asks for the parent's email and password and creates the account
-- [ ] **SETUP-03**: Parent can change their password in the app
-- [ ] **SETUP-04**: Operator can reset a parent's password with one CLI command inside the container
-- [ ] **SETUP-05**: Outside Development the API refuses to start with missing or default secrets (no `devpassword` / known JWT key fallback)
+- [ ] **SETUP-01**: Heimnetz-Betrieb als vollständiger Betriebsweg: `setup.sh` erzeugt DB-Passwort und JWT-Schlüssel, tägliche Sicherungen laufen. Seit dem vorbereiteten 1.1.0 ersetzt HTTPS mit eigener CA den früheren HTTP-Betriebsweg (TLS-01..TLS-06, Quick 261025-fpi); Geräteabnahme und aktuelles Gate offen.
+- [x] **SETUP-02**: No demo credentials by default; `setup.sh` asks for the parent's email and password and creates the account
+- [x] **SETUP-03**: Parent can change their password in the app
+- [x] **SETUP-04**: Operator can reset a parent's password with one CLI command inside the container
+- [x] **SETUP-05**: Outside Development the API refuses to start with missing or default secrets (no `devpassword` / known JWT key fallback)
 - [x] **SETUP-06**: `setup.sh` ist direkt ausführbar; neue und bestehende Secrets bleiben unverändert und sind über read-only Dateimounts für den Non-Root-API-Container lesbar, während das Hostverzeichnis `0700` behält
 
 ### Parent Basics
 
-- [ ] **PAR-01**: Parent can edit a child (name, reset PIN, daily new-card limit)
-- [ ] **PAR-02**: PIN must be exactly 4 digits (validated server-side; the parent forms accept at most 4 characters)
-- [ ] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
+- [x] **PAR-01**: Parent can edit a child (name, reset PIN, daily new-card limit)
+- [x] **PAR-02**: PIN must be exactly 4 digits (validated server-side; the parent forms accept at most 4 characters)
+- [x] **PAR-05**: Parent can create a child (name, PIN, daily new-card limit) in the app; on a fresh install this is the only way to get a first child (UI-SPEC Q3, 2026-10-15)
 - [x] **PAR-03**: Parent can delete a child including all learning history
 - [x] **PAR-04**: Parent can rename a set and correct an entry without losing learning progress
 
@@ -29,7 +33,7 @@
 - [x] **FIX-03**: Cards shown but not answered resurface later instead of staying stuck as `New`
 - [x] **FIX-04**: Invalid session/item IDs and double taps return a clean 4xx/409 instead of 500
 - [x] **FIX-05**: The dashboard shows the current streak (a broken streak is not displayed as ongoing)
-- [ ] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace), not only by tapping; the 4th digit submits exactly once (2026-10-21)
+- [x] **FIX-08**: A child can enter the PIN with the keyboard (digits, Backspace), not only by tapping; the 4th digit submits exactly once (2026-10-21)
 - [x] **FIX-09**: Aborting a learning session does not use up the day's new-card limit; unanswered new cards count only when answered
 - [x] **FIX-06**: Mastery rule (ease ≥ 2.1) is defined once and used by overview and traffic light
 - [x] **FIX-07**: Eine Lernantwort funktioniert über unsicheres Heimnetz-HTTP per Button und Enter; stabile Antwort-IDs verhindern doppelte Wertung, Retry-Karten behalten eigene IDs und der Lernstand übersteht einen Stack-Neustart. Seit Quick 261025-fpi ersetzt der e2e-Pfad „Zertifikat nicht vertraut“ den Pfad ohne Secure Context; der Ersatz für crypto.randomUUID bleibt (Test: QA2-06)
@@ -41,7 +45,7 @@
 ### Quality
 
 - [x] **QUAL-01**: API integration tests against real PostgreSQL cover login, refresh, isolation between siblings, and each FIX requirement
-- [ ] **QUAL-02**: New/changed forms (password change, edit child) have frontend tests with the edge-case matrix and pass an axe check (WCAG 2.2 AA)
+- [x] **QUAL-02**: New/changed forms (password change, edit child) have frontend tests with the edge-case matrix and pass an axe check (WCAG 2.2 AA)
 
 ### Release
 
@@ -145,45 +149,45 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | Phase 1 | Pending |
-| SETUP-02 | Phase 1 | Pending |
-| SETUP-03 | Phase 1 | Pending |
-| SETUP-04 | Phase 1 | Pending |
-| SETUP-05 | Phase 1 | Pending |
-| SETUP-06 | Phase 1 / Quick 261006-r7l | Complete |
-| PAR-01 | Phase 1 | Pending |
-| PAR-02 | Phase 1 | Pending |
-| PAR-05 | Phase 1 | Pending |
-| DESIGN-01 | Phase 1 | Pending |
-| PAR-03 | Phase 2 | Complete |
-| PAR-04 | Phase 2 | Complete |
-| FIX-01 | Phase 2 | Complete |
-| FIX-02 | Phase 2 | Complete |
-| FIX-03 | Phase 2 | Complete |
-| FIX-04 | Phase 2 | Complete |
-| FIX-05 | Phase 2 | Complete |
-| FIX-06 | Phase 2 | Complete |
-| FIX-08 | Phase 1 | Pending |
-| FIX-09 | Phase 2 | Complete |
-| FIX-07 | Phase 1 / Quick 261006-r7l | Complete (2026-10-15; axe-Lauf offen, siehe Quick-Verifikation) |
-| QUAL-01 | Phase 2 | Complete |
-| QUAL-02 | Phase 1 | Pending |
-| REL-01 | Phase 3 | Complete |
-| REL-02 | Phase 3 | Complete |
-| REL-03 | Phase 3 | Complete |
-| REL-04 | Phase 3 | Pending |
-| HARD-01 | Phase 3.1 | Complete |
-| HARD-02 | Phase 3.1 | Complete |
-| HARD-03 | Phase 3.1 | Complete |
-| HARD-04 | Phase 3.1 | Complete |
-| HARD-05 | Phase 3.1 | Complete |
-| IMG-01 | Phase 3.1.1 | Pending — automatisch belegt 2026-10-23 (END f70271c), manuelle Abnahme A1–A3 offen |
-| TLS-01 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
-| TLS-02 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
-| TLS-03 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
-| TLS-04 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
-| TLS-05 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
-| TLS-06 | Quick 261025-fpi | Pending — automatisch belegt 2026-10-25 (END 6fac063), VM- und Geräteabnahme offen |
+| SETUP-01 | Phase 1 | Umgesetzt; Secrets/Backup historisch belegt (01-02/05, 01-UAT 5/6); HTTPS-VM bestanden, echte Hardware/CA-Abnahme und aktuelles Gate offen |
+| SETUP-02 | Phase 1 | Umgesetzt; setup.sh/AccountCommands; 01-02 und Install-Smoke historisch belegt |
+| SETUP-03 | Phase 1 | Umgesetzt; AccountEndpoints/AccountService und AccountPage; 01-06 historisch belegt |
+| SETUP-04 | Phase 1 | Umgesetzt; AccountCommands reset-password; 01-05 und Install-Smoke historisch belegt; nicht eigens geprüftes Reset-Passwort-Logging offen (01-UAT 8) |
+| SETUP-05 | Phase 1 | Umgesetzt; SecretCheck und Startpfad; 01-05/SecretCheckTests historisch belegt |
+| SETUP-06 | Phase 1 / Quick 261006-r7l | Umgesetzt; Quick 261006-r7l und spätere Install-Smokes historisch belegt |
+| PAR-01 | Phase 1 | Umgesetzt; LearnerEndpoints/ChildFormPage; 01-08 historisch belegt; echte Gerätebedienung offen |
+| PAR-02 | Phase 1 | Umgesetzt; AccountRules.IsValidPin genau 4 ASCII-Ziffern, Formular maxLength 4; Quick 261021-p4z/v4n historisch belegt |
+| PAR-05 | Phase 1 | Umgesetzt; LearnerEndpoints/ChildFormPage; 01-07/first-run historisch belegt |
+| DESIGN-01 | Phase 1 | Umgesetzt; DESIGN.md, Token-Export, design:classes und axe historisch grün (261026-j98); echte Tablet-Darstellung und aktueller Design-/axe-Lauf offen |
+| PAR-03 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| PAR-04 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-01 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-02 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-03 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-04 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-05 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-06 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-08 | Phase 1 | Umgesetzt; ProfilePickerPage und Tests, vierte Ziffer sendet; Quick 261021-p4z/v4n historisch belegt |
+| FIX-09 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| FIX-07 | Phase 1 / Quick 261006-r7l | Umgesetzt; 01-UAT 7 belegt Doppelantwort/Neustart, spätere Lernseiten-axe-Läufe belegt; neuer Gate-Lauf und QA2-06 ohne Secure Context offen |
+| QUAL-01 | Phase 2 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| QUAL-02 | Phase 1 | Umgesetzt; AccountPage-/ChildFormPage-Testmatrix, account/children/keyboard-zoom E2E historisch belegt; aktueller axe-Lauf und echte Gerätebedienung offen |
+| REL-01 | Phase 3 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| REL-02 | Phase 3 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| REL-03 | Phase 3 | Installationsseite umgesetzt und Smoke historisch belegt; 03-UAT 3 nutzt Subagent als Ersatz, echter Mensch ohne Projektkenntnis weiterhin offen |
+| REL-04 | Phase 3 | 1.0.0/1.0.1 historisch veröffentlicht (03-UAT 1); Standard im Code 1.1.0, dessen Veröffentlichung/Images/Paket nicht belegt und offen |
+| HARD-01 | Phase 3.1 | Umgesetzt; 03.1-01/02, Quick 261023-a8x/k4m historisch belegt; echte Zwei-Tab-Zeitprüfung und aktuelle Verifikation offen |
+| HARD-02 | Phase 3.1 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| HARD-03 | Phase 3.1 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| HARD-04 | Phase 3.1 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| HARD-05 | Phase 3.1 | Umgesetzt; zugehörige Phasen-/Quick-Nachweise historisch belegt; aktuelle Verifikation offen |
+| IMG-01 | Phase 3.1.1 | Umgesetzt, automatisch historisch belegt (03.1.1-05 und spätere Smokes); A1–A3 und aktuelle Verifikation offen |
+| TLS-01 | Quick 261025-fpi | Umgesetzt; Quick 261025-fpi und spätere Smokes historisch belegt; VM-Abnahme 2026-10-26 bestanden, Geräteabnahme/aktuelles Gate offen |
+| TLS-02 | Quick 261025-fpi | Umgesetzt; Quick 261025-fpi und spätere Smokes historisch belegt; VM-Abnahme 2026-10-26 bestanden, Geräteabnahme/aktuelles Gate offen |
+| TLS-03 | Quick 261025-fpi | Umgesetzt; Quick 261025-fpi und spätere Smokes historisch belegt; VM-Abnahme 2026-10-26 bestanden, Geräteabnahme/aktuelles Gate offen |
+| TLS-04 | Quick 261025-fpi | Umgesetzt; CA-Download/Fingerabdrücke historisch und auf VM belegt; echte Browser-/Geräteabnahme offen |
+| TLS-05 | Quick 261025-fpi | Umgesetzt; Quick 261025-fpi und spätere Smokes historisch belegt; VM-Abnahme 2026-10-26 bestanden, Geräteabnahme/aktuelles Gate offen |
+| TLS-06 | Quick 261025-fpi | Version 1.1.0 im Code/Paket vorbereitet; Tag/Images/Paket-Veröffentlichung und Freigabe offen |
 
 **Coverage:**
 - v1 requirements: 39 total
@@ -192,4 +196,4 @@ Source: codebase map 2026-10-24 (`.planning/codebase/CONCERNS.md`, `TESTING.md`)
 
 ---
 *Requirements defined: 2026-09-24*
-*Last updated: 2026-10-25 — TLS-01 bis TLS-06 automatisch belegt, VM- und Geräteabnahme offen; SETUP-01 und FIX-07 mit Anmerkung zu HTTPS; QA2-06 ergänzt (Quick 261025-fpi-05); davor Domain-Variante entfernt, OPS2-01 nach Out of Scope (Quick 261025-fpi-02); davor TLS-01 bis TLS-06 (HTTPS im Heimnetz mit eigener CA, Quick 261025-fpi) ergänzt; davor am selben Tag v2-Kandidaten aus dem Abgleich mit dem Ursprungskonzept (LRN2-03..06, CNT2-02/03, GAM2-01/02, SEC2-01..03, AI2-01, QA2-05) und SPL2-01 bis SPL2-06 (Lernwörter) ergänzt; davor 2026-10-24 QA2-01 bis QA2-04 und PAR2-04.*
+*Last updated: 2026-11-17 — Code und historische Prüfergebnisse abgeglichen; VM-Abnahme nachgetragen, aktuelle Verifikation, Geräteabnahmen und Release 1.1.0 ausdrücklich offen.*

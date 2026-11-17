@@ -1,14 +1,14 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: "03.1.1"
-current_phase_name: Vocabulary Pictures
-status: executing
-stopped_at: Completed 03.1.1-05-PLAN.md
-last_updated: "2026-10-22T23:46:41.950Z"
-last_activity: 2026-10-23
-last_activity_desc: "03.1.1-05 ausgefuehrt (Bild uebersteht Sicherung, Wiederherstellung und Update im Release-Smoke; Installationsseite; vitest unter Node 22 repariert); volles Gate und Klon-Smoke auf END f70271c gruen (smoke=0 post=1); Phase 03.1.1 automatisch belegt, manuelle Abnahme A1-A3 offen (human_needed)"
-state_head: f70271ce7a3640cf0389fba7d41b529c6161a0b3
+current_phase: "01"
+current_phase_name: Safe Home-Network Install
+status: verifying
+stopped_at: "Planungsabgleich; aktuelle Phasenverifikation und Geräteabnahmen offen"
+last_updated: "2026-11-17"
+last_activity: 2026-11-17
+last_activity_desc: "32/32 Pläne ausgeführt; fünf Verifikationen stale; historische Prüfnachweise abgeglichen; aktuelles Gate, Geräteabnahmen und Release 1.1.0 offen"
+state_head: 9627760c062dfea93a4b0567812b25103394fd05
 progress:
   total_phases: 5
   completed_phases: 0
@@ -20,35 +20,61 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-24)
+See: .planning/PROJECT.md (updated 2026-11-17)
 
 **Core value:** Parents without special know-how can set up WordQuest in their home network and their children can learn with it safely and reliably.
-**Current focus:** Phase 03.1.1 — Vocabulary Pictures
+**Current focus:** Planungsabgleich abgeschlossen; Verifikation ab Phase 01 erneuern, manuelle Abnahmen und Release 1.1.0 offen
 
 ## Current Position
 
-Phase: 03.1.1 (Vocabulary Pictures) — automatisch belegt, manuelle Abnahme A1–A3 offen (Verifikationsstatus wie Phase 3: human_needed)
-Plan: 5 of 5 ausgefuehrt (Phase 03.1 davor automatisch abgeschlossen, manuelle Abnahme offen)
-Status: 03.1.1-05 fertig (Release-Smoke mit Bild: vocabulary_picture im Fingerabdruck und in beiden Zeilenpruefungen, Bild nach Sicherung S1 per DELETE entfernt und nach restore.sh byte-gleich zurueck, Fingerabdruck vor/nach Update gleich; first-run.spec.ts laedt das Bild im Dialog hoch und sieht es auf jeder Karte; Installationsseite nennt Bilder in der Sicherung, 300 KB, ca. 6 MB je 100 Bilder a 50 KB; Konzept gegen den Code geprueft, keine Abweichung; erster Gate-Lauf im node:22-Container fand 14 rote vitest-Faelle (jsdom-FileReader lehnt Node-Blob ab), behoben in f70271c; volles Gate auf END f70271c gruen: Backend 166 + 310, vitest 318, e2e 65 passed/1 skipped, SMOKE OK, PROXY-XFF OK, keine offene Modellaenderung, Buildx arm64/amd64, Klon-Smoke RELEASE-SMOKE OK, smoke=0 post=1; zwei Reviews ohne BLOCKER/HIGH, L-1 behoben, Rest begruendet; IMG-01 automatisch belegt, manuelle Abnahme A1-A3 offen). 03.1.1-04 fertig (Bild der Vokabel in der Lernrunde statt des Emojis, auch bei retryItem; SessionItemView.PictureVersion per Hilfsabfrage auf die Version, PictureQueryTests belegen fuer Rundenstart und Wiederholung: vocabulary_picture gelesen, Spalte data nie; VocabPicture alt="" mit Emoji-Rueckfall bei 404 und Dekodierfehler, Rahmen 160 px, Fokus im Antwortfeld; e2e ueber HTTP ohne Secure Context: ganze Runde per Tastatur, Dekodierfehler im echten Browser, axe 0 auf Karte, Wiederholung, Abschluss und Rueckfall, 200 % mit Antwortfeld ganz im Bild, 320 px; Hinweis „Noch einmal“ als status-chip-warn wegen Kontrast 4.45:1; Konzept §4/§7.1/§7.2/§15; Plan-Gate gruen, Review 0 BLOCKER/HIGH, M-1/L-1/L-2 behoben, L-3 begruendet zurueckgewiesen; IMG-01 offen bis 03.1.1-05 und manuelle Abnahme A1-A3). 03.1.1-03 fertig (Abschnitt „Bild“ im Dialog „Vokabel bearbeiten“: Bild waehlen per Maus/Tastatur, shrinkPicture mit EXIF-Drehung, 512 px, WebP 0.8 bzw. JPEG 0.85 auf Weiss, TypeError-Rueckfall ohne imageOrientation; api() mit Blob-Body; gespeichert ohne EXIF/XMP-Chunk, Drehung in den Pixeln, 2000 x 1000 als 512 x 256 im echten Browser dekodiert; Edge-Case-Matrix mit exakten Texten, jede 413 (auch nginx-HTML ueber 1 MB) deutsch; Vorschau folgt dem gespeicherten Stand nach dem Neuladen; DELETE /sets/{id}/entries/{entryId}/picture idempotent 204, fremd 404, Kind 403; axe 0 mit Vorschau und Fehler, 200 % mit 6 Tab-Zielen; Konzept §12/§15; Plan-Gate gruen, Review 0 BLOCKER/HIGH, M-1/M-2/L-1/L-2/L-4/L-5 behoben, L-3 begruendet zurueckgewiesen; IMG-01 offen bis 03.1.1-05 und manuelle Abnahme A1-A3). 03.1.1-02 fertig (pictureVersion in Vokabelliste und Bearbeiten per Projektion, PictureQueryTests mit DbCommandInterceptor und Kontrollfall belegt: Liste liest die Spalte data nicht; api() mit blob, lib/picture.tsx mit usePicture als data-URL und VocabPicture im festen Rahmen, Emoji bei Lade-, Netz- und Dekodierfehler; DESIGN.md vocab-thumb/vocab-picture; e2e: image/png, nosniff, no-store, 401 ohne Token, nur Cache wq-api, axe 0, 200 % mit 14 Tab-Zielen; Plan-Gate gruen, Review 1 LOW behoben (retry false), 3 INFO; IMG-01 offen bis 03.1.1-05). 03.1.1-01 fertig (Tabelle vocabulary_picture per dotnet ef ohne Navigation, Mandantenfilter, Kaskade; PUT /sets/{id}/entries/{entryId}/picture roher Body bis 300 KB, Signatur und Struktur WebP/JPEG/PNG nach D-16, 400/413/404/409; GET /pictures/{version} mit no-store; Konzept §5.2/§12/§13/§15; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, 3 LOW begruendet zurueckgewiesen; IMG-01 offen bis 03.1.1-05). 03.1-01 fertig (Kontosperre fuer Refresh/Abmelden/Widerruf, 409-Gnadenfrist, atomarer PIN-Zaehler). 03.1-02 fertig (Oberflaeche folgt dem Token-Speicher, verspaetete Refresh-Antwort verworfen, 409 uebernimmt den Token des anderen Tabs derselben Anmeldung, wq-api beim Sitzungsende und bei neuer Anmeldung geleert; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM). 03.1-03 fertig (Set-Wahl begrenzt die ganze Runde bei kontoweiter Rueckstandsbremse, offene Runden der letzten 30 Minuten reservieren neue Karten, LastReviewedAt als Concurrency-Token mit Mindestabstand 1 µs ohne Migration; HARD-02 komplett; Plan-Gate gruen, Review ohne BLOCKER/HIGH/MEDIUM, LOW 1 behoben). 03.1-04 fertig (Sicherheits-Header aus nginx-security-headers.conf an jeder nginx-Antwort beider Varianten, auch an 404; CSV-Kopfzeile nur bei eindeutiger Zeile; Ladefehler der Set-Liste als ErrorNote mit axe 0; HARD-04 komplett; Plan-Gate gruen, e2e 55 passed, Review ohne BLOCKER/HIGH/MEDIUM, LOW-1/LOW-2 behoben). 03.1-05 fertig (Release-Paket per .github/release-package.sh mit fester Dateiliste und SHA256, CI-Job release nur bei Tags v* mit contents: write, Installation ohne Git per curl | tar xz im Release-Smoke belegt, first-run.spec.ts bis zur Zusammenfassung; HARD-05 erst nach 03.1-06/07; Plan-Gate gruen, Review ohne HIGH, R-03/R-04 behoben, R-01 zurueckgewiesen bis 03.1-06). 03.1-06 fertig (upgrade.sh laedt das neueste Release-Paket, prueft SHA256 sowie Namen und Typen vor dem Entpacken, sichert, ersetzt die sieben Dateien und startet per exec --continue neu; Release-Smoke mit echtem Pull aus registry:2 auf 127.0.0.1:18084, acht Paketfaellen und Klon-Weg; Doku ohne git pull; HARD-05 komplett; Plan-Gate gruen, Review ohne HIGH, R-03/R-05/R-06/R-08/R-09 behoben, R-01/R-02/R-04 zurueckgewiesen; Restore-Rot aus 03.1-05 nicht reproduzierbar, Diagnose eingebaut). 03.1-07 fertig (Dump-Pruefung in restore.sh/upgrade.sh: Endzeile als ganze Zeile unter den letzten 20 Zeilen per grep -c, SIGPIPE-Regression im Smoke gefunden und behoben; Kommentare ohne Repo-Klon; Prod-Stack aus dem Wegwerf-Klon auf fe24d8b mit smoke=0 post=1; volles Gate gruen: Backend 144 + 272, vitest 250, e2e 55 passed/1 skipped, SMOKE OK, PROXY-XFF OK; Befund-Nachweis 11/11 in 03.1-VALIDATION.md; zwei Reviews ohne BLOCKER/HIGH/MEDIUM). Stand 2026-10-24: v1.0.0 und v1.0.1 veroeffentlicht (Tags gepusht, master 525abd7); UAT Phase 1 bis 3 bestanden (Ersatzpruefungen je Test vermerkt); VERIFICATION 03.1 und 03.1.1 human_needed; offen fuer Dennis: A1-A3 der Phase 03.1.1 und die echten Geraete laut UAT-Notizen
-Last activity: 2026-10-26 — Wartungsrunde: Codebase-Karte neu, Codex-Befunde behoben (Quick 261026-j98)
+Phase: 01 (Safe Home-Network Install) — erste veraltete Verifikation gemäß GSD; keine fehlende Implementierung.
+Plan: Alle 32 Phasenpläne ausgeführt, zuletzt 03.1.1-05. Kein neuer Funktionsumfang beauftragt.
+Status: Verifikation ausstehend (`stale` in allen fünf Phasen); manuelle Abnahmen und Release 1.1.0 nicht abgeschlossen.
+Last activity: 2026-11-17 — Planungsstand gegen Code `9627760`, GSD-Abfragen und dokumentierte Prüfergebnisse abgeglichen.
 
-Progress: [░░░░░░░░░░] 0%
+Progress: Umsetzung 32/32 Pläne; aktuell verifizierte Phasen 0/5. Kein Gesamt-Fertigstellungsprozentsatz.
+
+## Abgleich am 2026-11-17
+
+Referenz ist `master` auf `9627760` (Merge von `v1-fertig`; beide Historien erhalten). Der Arbeitsbaum war vor diesem Dokumentationsabgleich sauber. Dieser Abgleich prüft Code und vorhandene Protokolle, führt aber kein neues Build-, Test- oder Abnahme-Gate aus.
+
+- **Umsetzung:** 32/32 Phasenpläne haben eine Zusammenfassung (8 + 7 + 5 + 7 + 5). Das ist kein Nachweis einer abgeschlossenen Phasenabnahme.
+- **Letzter dokumentierter voller Prüflauf:** 2026-10-26, [Quick 261026-j98](quick/261026-j98-codex-befunde-der-wartungsrunde-beheben/261026-j98-SUMMARY.md), Code-Endstand `34ee200`: Backend-Build ohne Warnungen/Fehler, Learning 171/171, API 390/390, Frontend 333/333, E2E mit axe 71 bestanden/1 übersprungen; Design-Lint 0 Fehler/0 Warnungen, Proxy-, Installations- und Release-Smoke erfolgreich. Der übersprungene E2E-Fall wird dadurch nicht als bestanden gewertet.
+- **VM-Abnahme HTTPS:** Debian aarch64 am 2026-10-26 bestanden; Mehrnetz-Gateway-Befund in `11220f7` behoben. [Nachweis](quick/261025-fpi-https-mit-eigener-ca-statt-lets-encrypt/261025-fpi-05-SUMMARY.md#vm-abnahme-orchestrator-2026-10-26). Das ersetzt keine Abnahme auf echten Endgeräten.
+- **Aktuelle Verifikation:** GSD 1.21.0 meldet für alle fünf Phasen `stale`. Die Quellen wurden seit den jeweiligen Verifikationen geändert. Die historischen `VERIFICATION.md`- und UAT-Protokolle bleiben als Nachweise erhalten; ihre alten Ergebnisse gelten nicht als neuer Prüflauf auf `9627760`.
+- **Prüfumgebung:** Gebündeltes Node.js und `gsd_run` sind mit dem global vorgegebenen PATH nutzbar. Frühere Aufrufe scheiterten an `node`/`npm` bzw. `dotnet` mit Exit 127; Arcane zuletzt an `SNAPSHOT_CHANGED`. Die behobene GSD-Laufzeit ist keine Projektverifikation. Ein vollständiger aktueller Build-, Test-, Design- und axe/E2E-Lauf bleibt offen.
+
+### Noch offene Abnahmen und Freigaben
+
+- Vokabelbilder: A1 Kamera-Dateiauswahl auf iPhone/Android, A2 HEIC und Drehung, A3 Safari/JPEG-Rückfall aus [03.1.1-VERIFICATION](phases/03.1.1-vocabulary-pictures/03.1.1-VERIFICATION.md).
+- HTTPS mit eigener CA: iPhone/iPad, Android und Browser ohne installierte CA auf echter Heimhardware; Vertrauen, CA-Installation, Warnung/Rückfall und PWA-Verhalten gemäß [HTTPS-Nachweis](quick/261025-fpi-https-mit-eigener-ca-statt-lets-encrypt/261025-fpi-05-SUMMARY.md).
+- Verbleibende Hardware-/Bedienungsabnahmen aus [01-UAT](phases/01-safe-home-network-install/01-UAT.md), [02-UAT](phases/02-reliable-learning-clean-family-data/02-UAT.md), [03-UAT](phases/03-installable-1-0-0-release/03-UAT.md) und den Verifikationen: echte Tablet-Performance, Bildschirmtastatur/echter Browser-Zoom, echte WLAN-Geräte, echter Pi und Langzeit-/Tageswechselverhalten sowie Installation durch einen Menschen ohne Projektkenntnis. Die dort dokumentierten VM-, Simulations- und Agent-Ersatzprüfungen bleiben als solche gekennzeichnet. Nicht eigens geprüftes Reset-Passwort-Logging bleibt offen.
+- Release 1.1.0: Version ist im Code/Paket vorbereitet; lokales Tag fehlt (`git tag --list` zeigt `v1.0.0` und `v1.0.1`). Veröffentlichung von Tag, Images und Paket 1.1.0 ist nicht belegt und bleibt offen. Für 1.0.0/1.0.1 liegen historische Veröffentlichungsnachweise in `03-UAT.md` vor.
+- Phasenverifikation aktualisieren und verbleibende manuelle Punkte abnehmen, bevor der Meilenstein abgeschlossen wird. GSD meldet 26 `human_needed`-Einträge in alten Verifikationen. Diese Rohzahl ist keine bereinigte Zahl unerledigter Abnahmen: einige Einträge sind später durch UAT-Ersatzprüfungen belegt oder durch die Entfernung von Traefik überholt. Verbliebene Grenzen werden deshalb oben ausdrücklich weitergeführt.
+
+### Überholte Prüfszenarien
+
+Traefik/Let's Encrypt, `docker-compose.yml` und die Installation über `git pull` gehören nicht mehr zum aktuellen Betriebsweg. Historische Nachweise bleiben erhalten; eine erneute Abnahme dieser entfernten Variante ist nicht erforderlich. Aktuelle Prüfungen nutzen `docker-compose.quick.yml`, HTTPS mit eigener CA und den Paket-Updateweg. Die spätere VM-Abnahme schließt die ehemals offene VM-Prüfung, aber nicht die Geräteabnahme. Ein Upgrade bestehender 1.0.x-Installationen auf 1.1.0 ist nicht vorgesehen; Neuinstallation ist dokumentiert.
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 32
 - Average duration: -
-- Total execution time: 0 hours
+- Total execution time: nicht neu aggregiert; historische Per-Plan Metrics siehe unten
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 8 | 8 | nicht neu aggregiert |
+| 02 | 7 | 7 | nicht neu aggregiert |
+| 03 | 5 | 5 | nicht neu aggregiert |
+| 03.1 | 7 | 7 | nicht neu aggregiert |
+| 03.1.1 | 5 | 5 | nicht neu aggregiert |
 
 **Recent Trend:**
-- Last 5 plans: -
+- Last 5 plans: 03.1.1-01 bis 03.1.1-05 ausgeführt; historische Nachweise in den jeweiligen Zusammenfassungen
 - Trend: -
 
 *Updated after each plan completion*
@@ -183,16 +209,16 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Quick 261006-r7l: axe auf `/lernen` nachholen — erledigt sich mit Plan 01-04 (axe-Werkzeug seit 01-01 vorhanden, `checkPage` auf den Lernseiten).
-- [Phase-1-Abschluss]: manuelle Abnahme Tab-Leiste bei 200 % Zoom, leere Zustände, Glas-Wirkung auf dem Tablet; `hostname -I` und Backup-Dienst auf einem Raspberry Pi prüfen.
-- [Phase-3-Nach-Release]: Nach-Release-Abnahme aus 03-VALIDATION.md (veroeffentlichte Images arm64/amd64, Pi-Installation nur nach der Seite, Person ohne Vorwissen, root-eigene Tagesdumps mit restore.sh, upgrade.sh aus GHCR, Traefik-Variante). Vor dem Push master auf den Stand von v1-fertig bringen (die Seite klont den Standardbranch).
-- [Phase-3.1-02 offen]: TanStack-Query-Cache beim Sitzungsende nicht geleert (`App.tsx`, ein anderes Profil im selben Tab sieht kurz die alte Liste); Login-Anfragen mit `retryOn401` zaehlen bei bestehender Sitzung doppelt fuers Rate-Limit (`auth.tsx`). Review INFO 7/8, Einzelheiten in 03.1-02-SUMMARY.
+- Aktuellen vollständigen Build-, Test-, Design- und axe/E2E-Lauf nachholen; alle fünf `stale`-Verifikationen erneuern. GSD empfiehlt zunächst `$gsd-execute-phase 01`; die Pläne sind bereits ausgeführt.
+- Verbleibende Geräte-/Hardware- und menschliche Abnahmen siehe „Noch offene Abnahmen und Freigaben“ oben. A1–A3 und die HTTPS-Geräteabnahme bleiben offen.
+- Release 1.1.0 erst nach den vorgesehenen Abnahmen freigeben und veröffentlichen.
+- Historisch erledigt: Lernseiten-axe durch spätere vollständige E2E-Läufe (zuletzt Quick 261026-j98); Query-Cache und doppelte Login-Anfragen durch Quick 261023-k4m; Logout-Tokenkette durch Quick 261023-a8x. Das aktuelle Gate bleibt davon unabhängig offen.
 
 ### Quick Tasks
 
 | ID | Aufgabe | Stand | Nachweis |
 |----|---------|-------|----------|
-| 261006-r7l | Installer, Container-Secrets und HTTP-Lernen | Umgesetzt; axe-Lauf offen | [Zusammenfassung](quick/261006-r7l-installer-rechte-lesbare-docker-secrets-/261006-r7l-SUMMARY.md) |
+| 261006-r7l | Installer, Container-Secrets und HTTP-Lernen | Umgesetzt; Lernseiten-axe durch spätere Phasen-/Quick-Läufe historisch belegt, aktueller Lauf offen | [Zusammenfassung](quick/261006-r7l-installer-rechte-lesbare-docker-secrets-/261006-r7l-SUMMARY.md) |
 | 261021-p4z | Kinder-PIN genau 4 Ziffern, Anmeldung mit der vierten Ziffer (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install- und Release-Smoke gruen; Frage zu „Los geht’s“ in 261021-v4n beantwortet | [Zusammenfassung](quick/261021-p4z-kinder-pin-genau-4-ziffern/261021-p4z-SUMMARY.md) |
 | 261021-v4n | Kinder-Anmeldung ohne „Los geht’s“, PIN-Felder der Eltern auf 4 Zeichen, Doku ohne Alt-PINs (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install- und Release-Smoke gruen; Frage zu sichtbarer Warteanzeige in 261022-fke beantwortet | [Zusammenfassung](quick/261021-v4n-pin-ohne-los-gehts-button/261021-v4n-SUMMARY.md) |
 | 261022-fke | Sichtbare Warteanzeige „Einen Moment …“ auf der Kinder-Anmeldung (PAR-02, FIX-08) | Umgesetzt; Gate, e2e/axe, Install-Smoke gruen | [Zusammenfassung](quick/261022-fke-sichtbare-warteanzeige-pin-anmeldung/261022-fke-SUMMARY.md) |
@@ -210,7 +236,9 @@ Recent decisions affecting current work:
 ### Blockers/Concerns
 
 - Release 1.0.0 veroeffentlicht 2026-10-24: Tag v1.0.0 auf 8f3c6ab, master b5df847 (Merge-Commit, Baum gleich v1-fertig), CI gruen, Images amd64/arm64 anonym ladbar. Release 1.0.1 (Quick 261024-vnx) veroeffentlicht 2026-10-24: Tag v1.0.1, master 525abd7, CI gruen; Update 1.0.0 → 1.0.1 auf der VM bestanden (03-UAT Test 5 und 6). UAT-Stand Phase 1-3 in den jeweiligen UAT-Dateien.
-- Offen aus 03.1: Refresh-Widerruf aller Tokens wenn Abmelden das Rennen gewinnt (03.1-01/-02-SUMMARY)
+- Weiterhin offene Grenze aus 03.1-01: Gewinnt Abmelden oder PIN-Wechsel das Rennen, kann ein Refresh mit widerrufenem, nicht rotiertem Token alle Tokens des Kontos widerrufen. Andere Geräte müssen sich dann neu anmelden (`AuthService.RefreshAsync`, `RevokeAllAsync`; 03.1-01-SUMMARY, Offene Punkte).
+- Weiterhin offene Grenze aus 03.1-01: Eine bereits geprüfte Anmeldung mit alten Zugangsdaten kann während Reset/PIN-Wechsel nach dem Widerruf noch einen Token speichern; Login-Pfade nehmen die Kontosperre nicht selbst.
+- Davon getrennt historisch behoben: Logout mit rotiertem Token widerruft die Nachfolgerkette R1→R2→R3 (Quick 261023-a8x). Das behebt das oben genannte Refresh-Rennen nicht.
 - Schuld aus 261023-a8x: `LogoutAsync` laedt alle Refresh-Tokens des Kontos (`AuthService.cs:262-264`), alte werden nie geloescht; heute unkritisch, spaeter ab `CreatedAt` filtern oder rekursive CTE
 - e2e-Laeufe ueber 15 min scheitern vermutlich am geteilten Refresh-Token aus global-setup.ts (03.1-07-SUMMARY, Offene Punkte); nicht aufgetreten, nicht ausgebaut
 
@@ -224,6 +252,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-22T23:46:41.874Z
-Stopped at: Completed 03.1.1-05-PLAN.md
+Last session: 2026-11-17
+Stopped at: Planungsabgleich; Verifikation und manuelle Abnahmen offen
 Resume file: None

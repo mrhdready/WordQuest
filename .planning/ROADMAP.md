@@ -2,7 +2,13 @@
 
 ## Overview
 
-v1.0 turns the existing learning core into a working, safe base that another family can run in its home network. Phase 1 makes the plain-HTTP home-network install safe and recoverable (own parent account, generated secrets, daily backups, password and PIN recovery). Phase 2 removes the known defects that make learning unreliable and lets a parent delete a child and correct sets without leaving orphaned data, backed by integration tests against real PostgreSQL. Phase 3 ships a versioned 1.0.0 release with upgrade and restore scripts and one install page a non-expert can follow.
+Der Meilenstein v1.0 macht den vorhandenen Lernkern zu einer verlässlichen Heimnetz-App. Phase 1 liefert eigenes Elternkonto, erzeugte Secrets, tägliche Sicherung sowie Passwort- und PIN-Wiederherstellung. Phase 2 behebt Lernfehler und ergänzt Löschen und Korrigieren ohne verwaiste Lerndaten, belegt durch Integrationstests gegen PostgreSQL. Phase 3 liefert die Grundlage der historisch veröffentlichten Versionen 1.0.0/1.0.1 samt Update, Wiederherstellung und Installationsseite. Der Code bereitet inzwischen 1.1.0 mit HTTPS und eigener CA vor (Quick 261025-fpi); aktuelle Geräteabnahme, Verifikation und Veröffentlichung bleiben offen.
+
+## Aktueller Prüfstand (2026-11-17)
+
+32/32 Pläne ausgeführt; fünf Verifikationen `stale`, deshalb keine Phase als aktuell abgeschlossen markiert. Letzter dokumentierter voller Lauf: Quick 261026-j98 vom 2026-10-26 (171 Learning-, 390 API-, 333 Frontend-Tests; E2E mit axe 71 bestanden/1 übersprungen). Kein neuer Lauf auf `9627760`.
+
+Der vollständige [Nachweis- und Abnahmestand](STATE.md#abgleich-am-2026-11-17) unterscheidet VM-Ersatzprüfungen, echte Geräteabnahmen und Release 1.1.0. Historische Planbeschreibungen bleiben unverändert, auch wenn sie inzwischen entfernte Betriebsvarianten nennen. Verbleibende Abnahmen bleiben offen; Traefik wird nicht wieder eingeführt.
 
 ## Phases
 
@@ -12,20 +18,22 @@ v1.0 turns the existing learning core into a working, safe base that another fam
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Safe Home-Network Install** - Parent installs over plain HTTP with own account, generated secrets and daily backups, and can recover passwords and child PINs
+- [ ] **Phase 1: Safe Home-Network Install** - Parent installs over HTTPS with own CA and own account, generated secrets and daily backups, and can recover passwords and child PINs
 - [ ] **Phase 2: Reliable Learning & Clean Family Data** - Known learning bugs fixed, child deletion and set/entry correction without orphaned data, proven by integration tests
 - [ ] **Phase 3: Installable 1.0.0 Release** - Versioned images, `upgrade.sh`, `restore.sh` and one install page for non-experts
+- [ ] **Phase 03.1: Release Hardening** - 7/7 Pläne ausgeführt; aktuelle Verifikation und manuelle Abnahme offen
+- [ ] **Phase 03.1.1: Vocabulary Pictures** - 5/5 Pläne ausgeführt; aktuelle Verifikation und A1–A3 offen
 
 ## Phase Details
 
 ### Phase 1: Safe Home-Network Install
 
-**Goal**: A parent installs WordQuest in the home network over plain HTTP with their own account, generated secrets and daily backups, and can recover their own password and a child's forgotten PIN without help
+**Goal**: Eltern installieren WordQuest im Heimnetz über HTTPS mit eigener CA, eigenem Konto, erzeugten Secrets und täglichen Sicherungen. Sie können ihr Passwort und die vergessene Kinder-PIN selbst zurücksetzen.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: DESIGN-01, SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05, SETUP-06, FIX-07, PAR-01, PAR-02, PAR-05, FIX-08, QUAL-02
 **Success Criteria** (what must be TRUE):
-  1. On a fresh host, `setup.sh` in home-network mode asks for the parent's email and password and generates DB password and JWT key; after start the parent logs in at `http://<host>:8080` with exactly that account, and no demo account exists
+  1. Auf einem frischen Host fragt `setup.sh` nach E-Mail und Passwort des Elternteils und erzeugt DB-Passwort und JWT-Schlüssel. Danach klappt die Anmeldung mit genau diesem Konto über die ausgegebene HTTPS-Adresse (80/443, bei Konflikt 8080/8443); es gibt kein Demo-Konto.
   2. The home-network stack writes a daily database dump to the backup directory, and outside Development the API refuses to start (clear error naming the secret) when the DB password or JWT key is missing or a known default
   3. Parent changes their password in the app and can then log in only with the new one; an operator who lost it resets it with one command inside the container and logs in with the result
   4. Parent edits a child's name, daily new-card limit and PIN, and the child logs in with the new PIN; a PIN that is not exactly 4 digits is rejected by the server with a readable message, also when sent directly to the API
@@ -37,7 +45,7 @@ Plans:
 - [x] 01-01-PLAN.md — DESIGN.md-Tokens exportieren, UI-Bausteine und Eltern-Login umstellen (alte Theme-Namen als Übergang), Playwright/axe und Vitest einrichten (mit Paket-Freigabe)
 - [x] 01-02-PLAN.md — setup.sh im Heimnetz-Modus: eigenes Elternkonto, erzeugte Secrets, kein Demo-Konto; Smoke gegen frisch gebautes Image; Integrationstest-Projekt
 - [x] 01-03-PLAN.md — Verwalten-Seiten (Vokabeln, Set, Fortschritt) auf DESIGN.md, Field-Baustein, Testhilfe mit Parameterrouten, CSV-Import-Zustände belegt
-- [x] 01-04-PLAN.md — Kinder-Anmeldung per Tastatur und Maus mit PIN 4–6, Lernseiten auf DESIGN.md, Lernen über HTTP belegt, Design-Migration abschließen
+- [x] 01-04-PLAN.md — Kinder-Anmeldung per Tastatur und Maus mit historisch PIN 4–6 (seit Quick 261021-p4z genau 4), Lernseiten auf DESIGN.md, Lernen über HTTP belegt, Design-Migration abschließen
 - [x] 01-05-PLAN.md — Passwort-Reset per Befehl, Secret-Prüfung beim Start (auch expliziter Connection-String), tägliche Sicherung
 - [x] 01-06-PLAN.md — Passwort ändern in der App, Formular-Matrix, Frontend-Schritte im CI-Gate
 - [x] 01-07-PLAN.md — Kind anlegen mit PIN- und Namensregel im Identity-Modul, seedfreier Erstdurchlauf bis zur ersten Lernantwort
@@ -95,13 +103,15 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3
+Phasenfolge: 1 → 2 → 3 → 03.1 → 03.1.1. Alle Pläne sind ausgeführt. Für aktuelle Verifikation empfiehlt GSD zuerst Phase 01; keine erneute Implementierung wird damit behauptet.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Safe Home-Network Install | 8/8 | In Progress | - |
-| 2. Reliable Learning & Clean Family Data | 7/7 | In Progress | - |
-| 3. Installable 1.0.0 Release | 5/5 | In Progress | - |
+| 1. Safe Home-Network Install | 8/8 | Umgesetzt; Verifikation stale, Abnahmegrenzen offen | - |
+| 2. Reliable Learning & Clean Family Data | 7/7 | Umgesetzt; Verifikation stale, Abnahmegrenzen offen | - |
+| 3. Installable 1.0.0 Release | 5/5 | 1.0.0/1.0.1 historisch veröffentlicht; Verifikation stale | - |
+| 03.1. Release Hardening | 7/7 | Umgesetzt; Verifikation stale, manuelle Abnahme offen | - |
+| 03.1.1. Vocabulary Pictures | 5/5 | Umgesetzt; Verifikation stale, A1–A3 offen | - |
 
 ### Phase 03.1: Release Hardening (INSERTED)
 
