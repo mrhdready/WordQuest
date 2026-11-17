@@ -98,7 +98,9 @@ public static class CsvVocabularyParser
 
         foreach (char candidate in Candidates)
         {
-            int[] counts = sample.Select(l => l.Count(c => c == candidate)).ToArray();
+            // Gezaehlt ueber SplitLine, damit Trennzeichen in Anfuehrungszeichen
+            // ("gehen, laufen, spazieren";go) nicht mitzaehlen.
+            int[] counts = sample.Select(l => SplitLine(l, candidate).Length - 1).ToArray();
             if (counts.Length == 0 || counts[0] == 0)
             {
                 continue;

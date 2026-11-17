@@ -25,13 +25,14 @@ SRC="$WORK/src"
 INST="$WORK/wordquest"
 
 export COMPOSE_PROJECT_NAME=wq-release
-export WQ_PORT=18082
+export WQ_HTTP_PORT=18082
+export WQ_HTTPS_PORT=18442
 export COMPOSE_FILE=docker-compose.quick.yml:docker-compose.build.yml
 # WQ_VERSION und WQ_IMAGE_PREFIX bewusst nicht exportieren (anders als
 # setup-smoke.sh): Eine Shell-Variable schlaegt .env, dann pruefte der Smoke
 # die Werte aus .env gar nicht (03-RESEARCH Pitfall 3).
 
-EXPECTED_VERSION=1.0.1
+EXPECTED_VERSION=1.1.0
 EXPECTED_PREFIX=ghcr.io/mrhdready/wordquest
 API_TAG="${EXPECTED_PREFIX}-api:${EXPECTED_VERSION}"
 WEB_TAG="${EXPECTED_PREFIX}-web:${EXPECTED_VERSION}"
@@ -100,12 +101,12 @@ example_value() { sed -n "s/^$1=//p" .env.example; }
   || fail ".env.example: WQ_IMAGE_PREFIX ist '$(example_value WQ_IMAGE_PREFIX)' statt '$EXPECTED_PREFIX'."
 # Standardwerte ${NAME:-wert} einer Compose-Datei, je Fundstelle eine Zeile.
 compose_defaults() { grep -o "\${$1:-[^}]*}" "$2" | sed "s/^\${$1:-//; s/}\$//" || true; }
-for file in docker-compose.quick.yml docker-compose.yml; do
+for file in docker-compose.quick.yml; do
   for pair in "WQ_VERSION $EXPECTED_VERSION" "WQ_IMAGE_PREFIX $EXPECTED_PREFIX"; do
     name="${pair% *}"; expected="${pair#* }"
     found="$(compose_defaults "$name" "$file")"
-    [[ "$(printf '%s\n' "$found" | grep -c .)" == 2 ]] \
-      || fail "$file: $name hat nicht genau zwei Standardwerte (api und web): $(echo $found)"
+    [[ "$(printf '%s\n' "$found" | grep -c .)" == 3 ]] \
+      || fail "$file: $name hat nicht genau drei Standardwerte (api, certs und web): $(echo $found)"
     [[ "$(printf '%s\n' "$found" | sort -u)" == "$expected" ]] \
       || fail "$file: Standardwert von $name ist '$(echo $found)' statt '$expected'."
   done
@@ -161,13 +162,10 @@ pkg_listing() {
 }
 PKG_EXPECTED='- wordquest/.env.example
 - wordquest/docker-compose.quick.yml
-- wordquest/docker-compose.yml
-- wordquest/frontend/nginx-traefik-realip.conf
 - wordquest/restore.sh
 - wordquest/setup.sh
 - wordquest/upgrade.sh
-d wordquest/
-d wordquest/frontend/'
+d wordquest/'
 listing="$(pkg_listing "$WORK/release-base/wordquest.tar.gz")"
 [[ "$listing" == "$PKG_EXPECTED" ]] \
   || fail "Paketinhalt weicht ab: $(printf '%s' "$listing" | tr '\n' '|')"
@@ -236,12 +234,16 @@ auth_budget() {
   printf '%s %s\n' "$started" "$count" >"$AUTH_FILE"
 }
 
+# Anfragen an WordQuest per HTTPS, mit der CA der Installation als einzigem Anker
+# (nach der Installation in .smoke/ca.pem).
+curl_wq() { curl --cacert "$INST/.smoke/ca.pem" "$@"; }
+
 login() {
   auth_budget 1
-  curl -s -o /dev/null -w '%{http_code}' \
+  curl_wq -s -o /dev/null -w '%{http_code}' \
     -H 'Content-Type: application/json' \
     -d "{\"email\":\"$1\",\"password\":\"$2\"}" \
-    "http://localhost:${WQ_PORT}/api/v1/auth/login"
+    "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/login"
 }
 
 # Seitenabgleich (REL-03, D-10): Jeder Befehl der Installationsseite laeuft hier
@@ -261,10 +263,13 @@ page_cmd() {
   printf '%s\n' "$1" >>"$INST/.smoke/page-cmds"
 }
 # Befehle der Seite, die der Smoke nicht ausfuehrt: "Befehl — Grund", je eine Zeile.
-HANDGRIFFE='sudo apt install curl — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat curl
+HANDGRIFFE='docker compose down — Ausweg „Zertifizierungsstelle neu anlegen“; belegt in setup-smoke.sh (TLS OK) mit dem Projektnamen des Smokes
+docker volume rm wordquest_tls-ca wordquest_tls — Ausweg „Zertifizierungsstelle neu anlegen“; belegt in setup-smoke.sh (TLS OK) mit dem Projektnamen des Smokes
+docker compose logs certs — nur Ansehen im Fehlerfall; die Meldungen von certs belegt setup-smoke.sh (TLS OK)
+sudo apt install curl — Paketinstallation auf dem Zielgeraet; der Entwicklungsrechner hat curl
 sudo usermod -aG docker $USER — Gruppe docker, wirkt erst nach neuer Anmeldung
 docker compose -p wordquest-quick down — alter Schnelltest, kein Smoke-Teil (D-06)
-sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh:56, braucht sudo
+sudo chown -R "$(id -un)" backups — Ausweg aus der Meldung von setup.sh zum Ordner backups, braucht sudo
 docker compose exec api dotnet WordQuest.Api.dll reset-password eltern@example.de — belegt in setup-smoke.sh (RESET OK)
 docker compose logs api — nur Ansehen im Fehlerfall; die Startabbrueche belegt setup-smoke.sh (STARTABBRUCH OK)
 hostname -I — nur auf dem Pi (Linux); macOS kennt -I nicht
@@ -299,7 +304,12 @@ grep -qF 'Das Image-Präfix besteht aus' .smoke/install.log || fail "Kein Hinwei
 grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail ".env enthaelt nicht WQ_VERSION=$EXPECTED_VERSION."
 grep -qx "WQ_IMAGE_PREFIX=$EXPECTED_PREFIX" .env || fail ".env enthaelt nicht WQ_IMAGE_PREFIX=$EXPECTED_PREFIX."
 grep -qF '✓ API ist bereit.' .smoke/install.log || fail "Zeile '✓ API ist bereit.' fehlt."
-grep -qF 'Fertig. WordQuest läuft unter: http://' .smoke/install.log || fail "Abschlusszeile fehlt."
+grep -qF 'Fertig. WordQuest läuft unter: https://' .smoke/install.log || fail "Abschlusszeile fehlt."
+for line in '✓ Zertifikat ist bereit.' '✓ WordQuest antwortet über HTTPS.' \
+  'Fingerabdruck von WordQuest (SHA-256): ' 'Fingerabdruck der Zertifizierungsstelle (SHA-256): '; do
+  grep -qF "$line" .smoke/install.log || fail "Installation ohne Zeile: $line"
+done
+docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >.smoke/ca.pem || fail "CA der Installation nicht lesbar."
 if grep -qF 'geheim-123' .smoke/install.log; then fail "Ausgabe enthaelt das Passwort."; fi
 
 running="$(docker inspect -f '{{.Config.Image}}' "$(docker compose ps -q api </dev/null)")"
@@ -309,6 +319,10 @@ running="$(docker inspect -f '{{.Config.Image}}' "$(docker compose ps -q web </d
 
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "Login mit dem neuen Elternkonto: HTTP $code statt 200."
+# HTTP leitet auf HTTPS um, Pfad und Query bleiben (OD-2, TLS-03).
+redirect="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:${WQ_HTTP_PORT}/verwalten?x=1")"
+[[ "$redirect" == "301 https://localhost:${WQ_HTTPS_PORT}/verwalten?x=1" ]] \
+  || fail "HTTP leitet nicht auf HTTPS um: $redirect"
 echo "INSTALL OK"
 
 echo "== Weitere Seitenschritte"
@@ -316,7 +330,7 @@ page_cmd 'docker compose version'
 docker compose version </dev/null >.smoke/compose-version.log
 page_cmd 'docker compose ps'
 docker compose ps </dev/null >.smoke/compose-ps.log
-for service in api backup db web; do
+for service in api backup certs db web; do
   grep -E "[[:space:]]${service}[[:space:]]" .smoke/compose-ps.log | grep -q 'Up' \
     || fail "docker compose ps zeigt den Dienst $service nicht mit Up."
 done
@@ -327,6 +341,13 @@ docker compose exec -T backup /backup.sh </dev/null >.smoke/backup.log 2>&1 \
 dump="$(ls backups/daily/wordquest-*.sql.gz 2>/dev/null | head -n 1 || true)"
 [[ -n "$dump" ]] || fail "Keine Datei backups/daily/wordquest-*.sql.gz nach der Sicherung."
 gzip -t "$dump" || fail "$dump ist kein gueltiges gzip."
+page_cmd 'docker compose exec certs dotnet WordQuest.Api.dll tls show'
+docker compose exec -T certs dotnet WordQuest.Api.dll tls show </dev/null >.smoke/tls-show.log \
+  || fail "tls show endete nicht mit 0."
+while IFS= read -r line; do
+  grep -qF -- "$line" .smoke/install.log || fail "tls show nennt einen anderen Fingerabdruck als setup.sh: $line"
+done <.smoke/tls-show.log
+[[ "$(grep -c 'Fingerabdruck' .smoke/tls-show.log)" == 2 ]] || fail "tls show nennt nicht genau zwei Fingerabdruecke."
 
 echo "== Wiederherstellung (REL-02)"
 # Fingerabdruck der Fachdaten in einer Zeile, ohne refresh_token (restore.sh
@@ -349,10 +370,10 @@ api_started() { docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q
 token() {
   local code
   auth_budget 1
-  code="$(curl -s -o .smoke/login.json -w '%{http_code}' \
+  code="$(curl_wq -s -o .smoke/login.json -w '%{http_code}' \
     -H 'Content-Type: application/json' \
     -d '{"email":"eltern@example.de","password":"geheim-123"}' \
-    "http://localhost:${WQ_PORT}/api/v1/auth/login" || true)"
+    "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/login" || true)"
   [[ "$code" == 200 ]] || fail "Login fuer die Tokens: HTTP $code statt 200."
   sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' .smoke/login.json >.smoke/access-token
   sed -n 's/.*"refreshToken":"\([^"]*\)".*/\1/p' .smoke/login.json >.smoke/refresh-token
@@ -360,15 +381,15 @@ token() {
 }
 # GET /api/v1/learners mit dem Access-Token aus der Datei; Antwort in .smoke/learners.json.
 learners() {
-  curl -s -o .smoke/learners.json -w '%{http_code}' \
+  curl_wq -s -o .smoke/learners.json -w '%{http_code}' \
     -H "Authorization: Bearer $(cat .smoke/access-token)" \
-    "http://localhost:${WQ_PORT}/api/v1/learners" || true
+    "https://localhost:${WQ_HTTPS_PORT}/api/v1/learners" || true
 }
 # restore.sh startet web zuletzt neu; nginx nimmt danach erst nach einem Moment an.
 wait_web() {
   local _
   for _ in $(seq 1 30); do
-    curl -s -o /dev/null "http://localhost:${WQ_PORT}/" && return 0
+    curl_wq -s -o /dev/null "https://localhost:${WQ_HTTPS_PORT}/" && return 0
     sleep 1
   done
   fail "web antwortet 30 s nach restore.sh nicht."
@@ -386,7 +407,7 @@ restore_run() {
 # Anmelde-Limit: globalSetup, Profilwahl und learner-login (first-run.spec.ts:11-12).
 auth_budget 3
 # Das Passwort steht nur fuer diesen einen Aufruf in der Umgebung.
-WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="http://localhost:${WQ_PORT}" \
+WQ_E2E_FIRST_RUN=1 WQ_E2E_BASE_URL="https://localhost:${WQ_HTTPS_PORT}" \
   WQ_E2E_GUARDIAN_EMAIL=eltern@example.de WQ_E2E_GUARDIAN_PASSWORD=geheim-123 \
   npm --prefix "$ROOT/frontend" run e2e -- first-run.spec.ts </dev/null \
   || fail "Erstdurchlauf auf der Release-Installation fehlgeschlagen."
@@ -410,27 +431,27 @@ code="$(learners)"
 [[ "$code" == 200 ]] || fail "GET /api/v1/learners: HTTP $code statt 200."
 child_id="$(sed -n 's/.*"id":"\([^"]*\)","displayName":"Erstes Kind".*/\1/p' .smoke/learners.json)"
 [[ -n "$child_id" ]] || fail "Erstes Kind nicht in /api/v1/learners."
-code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+code="$(curl_wq -s -o /dev/null -w '%{http_code}' -X DELETE \
   -H "Authorization: Bearer $(cat .smoke/access-token)" \
-  "http://localhost:${WQ_PORT}/api/v1/learners/$child_id" || true)"
+  "https://localhost:${WQ_HTTPS_PORT}/api/v1/learners/$child_id" || true)"
 [[ "$code" == 204 ]] || fail "DELETE des Kindes: HTTP $code statt 204."
 # Auch das Bild entfernen: Sonst bewiese die Wiederherstellung fuer Bilder nichts,
 # es laege ja noch in der Datenbank (D-14).
-code="$(curl -s -o .smoke/sets.json -w '%{http_code}' \
+code="$(curl_wq -s -o .smoke/sets.json -w '%{http_code}' \
   -H "Authorization: Bearer $(cat .smoke/access-token)" \
-  "http://localhost:${WQ_PORT}/api/v1/sets" || true)"
+  "https://localhost:${WQ_HTTPS_PORT}/api/v1/sets" || true)"
 [[ "$code" == 200 ]] || fail "GET /api/v1/sets: HTTP $code statt 200."
 set_id="$(sed -n 's/.*"id":"\([^"]*\)","title":"Erstes Set".*/\1/p' .smoke/sets.json)"
 [[ -n "$set_id" ]] || fail "Erstes Set nicht in /api/v1/sets."
-code="$(curl -s -o .smoke/entries.json -w '%{http_code}' \
+code="$(curl_wq -s -o .smoke/entries.json -w '%{http_code}' \
   -H "Authorization: Bearer $(cat .smoke/access-token)" \
-  "http://localhost:${WQ_PORT}/api/v1/sets/$set_id/entries" || true)"
+  "https://localhost:${WQ_HTTPS_PORT}/api/v1/sets/$set_id/entries" || true)"
 [[ "$code" == 200 ]] || fail "GET /api/v1/sets/$set_id/entries: HTTP $code statt 200."
 entry_id="$(sed -n 's/.*"id":"\([^"]*\)","sourceText":"Hund".*/\1/p' .smoke/entries.json)"
 [[ -n "$entry_id" ]] || fail "Vokabel Hund nicht im Ersten Set."
-code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+code="$(curl_wq -s -o /dev/null -w '%{http_code}' -X DELETE \
   -H "Authorization: Bearer $(cat .smoke/access-token)" \
-  "http://localhost:${WQ_PORT}/api/v1/sets/$set_id/entries/$entry_id/picture" || true)"
+  "https://localhost:${WQ_HTTPS_PORT}/api/v1/sets/$set_id/entries/$entry_id/picture" || true)"
 [[ "$code" == 204 ]] || fail "DELETE des Bildes: HTTP $code statt 204."
 [[ "$(count_rows vocabulary_picture)" == 0 ]] || fail "Nach dem Entfernen ist vocabulary_picture nicht leer."
 [[ "$(fingerprint)" != "$fp_s1" ]] || fail "Fingerabdruck nach dem Loeschen unveraendert."
@@ -468,9 +489,9 @@ inodes="$(while IFS= read -r path; do ls -1i "$path" | awk '{ print $1 }'; done 
 [[ "$(count_rows vocabulary_picture)" -ge 1 ]] || fail "Das Bild ist nach restore.sh nicht zurueck."
 [[ "$(count_rows refresh_token)" == 0 ]] || fail "refresh_token ist nach restore.sh nicht leer."
 # /auth/refresh hat kein Anmelde-Limit (AuthEndpoints.cs:23).
-code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+code="$(curl_wq -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
   -d "{\"refreshToken\":\"$(cat .smoke/refresh-token-s1)\"}" \
-  "http://localhost:${WQ_PORT}/api/v1/auth/refresh" || true)"
+  "https://localhost:${WQ_HTTPS_PORT}/api/v1/auth/refresh" || true)"
 echo "Refresh mit Token aus der Sicherung: HTTP $code"
 [[ "$code" == 401 ]] || fail "Refresh mit dem Token aus der Sicherung: HTTP $code statt 401."
 code="$(learners)"
@@ -677,7 +698,7 @@ check_upd_backup() {
 # Ausgeliefertes Paket: das aus der CI-Nachbildung oben, mit anderer Version in
 # .env.example (grep -v und angehaengte Zeile: ein | verduerbe einen sed-Ersatz).
 # Mit "falsch" passt die Pruefsumme nicht zum Paket.
-PKG_FILES='docker-compose.quick.yml docker-compose.yml .env.example setup.sh upgrade.sh restore.sh frontend/nginx-traefik-realip.conf'
+PKG_FILES='docker-compose.quick.yml .env.example setup.sh upgrade.sh restore.sh'
 pkg_unpack() {
   rm -rf "$WORK/pkg"
   mkdir "$WORK/pkg"
@@ -697,10 +718,10 @@ serve_pkg() {
   mv "$WORK/pkg/env-example" "$WORK/pkg/wordquest/.env.example"
   pkg_pack "${2:-}"
 }
-# Summen der sieben Paketdateien im Installationsordner und von secrets/.
+# Summen der fuenf Paketdateien im Installationsordner und von secrets/.
 pkg_sums() { for f in $PKG_FILES; do shasum "$f" 2>&1 || true; done; ls -l $PKG_FILES 2>&1 | cut -c1-10; }
 secrets_sum() { (cd secrets && ls -ln | cut -c1-10 && shasum ./*) 2>&1 || true; }
-# Jede der sieben Dateien gleicht der im ausgelieferten Paket.
+# Jede der fuenf Dateien gleicht der im ausgelieferten Paket.
 pkg_is_served() {
   local f
   for f in $PKG_FILES; do
@@ -758,6 +779,7 @@ upgrade_run() {
 
 [[ -x upgrade.sh ]] || fail "upgrade.sh fehlt oder ist nicht ausfuehrbar."
 [[ "$(backup_count)" == 0 ]] || fail "Vor dem Update gibt es schon eine Sicherung vor-update-*."
+docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >.smoke/ca-vor-update.pem
 for tag in "$REG_API_TAG" "$REG_WEB_TAG"; do
   if docker image inspect "$tag" >/dev/null 2>&1; then fail "$tag liegt vor dem Update schon lokal."; fi
 done
@@ -765,7 +787,7 @@ serve_pkg "$EXPECTED_VERSION"
 # Die installierte Fassung weicht vom Paket ab: Danach muss sie ersetzt sein.
 echo '# Smoke: installierte Fassung vor dem Update' >>upgrade.sh
 page_cmd './upgrade.sh'
-# Die .env behaelt ihre Rechte (WR-01): In der Traefik-Variante steht dort ein Token.
+# Die .env behaelt ihre Rechte (WR-01): upgrade.sh darf sie nicht fuer alle lesbar machen.
 chmod 600 .env
 env_mode="$(ls -l .env | cut -c1-10)"
 secrets_before="$(secrets_sum)"
@@ -795,6 +817,9 @@ check_upd_backup "$upd"
 grep -qx "WQ_VERSION=$EXPECTED_VERSION" .env || fail ".env enthaelt nach dem Update nicht WQ_VERSION=$EXPECTED_VERSION."
 [[ "$(image_of api)" == "$REG_API_TAG" ]] || fail "api laeuft nach dem Update mit '$(image_of api)' statt '$REG_API_TAG'."
 [[ "$(image_of web)" == "$REG_WEB_TAG" ]] || fail "web laeuft nach dem Update mit '$(image_of web)' statt '$REG_WEB_TAG'."
+[[ "$(image_of certs)" == "$REG_API_TAG" ]] || fail "certs laeuft nach dem Update mit '$(image_of certs)' statt '$REG_API_TAG'."
+docker compose exec -T certs cat /certs/ca/ca.crt </dev/null | cmp -s - .smoke/ca-vor-update.pem \
+  || fail "Das Update hat die Zertifizierungsstelle geaendert."
 for tag in "$REG_API_TAG" "$REG_WEB_TAG"; do
   digests="$(docker image inspect -f '{{json .RepoDigests}}' "$tag")"
   echo "RepoDigests $tag: $digests"
@@ -937,6 +962,42 @@ wait_api
 [[ "$(fingerprint)" == "$fp_before" ]] || fail "API nicht bereit, Weg zurueck: Fingerabdruck ungleich vorher."
 code="$(login eltern@example.de geheim-123)"
 [[ "$code" == 200 ]] || fail "API nicht bereit, Weg zurueck: Login HTTP $code statt 200."
+
+# Unvollstaendige CA (Codex-Befund 261026): Die API wird bereit, HTTPS aber nicht.
+# restore.sh und upgrade.sh melden dann keinen Erfolg, sondern den Ausweg aus der
+# Anleitung. Beide Faelle laufen, bevor der Smoke scheitert, damit er beide nennt.
+# Danach kommt dieselbe ca.crt zurueck, die Geraete vertrauen ihr weiter.
+ca_ok() { docker compose exec -T certs dotnet WordQuest.Api.dll tls show </dev/null >/dev/null 2>&1; }
+ca_errors=""
+expect_ca_way() {
+  local e=""
+  [[ "$status" != 0 ]] || e="$e Exit 0."
+  grep -qF 'Die Zertifizierungsstelle ist unvollständig (es fehlt: ca/ca.crt).' "$1" || e="$e Keine Meldung zur CA."
+  grep -qF 'Zertifizierungsstelle neu anlegen' "$1" || e="$e Kein Ausweg."
+  if grep -qF 'Fertig.' "$1"; then e="$e Meldet Erfolg."; fi
+  [[ -z "$e" ]] || ca_errors="$ca_errors $2:$e"
+}
+docker compose exec -T certs cat /certs/ca/ca.crt </dev/null >.smoke/ca-gerettet.pem
+docker compose exec -T certs rm /certs/ca/ca.crt </dev/null
+restore_run .smoke/restore-ca.log "$upd_way_back" < <(printf 'ja\n')
+expect_ca_way .smoke/restore-ca.log restore.sh
+[[ "$(fingerprint)" == "$fp_before" ]] || fail "CA unvollstaendig: Fingerabdruck nach restore.sh ungleich vorher."
+serve_pkg "$EXPECTED_VERSION"
+upd_snapshot
+upgrade_run .smoke/upgrade-ca.log ok
+expect_ca_way .smoke/upgrade-ca.log upgrade.sh
+[[ -z "$ca_errors" ]] || fail "CA unvollstaendig:$ca_errors"
+# Statt des Wegs zurueck (der an derselben CA scheitert) nennt upgrade.sh die Sicherung.
+ca_upd="$(upd_file .smoke/upgrade-ca.log)"
+check_upd_backup "$ca_upd"
+expect_msg .smoke/upgrade-ca.log "Die Sicherung von vorher liegt in $ca_upd."
+docker compose run --rm --no-deps -T --entrypoint sh certs -c 'cat >/certs/ca/ca.crt && chmod 644 /certs/ca/ca.crt' \
+  <.smoke/ca-gerettet.pem >/dev/null 2>&1 || fail "ca.crt liess sich nicht zuruecklegen."
+docker compose restart certs </dev/null >/dev/null 2>&1 || fail "certs startet nach dem Zuruecklegen nicht."
+for _ in $(seq 1 30); do ca_ok && break; sleep 2; done
+ca_ok || fail "CA nach dem Zuruecklegen nicht bereit."
+wait_web
+echo "Fall CA unvollstaendig: restore.sh und upgrade.sh mit Ausweg"
 
 # Zweiter Aufruf ohne neue Version: harmlos. Dazu fehlen in .env die Zeile
 # WQ_VERSION und das letzte Zeilenende (IN-02): Die neue Zeile darf nicht an

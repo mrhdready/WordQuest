@@ -23,11 +23,11 @@ fi
 
 # Feste Liste statt des ganzen Ordners: .env, secrets/ und backups/ eines
 # Rechners, auf dem das Paket entsteht, geraten so nie hinein.
-FILES='docker-compose.quick.yml docker-compose.yml .env.example setup.sh upgrade.sh restore.sh frontend/nginx-traefik-realip.conf'
+FILES='docker-compose.quick.yml .env.example setup.sh upgrade.sh restore.sh'
 
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-mkdir -p "$stage/wordquest/frontend"
+mkdir -p "$stage/wordquest"
 for file in $FILES; do
   # -p: Die drei Skripte bleiben ausfuehrbar.
   cp -p "$ROOT/$file" "$stage/wordquest/$file"

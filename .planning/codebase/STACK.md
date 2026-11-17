@@ -1,98 +1,103 @@
 ---
-last_mapped_commit: a397d4db9d120da68a269a147900eabb05e0a42e
-last_mapped_at: 2026-10-24
+last_mapped_commit: 00d6615b8a97d9dc54b7a0451f777fbfa6e91621
+last_mapped_at: 2026-10-26
 ---
 # Technology Stack
 
-**Analysis Date:** 2026-10-24
+**Analysis Date:** 2026-10-26
 
 ## Languages
 
 **Primary:**
-- C# (`<Nullable>enable</Nullable>`, Ziel `net10.0` in `backend/Directory.Build.props`) - Backend unter `backend/src/` und `backend/tests/`
-- TypeScript `^5.9.3` - Frontend unter `frontend/src/` (React/TSX)
+- C# (`LangVersion` latest, `Nullable` enable, `ImplicitUsings` enable) - Backend in `backend/src/` (settings in `backend/Directory.Build.props`)
+- TypeScript ^5.9.3 - Frontend in `frontend/src/` (`frontend/tsconfig.json`, `verbatimModuleSyntax`)
 
 **Secondary:**
-- Bash - Betriebsskripte `setup.sh`, `upgrade.sh`, `restore.sh`, `.github/release-package.sh`
-- YAML - Docker-Compose-Dateien im Repo-Root, `frontend/e2e/docker-compose.e2e.yml`, `.github/workflows/ci.yml`
-- nginx-Konfiguration - `frontend/nginx.conf`, `frontend/nginx-security-headers.conf`, `frontend/nginx-traefik-realip.conf`
+- Bash - Install/operate scripts `setup.sh`, `upgrade.sh`, `restore.sh`, `.github/release-package.sh`
+- nginx config - `frontend/nginx.conf`, `frontend/nginx-security-headers.conf`
+- CSS (Tailwind 4) - `frontend/src/index.css`, generated `frontend/src/design-tokens.css`
+- YAML front matter design tokens - `DESIGN.md` (google-labs design.md format, `version: alpha`)
 
 ## Runtime
 
 **Environment:**
-- .NET 10 (ASP.NET Core); Container-Image `mcr.microsoft.com/dotnet/aspnet:10.0-alpine`, Build mit `mcr.microsoft.com/dotnet/sdk:10.0-alpine` (`backend/Dockerfile`), läuft als Nutzer `wordquest` auf Port 8080
-- Node 22 für Build und Tooling (`node:22-alpine` in `frontend/Dockerfile`, `NODE_VERSION: "22"` in `.github/workflows/ci.yml`)
-- Auslieferung des Frontends über `nginxinc/nginx-unprivileged:alpine` (Port 8080)
-- `InvariantGlobalization=false` absichtlich (deutsche Texte, IANA-Zeitzonen) in `backend/Directory.Build.props`
+- .NET 10 (`net10.0`), ASP.NET Core runtime image `mcr.microsoft.com/dotnet/aspnet:10.0-alpine` (`backend/Dockerfile`), plus `tzdata`, `wget`, `icu-libs`
+- `InvariantGlobalization=false` deliberately (German texts, IANA time zones)
+- Node 22 for build/dev (`node:22-alpine` in `frontend/Dockerfile`, `NODE_VERSION: "22"` in `.github/workflows/ci.yml`)
+- Frontend served as static files by `nginxinc/nginx-unprivileged:alpine` (ports 8080 HTTP redirect, 8443 HTTPS)
+- Target hardware: ARM64 home servers (Raspberry Pi 5, NAS); images built for `linux/amd64,linux/arm64`
 
 **Package Manager:**
-- NuGet; Versionen stehen in der jeweiligen `.csproj`, Central Package Management ist aus (`backend/Directory.Packages.props`)
-- npm; Lockfile `frontend/package-lock.json` vorhanden (CI nutzt `npm ci`)
-- Solution-Datei: `backend/WordQuest.slnx`
+- NuGet - versions inline in each `.csproj`; Central Package Management disabled (`backend/Directory.Packages.props`, `ManagePackageVersionsCentrally=false`) - do not put versions there
+- npm - lockfile `frontend/package-lock.json` present; `npm ci` in CI and Dockerfile
 
 ## Frameworks
 
 **Core:**
-- ASP.NET Core Minimal APIs (`Microsoft.NET.Sdk.Web`) - `backend/src/WordQuest.Api/`
-- EF Core 10.0.12 + Npgsql 10.0.3 - Persistenz in `backend/src/WordQuest.Infrastructure/`
-- React `^19.3.0` + React Router `^7.18.4` - SPA in `frontend/src/`
-- TanStack Query `^5.102.8` - Server-State im Frontend
-- Tailwind CSS `^4.3.3` (via `@tailwindcss/vite`), Tokens aus `DESIGN.md` exportiert nach `frontend/src/design-tokens.css`
+- ASP.NET Core Minimal APIs (net10.0) - `backend/src/WordQuest.Api/Program.cs`, endpoints in `backend/src/WordQuest.Api/Endpoints/`
+- EF Core 10.0.12 + Npgsql provider 10.0.3 - `backend/src/WordQuest.Infrastructure/WordQuestDbContext.cs`
+- React ^19.3.0 + react-dom - `frontend/src/main.tsx`, `frontend/src/App.tsx`
+- React Router DOM ^7.18.4 - routing
+- TanStack Query ^5.102.8 - server state
+- Tailwind CSS ^4.3.3 via `@tailwindcss/vite`
+- Radix UI primitives (`@radix-ui/react-dialog`, `react-label`, `react-slot`) - wrapped in `frontend/src/components/ui/`
 
 **Testing:**
 - xUnit 2.9.3, `xunit.runner.visualstudio` 4.0.0, `Microsoft.NET.Test.Sdk` 18.10.1, `coverlet.collector` 10.0.1 - `backend/tests/WordQuest.Learning.Tests/`, `backend/tests/WordQuest.Api.Tests/`
-- `Microsoft.AspNetCore.Mvc.Testing` 10.0.12 - Integrationstests mit `WebApplicationFactory` gegen echtes PostgreSQL
-- Vitest 5.0.3 + jsdom 30.1.2 + Testing Library (`@testing-library/react` 16.3.3, `user-event` 14.6.7) - Konfiguration in `frontend/vite.config.ts` (`test`-Block, Setup `src/test/setup.ts`)
-- Playwright 1.64.0 + `@axe-core/playwright` 4.13.0 - E2E und WCAG-Check, `frontend/playwright.config.ts`, Stack `frontend/e2e/docker-compose.e2e.yml`
+- `Microsoft.AspNetCore.Mvc.Testing` 10.0.12 - `WebApplicationFactory` integration tests against real PostgreSQL
+- Vitest 5.0.3 + jsdom 30.1.2 + Testing Library (`@testing-library/react` 16.3.3, `dom` 10.4.2, `user-event` 14.6.7) - frontend unit tests (`*.test.ts(x)` co-located, e.g. `frontend/src/lib/api.test.ts`)
+- Playwright 1.64.0 (`playwright-core` pinned via `overrides`) + `@axe-core/playwright` 4.13.0 - E2E/a11y in `frontend/e2e/`, config `frontend/playwright.config.ts`, stack `frontend/e2e/docker-compose.e2e.yml`
 
 **Build/Dev:**
-- Vite `^8.3.0` mit `@vitejs/plugin-react` `^6.1.1` - `frontend/vite.config.ts` (Alias `@` → `./src`)
-- `vite-plugin-pwa` `^1.3.0` - Manifest + Workbox (NetworkFirst-Cache `wq-api` für GET `/api/`)
-- ESLint `^10.10.0` + `typescript-eslint` `^8.70.0` + `eslint-plugin-react-hooks` - `frontend/eslint.config.js`
-- `@google/design.md@0.4.0` (per `npx`) - `npm run design:lint|design:export|design:check`
+- Vite ^8.3.0 + `@vitejs/plugin-react` ^6.1.1 - `frontend/vite.config.ts` (dev proxy `/api` -> `http://localhost:5080`)
+- `vite-plugin-pwa` ^1.3.0 - `registerType: 'autoUpdate'`, Workbox; Service Worker only under trusted HTTPS
+- ESLint ^10.10.0 + `typescript-eslint` ^8.70.0 + `eslint-plugin-react-hooks` ^7.1.1 - `frontend/eslint.config.js`
+- `@google/design.md@0.4.0` (via `npx -y`) - `npm run design:lint|design:export|design:check`
 - `frontend/scripts/design-classes.mjs` - `npm run design:classes`
-- `Microsoft.EntityFrameworkCore.Design` 10.0.12 - Migrationen (`dotnet ef`)
+- `Microsoft.EntityFrameworkCore.Design` 10.0.12 - migrations (`dotnet ef`), `DesignTimeDbContextFactory.cs`
+- `.editorconfig` + `EnforceCodeStyleInBuild=true`; CI builds with `/warnaserror`
 
 ## Key Dependencies
 
 **Critical:**
-- `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.12 + `System.IdentityModel.Tokens.Jwt` 8.22.0 - JWT-Auth (`backend/src/WordQuest.Api/WordQuest.Api.csproj`)
-- `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 - DB-Provider (`backend/src/WordQuest.Infrastructure/`)
-- Radix-Primitives `@radix-ui/react-dialog`, `react-label`, `react-slot` - Basis von `frontend/src/components/ui/`
-- `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react` - UI-Hilfen und Icons
+- `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 - only DB provider (`backend/src/WordQuest.Infrastructure/WordQuest.Infrastructure.csproj`)
+- `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.12 + `System.IdentityModel.Tokens.Jwt` 8.22.0 - API auth (`backend/src/WordQuest.Api/WordQuest.Api.csproj`)
+- `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` 10.0.12 - `/health/live`, `/health/ready`
+- `Microsoft.AspNetCore.OpenApi` 10.0.12
+- BCL crypto only: PBKDF2-HMAC-SHA256 (`PasswordHasher.cs`), SHA256 tokens (`TokenHasher.cs`), X.509 CA/server certs (`backend/src/WordQuest.Api/TlsCertificates.cs`)
 
 **Infrastructure:**
-- `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` 10.0.12 - `/health/live`, `/health/ready`
-- `Microsoft.AspNetCore.OpenApi` 10.0.12 - `MapOpenApi()` nur in Development (`backend/src/WordQuest.Api/Program.cs`)
-- Krypto nur BCL: PBKDF2-HMAC-SHA256 (`PasswordHasher.cs`), SHA256 für Token (`TokenHasher.cs`)
-- Domänenmodule `WordQuest.Modules.{Identity,Content,Learning,Gamification}` und `WordQuest.Shared.Kernel` ohne NuGet-Abhängigkeiten
+- `class-variance-authority`, `clsx`, `tailwind-merge` - component variants (`frontend/src/lib/utils.ts`)
+- `lucide-react` ^1.46.0 - icons
+- Domain modules (`WordQuest.Modules.Identity|Content|Learning|Gamification`, `WordQuest.Shared.Kernel`) have no NuGet dependencies
 
 ## Configuration
 
 **Environment:**
-- Vorlage `.env.example` (Variablen: `COMPOSE_FILE`, `WQ_IMAGE_PREFIX`, `WQ_VERSION`, `WQ_HOST`, `WQ_TIMEZONE`, `WQ_SEED_DEMO_DATA`, `WQ_ACME_EMAIL`, `WQ_ACME_DNS_PROVIDER`, `CF_DNS_API_TOKEN`); `.env` wird von `setup.sh` angelegt
-- `ReadSecret()` in `backend/src/WordQuest.Api/Program.cs` liest zuerst `<NAME>_FILE`, dann die Umgebungsvariable (`WQ_JWT_SIGNING_KEY`, `WQ_DB_PASSWORD`)
-- DB-Verbindung aus `WQ_DB_HOST`, `WQ_DB_PORT`, `WQ_DB_NAME`, `WQ_DB_USER`, `WQ_DB_PASSWORD` (Defaults `localhost`/`5432`/`wordquest`/`wordquest`)
-- Weitere Schlüssel: `WQ_TIMEZONE` (Default `Europe/Berlin`), `WQ_SEED_DEMO_DATA` (Default `false`), `Auth:RequestsPerMinute` (Default 10), `Auth:SigningKey` (Dev-Fallback), `WQ_PORT` (Host-Port in `docker-compose.quick.yml`, Default 8080)
-- App-Settings: `backend/src/WordQuest.Api/appsettings.json`, `appsettings.Development.json`; Dev-Signing-Key in `Properties/launchSettings.json`
+- API reads env vars `WQ_DB_HOST`, `WQ_DB_PORT`, `WQ_DB_NAME`, `WQ_DB_USER`, `WQ_DB_PASSWORD`, `WQ_JWT_SIGNING_KEY`, `WQ_TIMEZONE`, `WQ_SEED_DEMO_DATA`, `WQ_TLS_NAMES`, `WQ_DESIGN_CONNECTION` (design-time)
+- Secrets via `ReadSecret()` in `backend/src/WordQuest.Api/Program.cs`: `<NAME>_FILE` first, then env var (`WQ_DB_PASSWORD_FILE`, `WQ_JWT_SIGNING_KEY_FILE`)
+- Compose-level vars in `.env` (template `.env.example`, contents not read): `COMPOSE_FILE`, `WQ_IMAGE_PREFIX`, `WQ_VERSION`, `WQ_TIMEZONE`, `WQ_SEED_DEMO_DATA`; set by `setup.sh` also `WQ_TLS_NAMES`, `WQ_HTTP_PORT`, `WQ_HTTPS_PORT`, optional `WQ_RELEASE_URL`
+- `WQ_AI_PROVIDER: none` is set in `docker-compose.quick.yml` but not read anywhere in `backend/src` or `frontend/src`
+- Dev signing key in `backend/src/WordQuest.Api/Properties/launchSettings.json`; `appsettings.json`, `appsettings.Development.json`
 
 **Build:**
-- `backend/Directory.Build.props` (lokal `TreatWarningsAsErrors=false`, CI baut mit `/warnaserror`)
-- `.editorconfig` (Codestil, `EnforceCodeStyleInBuild`)
-- `frontend/tsconfig.json`, `frontend/vite.config.ts`, `frontend/eslint.config.js`, `frontend/playwright.config.ts`
-- `backend/Dockerfile`, `frontend/Dockerfile` (Multi-Stage, `--platform=$BUILDPLATFORM`)
+- `backend/WordQuest.slnx`, `backend/Directory.Build.props`, `backend/Directory.Packages.props`
+- `backend/Dockerfile` (build on `$BUILDPLATFORM` with `sdk:10.0-alpine`, framework-dependent `/p:UseAppHost=false`)
+- `frontend/Dockerfile` (node build -> nginx-unprivileged; `nginx.conf` used as envsubst template, `NGINX_ENVSUBST_FILTER=WQ_`)
+- Compose: `docker-compose.quick.yml` (production: db, api, certs, web, backup), `docker-compose.build.yml` (build overlay), `docker-compose.dev.yml` (Postgres only)
 
 ## Platform Requirements
 
 **Development:**
-- .NET 10 SDK, Node 22, Docker; PostgreSQL per `docker-compose.dev.yml`
-- Backend-Tests brauchen `WQ_TEST_DB` (Standard `Host=localhost;Port=5432;Username=wordquest;Password=devpassword`)
+- .NET 10 SDK, Node 22, Docker
+- `docker compose -f docker-compose.dev.yml up -d` (PostgreSQL 17 on 5432), API `dotnet run` on `http://localhost:5080`, frontend `npm run dev` on `http://localhost:5173`
+- Tests need PostgreSQL via `WQ_TEST_DB`
 
 **Production:**
-- Docker Compose auf ARM64-Heimhardware (Raspberry Pi 5, NAS); Images für `linux/amd64,linux/arm64`
-- Standardweg `docker-compose.quick.yml` (HTTP im Heimnetz), Fortgeschrittene `docker-compose.yml` (Traefik + Let's Encrypt)
-- Genau eine API-Instanz (Migration beim Start, In-Memory-Rate-Limiter)
+- Docker Compose on a home server (single API instance required: migrations at startup, in-memory rate limiter)
+- HTTPS with a per-install own CA generated by the `certs` service (`tls watch` command of the API image); CA downloadable at `http://<host>/wordquest-ca.crt`
+- Images from `ghcr.io/mrhdready/wordquest-api|web` (default tag `1.1.0`), release tarball from GitHub Releases
 
 ---
 
-*Stack analysis: 2026-10-24*
+*Stack analysis: 2026-10-26*

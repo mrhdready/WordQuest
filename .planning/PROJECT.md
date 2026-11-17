@@ -21,13 +21,13 @@ Parents without special know-how can set up WordQuest in their home network and 
 - ✓ Learning sessions: composition of relearning/due/new cards, server-side grading (normalization + Damerau-Levenshtein), SM-2 scheduling — existing
 - ✓ Gamification: XP per answer, completion bonus, streaks, level curve — existing
 - ✓ Parent views: learner overview and traffic-light mastery per set — existing
-- ✓ Docker Compose variants: `docker-compose.quick.yml` (HTTP :8080, trial only today) and `docker-compose.yml` (Traefik + Let's Encrypt DNS-01, daily backups, `setup.sh` for secrets) — existing
+- ✓ Docker Compose variants: `docker-compose.quick.yml` (HTTP :8080, trial only today) and `docker-compose.yml` (Traefik + Let's Encrypt DNS-01, daily backups, `setup.sh` for secrets) — existing; `docker-compose.yml` removed 2026-10-25 (owner)
 - ✓ CI: build with `/warnaserror`, backend unit tests, frontend lint/typecheck/build, migration presence check — existing
 
 ### Active
 
 See `.planning/REQUIREMENTS.md` (21 v1 requirements):
-- [ ] Setup & accounts: HTTP home-network mode as full operating mode, no demo credentials, parent account created by `setup.sh`, password change, CLI reset, fail-fast secrets
+- [ ] Setup & accounts: HTTP home-network mode as full operating mode (superseded 2026-10-25 by HTTPS with an own CA per install (1.1.0)), no demo credentials, parent account created by `setup.sh`, password change, CLI reset, fail-fast secrets
 - [ ] Parent basics: edit child (PIN reset), PIN validation, delete child, edit set/entry
 - [ ] Bug fixes: rate-limit lockout, orphaned learning data, stuck `New` cards, 500s on bad IDs/double taps, stale streak, single mastery rule
 - [ ] Quality: API integration tests on real Postgres; form tests + axe for new forms
@@ -40,7 +40,7 @@ See `.planning/REQUIREMENTS.md` (21 v1 requirements):
 - Email / push notifications — no mail infrastructure for non-expert hosters
 - Passkeys / OIDC — not needed for a home-network family app
 - Tracking, leaderboards, streak penalties — pressure on children
-- Deferred to v2 (see REQUIREMENTS.md): set assignment per child, export / delete family, parent reporting, second parent, browser setup wizard, new game modes, offline outbox, domain/PWA path, off-host backups and deeper hardening
+- Deferred to v2 (see REQUIREMENTS.md): set assignment per child, export / delete family, parent reporting, second parent, browser setup wizard, new game modes, offline outbox, PWA path, off-host backups and deeper hardening
 
 ## Context
 
@@ -64,8 +64,9 @@ See `.planning/REQUIREMENTS.md` (21 v1 requirements):
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Scope cut to a working base (21 requirements, from 53) | The larger scope contradicted the goal of a simple app for non-expert parents | — Pending |
-| Primary operating mode: home network over plain HTTP, no domain | Simplest for non-experts, no certificate warnings; no PWA install (service worker needs HTTPS) | — Pending |
-| Domain + Let's Encrypt compose stays as-is for advanced users | Already exists, not extended in v1.0 | — Pending |
+| Primary operating mode: home network over plain HTTP, no domain | Simplest for non-experts, no certificate warnings; no PWA install (service worker needs HTTPS) | Superseded 2026-10-25 by HTTPS with an own CA per install (1.1.0) |
+| Domain + Let's Encrypt compose stays as-is for advanced users | Already exists, not extended in v1.0 | Removed 2026-10-25 (owner): not doable for non-expert parents; HTTPS via an own CA instead (quick 261025-fpi) |
+| HTTPS with an own CA per install (certs service, RSA, no HSTS, CA not in backups, no name constraints) | PWA install and service worker need a trusted certificate; works without a domain or internet access for certificates (owner 2026-10-25, quick 261025-fpi, ADR-008) | Pending owner device acceptance |
 | Parent account created by `setup.sh` instead of a browser wizard | Home network only; no setup takeover window, same mechanism as CLI reset | — Pending |
 | Mastery threshold ease ≥ 2.1, one constant | Concept doc contradicts itself (2.0 vs 2.1); 2.1 matches current code | — Pending |
 | Offline learning, new game modes, reporting deferred to v2 | Not needed for a working base | — Pending |
@@ -90,4 +91,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-24 after scope reduction to a working base*
+*Last updated: 2026-10-25 — HTTPS with an own CA per install (quick 261025-fpi); before: 2026-09-24 after scope reduction to a working base*

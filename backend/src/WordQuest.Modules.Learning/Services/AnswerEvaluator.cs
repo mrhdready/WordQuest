@@ -68,12 +68,14 @@ public sealed class AnswerEvaluator(SchedulerOptions? options = null)
         //    die Terminierung.
         foreach (string candidate in candidates)
         {
-            if (candidate.Length < MinLengthForTypoTolerance)
+            // Laenge ohne Artikel: "the dog" ist so kurz wie "dog".
+            string stripped = TextNormalizer.StripOptionalLeadingWord(candidate);
+            if (stripped.Length < MinLengthForTypoTolerance)
             {
                 continue;
             }
 
-            if (Levenshtein.IsWithin(givenStripped, TextNormalizer.StripOptionalLeadingWord(candidate), 1))
+            if (Levenshtein.IsWithin(givenStripped, stripped, 1))
             {
                 return new AnswerEvaluation(
                     IsCorrect: true,

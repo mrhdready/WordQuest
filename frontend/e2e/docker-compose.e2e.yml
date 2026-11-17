@@ -4,6 +4,10 @@
 # werden in keiner Betriebsdatei verwendet. Port nur an 127.0.0.1 gebunden.
 # Baut die Images aus dem Arbeitsbaum:
 #   npm --prefix frontend run e2e:stack
+#
+# Der Dienst certs (API-Image, `tls watch`) legt die Test-CA und das
+# Server-Zertifikat an; nginx liefert es auf 8443 aus (Host 127.0.0.1:18443).
+# Nur certs bindet das CA-Volume ein (Proxy-Gate).
 
 name: wordquest-e2e
 
@@ -40,8 +44,8 @@ services:
       WQ_SEED_DEMO_DATA: "true"
       # NUR FUER DEN TESTSTACK: Playwright schickt alle Anfragen von einer IP, ein
       # Gesamtlauf aller Specs braucht mehr als 10 Auth-Aufrufe pro Minute. Im Betrieb
-      # hat seit FIX-01 jedes Geraet einen eigenen Topf; docker-compose.quick.yml und
-      # docker-compose.yml bleiben beim Standard 10.
+      # hat seit FIX-01 jedes Geraet einen eigenen Topf; docker-compose.quick.yml
+      # bleibt beim Standard 10.
       Auth__RequestsPerMinute: "1000"
     depends_on:
       db:
@@ -53,12 +57,42 @@ services:
       retries: 20
       start_period: 30s
 
+  certs:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    command: ["tls", "watch"]
+    # root fuer die frisch angelegten, root-eigenen Volumes; Gruppe 101 ist nginx
+    # im Web-Image und liest server.pem (0640) ueber die Gruppe.
+    user: "0:101"
+    network_mode: none
+    # Sonst erbte certs den HTTP-Healthcheck der API und gaelte nie als gesund.
+    healthcheck:
+      disable: true
+    environment:
+      WQ_TLS_NAMES: "localhost,wordquest.test,127.0.0.1"
+    volumes:
+      - e2e-ca:/certs/ca
+      - e2e-tls:/certs/tls
+
   web:
     build:
       context: ../..
       dockerfile: frontend/Dockerfile
     ports:
       - "127.0.0.1:18080:8080"
+      - "127.0.0.1:18443:8443"
+    environment:
+      # Ziel der Umleitung von HTTP: der Host-Port fuer HTTPS.
+      WQ_HTTPS_PORT: "18443"
+    volumes:
+      - e2e-tls:/etc/nginx/tls:ro
     depends_on:
       api:
         condition: service_healthy
+      certs:
+        condition: service_started
+
+volumes:
+  e2e-ca:
+  e2e-tls:

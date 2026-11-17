@@ -30,7 +30,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallbackDenylist: [/^\/api/],
+        // Der CA-Download ist eine Navigation; ohne Eintrag lieferte der Worker die
+        // App-Seite statt der Datei (TLS-04). Workbox prueft Pfad plus Query.
+        navigateFallbackDenylist: [/^\/api/, /^\/wordquest-ca\.crt(\?|$)/],
         runtimeCaching: [
           {
             // Lesende API-Zugriffe: erst Netz, nach 5 Sekunden der Cache.

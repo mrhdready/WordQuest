@@ -352,7 +352,10 @@ public sealed class LearningService(
         }
 
         GamificationProfile profile = await GetOrCreateProfileAsync(learnerId, ct);
-        int levelBefore = LevelCurve.LevelFor(profile.Xp);
+        // Stand vor der Runde: Die Antwort-XP sind schon gebucht, ein Aufstieg durch
+        // eine Antwort zaehlt aber zu dieser Runde.
+        int levelBefore = LevelCurve.LevelFor(profile.Xp - session.XpAwarded);
+        bool firstCompletion = false;
 
         int answered = session.Items.Count(i => i.AnsweredAt is not null);
         int correct = session.Items.Count(i => i.Grade is not null and not Grade.Again);
@@ -369,6 +372,7 @@ public sealed class LearningService(
                 .Where(s => s.Id == sessionId && s.CompletedAt == null)
                 .ExecuteUpdateAsync(u => u.SetProperty(s => s.CompletedAt, now), ct);
 
+            firstCompletion = claimed == 1;
             if (claimed == 1)
             {
                 if (answered > 0)
@@ -402,7 +406,9 @@ public sealed class LearningService(
             Coins: profile.Coins,
             Streak: profile.CurrentStreak,
             StreakSaverUsed: streak.SaverUsed,
-            LeveledUp: level > levelBefore);
+            // Nur der erste Abschluss feiert: Beim wiederholten koennen andere Runden
+            // den Profilstand seitdem veraendert haben (Review 261026-j98).
+            LeveledUp: firstCompletion && level > levelBefore);
     }
 
     /// <summary>Heute faellige Karten: dieselbe Menge, aus der der Rundenstart waehlt.</summary>

@@ -8,9 +8,15 @@ import { accessToken, canvasPicture, putPicture } from './pictures'
 const childName = 'Max'
 const demoPin = '1234'
 
-// Fuer den Block "ohne Secure Context" unten: Browser-Optionen gehen nur auf
-// Dateiebene (eigener Worker), localhost bleibt davon unberuehrt.
-test.use({ launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] } })
+// Warnpfad fuer die ganze Datei: Der Browser vertraut der CA nicht (keine
+// SPKI-Liste aus global-setup, launchOptions ersetzt die der Konfiguration), die
+// Warnung ist weggeklickt (ignoreHTTPSErrors). So sieht ein Geraet aus, auf dem die
+// Eltern die CA nicht installiert haben: kein Service Worker, Lernen muss trotzdem
+// gehen. Browser-Optionen gehen nur auf Dateiebene (eigener Worker).
+test.use({
+  ignoreHTTPSErrors: true,
+  launchOptions: { args: ['--host-resolver-rules=MAP wordquest.test 127.0.0.1'] },
+})
 
 // Rate-Limit "auth": GET /auth/profiles zaehlt mit, je Test ein Laden von / und eine
 // Anmeldung. Der Teststack hebt das Limit an (Auth__RequestsPerMinute in
@@ -179,7 +185,7 @@ test.describe(() => {
   })
 })
 
-// Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen über HTTP"
+// Sitzungs-Endpunkte gemockt: Max' echter Lernstand bleibt fuer "Lernen ohne vertrautes Zertifikat"
 // unberuehrt (das Tagesbudget neuer Karten reicht fuer genau eine Runde).
 test('Schließen in einer angefangenen Runde und Fehlerzustand', async ({ page }) => {
   const item = {
@@ -299,12 +305,12 @@ test('Fehleransicht bei gleichzeitiger Doppel-Antwort', async ({ page }) => {
 })
 
 // FIX-03/FIX-09 im gebauten Stack: eigenes Kind, damit das Tagesbudget des
-// Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt.
+// Demo-Kinds fuer "Lernen ohne vertrautes Zertifikat" unberuehrt bleibt.
 test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, browser, baseURL }) => {
   const name = `Abbruchkind ${Date.now()}`
   const pin = '4711'
 
-  const guardian = await browser.newContext({ baseURL, storageState: guardianStorageState })
+  const guardian = await browser.newContext({ baseURL, storageState: guardianStorageState, ignoreHTTPSErrors: true })
   const manage = await guardian.newPage()
   await manage.goto('/verwalten/kinder/neu')
   await manage.getByLabel('Name', { exact: true }).fill(name)
@@ -342,16 +348,46 @@ test('Abgebrochene Runde: dieselbe neue Karte kommt wieder', async ({ page, brow
   expect(((await second.json()) as SessionView).items[0]?.cardId).toBe(firstCard)
 })
 
-// FIX-07: Heimnetz-HTTP mit nicht-lokalem Hostnamen, also ohne Secure Context
-// (kein crypto.randomUUID, kein Service Worker). Der Hostname zeigt auf den Teststack.
-test.describe('ohne Secure Context', () => {
-  test.use({ baseURL: 'http://wordquest.test:18080' })
+// Heimnetz-Adresse mit nicht-lokalem Hostnamen ueber HTTPS, Zertifikatswarnung
+// weggeklickt: Chromium registriert dann keinen Service Worker, die App laeuft als
+// reine Browser-App. Der Hostname zeigt auf den Teststack. Den Ersatz fuer
+// crypto.randomUUID (FIX-07) behaelt der Code fuer Seiten ohne Secure Context; hier
+// ist der Kontext sicher, den Ersatz prueft QA2-06.
+test.describe('Zertifikat nicht vertraut', () => {
+  test.use({ baseURL: 'https://wordquest.test:18443' })
+
+  // Kein Service Worker: Chromium lehnt das Skript des Workers wegen des Zertifikats
+  // ab, und keine Registrierung bleibt, auch nach erneutem Laden der Profilwahl (eine
+  // erfolgreiche Registrierung aus dem ersten Laden waere dann sichtbar). Gepollt,
+  // weil die Registrierung der App beim Laden noch laufen kann und so lange
+  // mitgezaehlt wird. openPicker wartet auf die Profile, bevor der Test weitertippt.
+  async function expectNoServiceWorker(page: Page) {
+    const rejected = await page.evaluate(() =>
+      navigator.serviceWorker.register('/sw.js').then(
+        () => '',
+        (error: Error) => error.message,
+      ),
+    )
+    expect(rejected).toContain('SSL certificate error')
+    const workers = () =>
+      page.evaluate(async () => ({
+        controller: navigator.serviceWorker.controller !== null,
+        registrations: (await navigator.serviceWorker.getRegistrations()).length,
+      }))
+    await expect.poll(workers).toEqual({ controller: false, registrations: 0 })
+    await openPicker(page)
+    await expect.poll(workers).toEqual({ controller: false, registrations: 0 })
+  }
 
   const isAnswer = (url: string) => /\/api\/v1\/sessions\/[^/]+\/answers$/.test(url)
   const sendButton = (page: Page) => page.getByRole('button', { name: /^Antwort(en| senden)$/ })
 
+  // "Weiter" gibt es nur, wenn das Kind etwas korrigiert sehen muss.
+  const needsWeiter = (result: AnswerResult) => !result.correct || result.hadTypo
+
   // Prueft die angezeigte Rueckmeldung gegen die Serverantwort; "Weiter" (hat
   // nach der Antwort den Fokus) beschreibt sie per aria-describedby (WCAG 4.1.3).
+  // Richtig ohne Tippfehler prueft expectAdvanced.
   async function answer(page: Page, action: () => Promise<void>) {
     const [response] = await Promise.all([
       page.waitForResponse((candidate) => isAnswer(candidate.url())),
@@ -359,6 +395,7 @@ test.describe('ohne Secure Context', () => {
     ])
     expect(response.status()).toBe(200)
     const result = (await response.json()) as AnswerResult
+    if (!needsWeiter(result)) return result
     const headline = result.correct ? 'Richtig!' : 'Fast!'
     const weiter = page.getByRole('button', { name: 'Weiter' })
     await expect(weiter).toBeFocused()
@@ -371,9 +408,26 @@ test.describe('ohne Secure Context', () => {
     return result
   }
 
-  test('Lernen über HTTP', async ({ page }) => {
+  // Richtig ohne Tippfehler: ohne Tipp die naechste Aufgabe, die Bestaetigung mit den XP
+  // steht im Statusbereich ueber dem leeren, fokussierten Antwortfeld; nach der letzten
+  // Aufgabe kommt direkt die Zusammenfassung.
+  async function expectAdvanced(page: Page, result: AnswerResult, last: boolean) {
+    if (last) {
+      await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    } else {
+      await expect(page.getByRole('status')).toHaveText(
+        result.xpAwarded > 0 ? `Richtig! +${result.xpAwarded} XP` : 'Richtig!',
+      )
+      const field = page.getByRole('textbox', { name: 'Deine Antwort' })
+      await expect(field).toBeFocused()
+      await expect(field).toHaveValue('')
+    }
+    await expect(page.getByRole('button', { name: 'Weiter' })).toHaveCount(0)
+  }
+
+  test('Lernen ohne vertrautes Zertifikat', async ({ page }) => {
     await openPicker(page)
-    expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
+    await expectNoServiceWorker(page)
     await loginByKeyboard(page)
 
     // Reihenfolge der Karten wie im Client: Startliste plus nachgereichte Wiederholungen.
@@ -401,19 +455,29 @@ test.describe('ohne Secure Context', () => {
     await page.getByRole('button', { name: 'Weiter' }).click()
     await expect(page.getByRole('textbox')).toHaveValue('')
     await page.getByRole('textbox').fill('falsch')
-    record(queue[1]!, await answer(page, () => sendButton(page).click()))
+    let result = await answer(page, () => sendButton(page).click())
+    record(queue[1]!, result)
 
     // Rest der Runde: unbekannte Karten falsch, Wiederholungen richtig.
     // Danach steht jede Karte in "Review", fuer heute ist nichts mehr faellig.
+    let advanced = false
     for (let index = 2; index < queue.length; index += 1) {
-      await page.getByRole('button', { name: 'Weiter' }).click()
+      if (needsWeiter(result)) {
+        await page.getByRole('button', { name: 'Weiter' }).click()
+      } else {
+        await expectAdvanced(page, result, false)
+        advanced = true
+      }
       const item = queue[index]!
       await page.getByRole('textbox').fill(solutions.get(item.cardId) ?? 'falsch')
-      record(item, await answer(page, () => page.getByRole('textbox').press('Enter')))
+      result = await answer(page, () => page.getByRole('textbox').press('Enter'))
+      record(item, result)
     }
+    expect(advanced, 'keine automatische Weiterschaltung').toBe(true)
 
-    await page.getByRole('button', { name: 'Weiter' }).click()
-    await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    // Die letzte Aufgabe ist eine richtig beantwortete Wiederholung: ohne "Weiter" zur Zusammenfassung.
+    expect(needsWeiter(result)).toBe(false)
+    await expectAdvanced(page, result, true)
     await checkPage(page)
 
     await page.getByRole('button', { name: 'Fertig' }).click()
@@ -427,7 +491,7 @@ test.describe('ohne Secure Context', () => {
 
   /*
     IMG-01 (D-11, D-12): eigenes Kind wie in "Abgebrochene Runde", damit das Tagesbudget
-    des Demo-Kinds fuer "Lernen über HTTP" unberuehrt bleibt, und ein Set mit genau einer
+    des Demo-Kinds fuer "Lernen ohne vertrautes Zertifikat" unberuehrt bleibt, und ein Set mit genau einer
     Vokabel, damit jede Karte der Runde ein Bild traegt. Der Eltern-Kontext laeuft auf der
     baseURL des Projekts (dort gilt guardianStorageState) und meldet sich nicht neu an.
     Anmelde-Budget: je Test zwei Anfragen der Policy "auth" (/ mit GET /auth/profiles,
@@ -447,6 +511,7 @@ test.describe('ohne Secure Context', () => {
     const guardian = await browser.newContext({
       baseURL: test.info().project.use.baseURL,
       storageState: guardianStorageState,
+      ignoreHTTPSErrors: true,
     })
     const manage = await guardian.newPage()
     await manage.goto('/verwalten/kinder/neu')
@@ -471,7 +536,7 @@ test.describe('ohne Secure Context', () => {
     await guardian.close()
 
     await openPicker(page)
-    expect(await page.evaluate(() => window.isSecureContext)).toBe(false)
+    await expectNoServiceWorker(page)
     await page.getByRole('button', { name }).click()
     await expect(page.getByRole('heading', { name: `Hallo, ${name}!` })).toBeVisible()
     for (const digit of pin.slice(0, -1)) await page.keyboard.press(digit)
@@ -500,7 +565,7 @@ test.describe('ohne Secure Context', () => {
     await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeFocused()
   }
 
-  test('Lernen mit Bild über HTTP', async ({ page, browser }) => {
+  test('Lernen mit Bild ohne vertrautes Zertifikat', async ({ page, browser }) => {
     // Die erste Karte erscheint bei 200 % (640 x 400 CSS-px), wie bei einem Kind mit
     // Zoom: kein waagerechter Scrollbalken, das Antwortfeld hat den Fokus und ist im
     // Bild. Der Rahmen steht schon vor dem Bild, der Fokus scrollt also nicht ins Leere.
@@ -526,25 +591,47 @@ test.describe('ohne Secure Context', () => {
     }
 
     // Ganze Runde per Tastatur: neue Karten falsch, Wiederholungen richtig, jeweils
-    // Enter im Antwortfeld; Enter auf "Weiter" (hat den Fokus) holt die naechste Karte.
+    // Enter im Antwortfeld; Enter auf "Weiter" (hat den Fokus) holt nach einer falschen
+    // Antwort die naechste Karte, nach einer richtigen kommt sie von selbst.
     let retryChecked = false
+    let zoomChecked = false
+    let result: AnswerResult | null = null
     for (let index = 0; index < queue.length; index += 1) {
       const item = queue[index]!
-      if (index > 0) {
+      if (result && needsWeiter(result)) {
         await page.keyboard.press('Enter')
         await expectPictureCard(page)
         if (item.isRetry && !retryChecked) {
           await checkPage(page)
           retryChecked = true
         }
+      } else if (result) {
+        await expectAdvanced(page, result, false)
+        await expectPictureCard(page)
+        if (!zoomChecked) {
+          // 200 %: Bestaetigung und fokussiertes Antwortfeld im Bild, kein waagerechtes
+          // Scrollen; danach axe, Kontrast und Reflow auf genau diesem Zustand.
+          await expect(page.getByRole('textbox', { name: 'Deine Antwort' })).toBeInViewport({ ratio: 1 })
+          await expect(page.getByRole('status')).toBeInViewport({ ratio: 1 })
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640)
+          if (original) await page.setViewportSize(original)
+          await checkPage(page)
+          zoomChecked = true
+        }
       }
-      await page.keyboard.type(solutions.get(item.cardId) ?? 'falsch')
-      record(item, await answer(page, () => page.keyboard.press('Enter')))
+      const solution = solutions.get(item.cardId)
+      // Das Kind mit Zoom tippt die Antwort, die gleich automatisch weiterschaltet, bei 200 %.
+      if (solution && !zoomChecked && index < queue.length - 1) await page.setViewportSize({ width: 640, height: 400 })
+      await page.keyboard.type(solution ?? 'falsch')
+      result = await answer(page, () => page.keyboard.press('Enter'))
+      record(item, result)
     }
     expect(retryChecked).toBe(true)
+    expect(zoomChecked, '200 % nach automatischer Weiterschaltung nicht geprueft').toBe(true)
 
-    await page.keyboard.press('Enter')
-    await expect(page.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
+    // Letzte Aufgabe richtig: die Zusammenfassung kommt ohne Enter auf "Weiter".
+    expect(needsWeiter(result!)).toBe(false)
+    await expectAdvanced(page, result!, true)
     await checkPage(page)
   })
 

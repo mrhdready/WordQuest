@@ -187,6 +187,25 @@ test('Erfassung: „Hinzufügen“ unten bündig mit den Feldern', async ({ page
   expect(Math.abs(field.y + field.height - (button.y + button.height))).toBeLessThanOrEqual(1)
 })
 
+// Codex-Befund 261026: Ladefehler der Vokabelliste blieb ohne Meldung. page.route sieht
+// GET-Antworten ueber den Service Worker nicht, deshalb ohne Worker (Muster "Reflow").
+test.describe(() => {
+  test.use({ serviceWorkers: 'block' })
+
+  test('Set-Detail: Ladefehler der Vokabeln mit Text, axe 0', async ({ page }) => {
+    const entriesUrl = /\/api\/v1\/sets\/[^/]+\/entries$/
+    await page.route(entriesUrl, (route) =>
+      route.request().method() === 'GET' ? route.fulfill({ status: 500, body: '' }) : route.fallback(),
+    )
+    await page.goto('/verwalten')
+    await page.locator('main a[href^="/verwalten/sets/"]').first().click()
+    await expect(page.getByRole('alert')).toHaveText('Das hat nicht geklappt. Versuche es noch einmal.')
+    await expect(page.getByText('Noch keine Vokabeln in diesem Set')).toHaveCount(0)
+    await checkPage(page)
+    await page.unroute(entriesUrl)
+  })
+})
+
 test('CSV-Import: geöffnet, Vorschau, Fehler, Erfolg', async ({ page }) => {
   await openFirstSet(page)
   await page.getByRole('button', { name: 'Liste importieren (CSV)' }).click()

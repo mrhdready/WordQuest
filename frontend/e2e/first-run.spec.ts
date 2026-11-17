@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import type { SessionView } from '@/types'
+import type { AnswerResult, SessionView } from '@/types'
 import { guardianStorageState } from './global-setup'
 import { canvasPicture } from './pictures'
 
@@ -76,6 +76,7 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
   // Ganze Runde: jede Aufgabe aus der Start-Antwort richtig beantworten, je nach
   // Richtung aus dem Eintrag. Ohne Fehler kommt keine Wiederholung dazu, die
   // Runde endet nach der letzten Aufgabe mit der Zusammenfassung (Muster learn.spec.ts).
+  // Richtig ohne Tippfehler schaltet ohne "Weiter" zur naechsten Aufgabe.
   const [started] = await Promise.all([
     child.waitForResponse((response) => response.url().endsWith('/api/v1/sessions')),
     child.getByRole('button', { name: 'Los geht’s' }).click(),
@@ -83,7 +84,6 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
   const items = ((await started.json()) as SessionView).items
   expect(items.length, 'Runde ohne Frage').toBeGreaterThan(0)
   for (const [index, item] of items.entries()) {
-    if (index > 0) await child.getByRole('button', { name: 'Weiter' }).click()
     await expect(child.getByRole('textbox')).toHaveValue('')
     // Jede Karte zeigt das Bild statt des Emojis, dekorativ ohne Alt-Text.
     const picture = child.getByTestId('vokabelbild').locator('img')
@@ -95,9 +95,15 @@ test('Erste Installation bis zur Zusammenfassung der ersten Runde', async ({ pag
       child.getByRole('textbox').press('Enter'),
     ])
     expect(answered.status()).toBe(200)
-    await expect(child.getByText('Richtig!', { exact: true })).toBeVisible()
+    const result = (await answered.json()) as AnswerResult
+    if (index < items.length - 1) {
+      await expect(child.getByRole('status')).toHaveText(
+        result.xpAwarded > 0 ? `Richtig! +${result.xpAwarded} XP` : 'Richtig!',
+      )
+      await expect(child.getByRole('textbox')).toHaveValue('')
+    }
   }
-  await child.getByRole('button', { name: 'Weiter' }).click()
+  await expect(child.getByRole('button', { name: 'Weiter' })).toHaveCount(0)
   await expect(child.getByRole('heading', { name: /Geschafft!|erreicht!/ })).toBeVisible()
   await context.close()
 })
