@@ -6,13 +6,14 @@ Anbieterneutrale Arbeitsregeln für jeden Coding-Agenten (Claude Code, Codex, Cu
 
 - Projektsprache ist **Deutsch**: Antworten, Dokumentation, Commit-Messages, Code-Kommentare, Texte für Nutzer.
 - Code-Bezeichner (Klassen, Methoden, Variablen) bleiben englisch.
-- Offene Punkte zur Sprachwahl stehen in [`Documentation/questions.md`](Documentation/questions.md).
+- Die offene Frage zur Sprachwahl steht in Issue [#20](https://github.com/mrhdready/WordQuest/issues/20).
 
 ## Freigabe
 
 - **Kein Commit und kein Push ohne ausdrückliche Freigabe** durch den Nutzer. Eine Freigabe gilt für den genannten Vorgang, nicht pauschal für alle folgenden.
 - Ebenso nur mit Freigabe: Force-Push, Branches löschen, Dateien oder Ordner löschen, die der Agent nicht selbst angelegt hat, neue Dependencies, neue Ordner/Features/Integrationen, die nicht beauftragt waren.
 - Vor dem Überschreiben oder Löschen das Ziel ansehen.
+- Issue-Pflege nach `## Issues (GitHub)` braucht keine Einzelfreigabe: anlegen, zuweisen, Status-Label setzen, kommentieren. Push, PR und Merge bleiben freigabepflichtig.
 
 ## Skills
 
@@ -86,47 +87,41 @@ WordQuest ist eine einfache Vokabel-Lern-App für Kinder, die Eltern ohne besond
 - **Gate:** `npx @google/design.md lint DESIGN.md` und der Export gehören ins Gate. Kontrast-Verstöße erscheinen nur als `warning` bei Exit-Code 0, deshalb die Ausgabe lesen und Kontrast-Warnungen als blockierend behandeln (Text ≥ 4.5:1).
 - Bei Änderungen an einer bestehenden `DESIGN.md` vorher `npx @google/design.md diff <alt> DESIGN.md` laufen lassen und den `regression`-Key prüfen.
 
-## GSD (Pflicht)
+## Issues (GitHub)
 
-Das Projekt arbeitet mit **GSD** (npm-Paket `@opengsd/gsd-core`): Planung, Phasen, Ausführung und Verifikation laufen über GSD, der Stand liegt in `.planning/`.
+Offene Arbeit steht **nur** in den GitHub Issues von `mrhdready/WordQuest`: Bugs, Features, technische Schulden, Abnahmen und offene Fragen. Daneben gibt es im Repo keine Planungsdateien, TODO-Listen oder Statusdateien. Die Vorgeschichte aus der Zeit mit GSD steht in [`Documentation/gsd_migration.md`](Documentation/gsd_migration.md). Die Befehle unten nutzen die GitHub-CLI `gh`. Die Weboberfläche von GitHub geht genauso.
 
-**Zu Beginn jeder Session prüft der Agent, ob GSD für sein Tool installiert ist**, bevor er plant oder Code ändert:
+**Anlegen**
+- Was auffällt und nicht in der laufenden Änderung erledigt wird, wird ein Issue. Ein Satz in einer Zusammenfassung oder ein `TODO` im Code reicht nicht.
+- Vorher nach einem bestehenden Issue suchen: `gh issue list --state all --search "<Begriff>"`. Gibt es eins, kommt der neue Befund dort als Kommentar dazu.
+- Ein Issue behandelt ein Anliegen. Der Titel sagt, was nicht stimmt oder was fehlt. Der Text nennt den Ist-Zustand, die betroffenen Dateien, ein prüfbares Akzeptanzkriterium und die Quelle.
+- Labels für die Art: `bug`, `enhancement`, `documentation`, `question`, bei Barrieren zusätzlich `accessibility`. `v2` markiert Kandidaten, die noch nicht eingeplant sind.
+- Was über den laufenden Auftrag hinausgeht, wird ein eigenes Issue (Ideen mit `v2`). Es wird nicht still Teil der laufenden Arbeit.
 
-```bash
-# global (Config-Verzeichnis des Tools) oder lokal (im Repo)
-for d in ~/.claude ~/.codex ~/.cursor ~/.gemini ~/.copilot ~/.config/opencode \
-         ./.claude ./.codex ./.cursor ./.gemini ./.github ./.opencode; do
-  f="$d/gsd-core/bin/gsd-tools.cjs"
-  [ -f "$f" ] && node "$f" runtime-identity --raw && break
-done
-```
+**Zuweisen und Status**
+- Wer an einem Issue arbeitet, weist es sich **vor** Arbeitsbeginn zu, setzt `status: in Arbeit` und schreibt einen kurzen Startkommentar: `gh issue edit <n> --add-assignee @me --add-label "status: in Arbeit"`. Ist das Issue schon jemand anderem zugewiesen, wird es nur nach Absprache übernommen. Das gilt für Menschen und für KI-Agenten. Ein Agent arbeitet über das GitHub-Konto des Menschen, der ihn startet, und nennt sich in jedem Kommentar mit Tool-Namen (z. B. „Codex im Auftrag von <Konto>“).
+- Den Stand zeigt genau ein Status-Label:
+  - `status: in Arbeit`: jemand arbeitet daran
+  - `status: im Review`: die Änderung liegt als PR vor und wird geprüft
+  - `status: blockiert`: es geht nicht weiter, der Grund steht im Kommentar
+  - `status: wartet auf Freigabe`: ein Mensch muss entscheiden oder freigeben
+- Bei jedem Wechsel wird das alte Label entfernt, das neue gesetzt und ein kurzer Kommentar geschrieben: wer (bei KI mit Tool), was passiert ist, Branch oder PR, nächster Schritt.
+  ```bash
+  gh issue edit 12 --remove-label "status: in Arbeit" --add-label "status: im Review"
+  gh issue comment 12 --body "Codex im Auftrag von <Konto>: PR #50 offen, wartet auf Review."
+  ```
+- Wer die Arbeit abgibt oder abbricht, entfernt Zuweisung und Status-Label und hält den erreichten Stand im Kommentar fest.
 
-- Treffer: Die Ausgabe enthält `"packageName":"@opengsd/gsd-core"`. Weiter mit den GSD-Befehlen des Tools.
-- Kein Treffer: **nicht ohne GSD weiterarbeiten.** Den Nutzer auffordern, GSD zu installieren, und den passenden Befehl nennen, z. B.:
-  - Claude Code: `npx @opengsd/gsd-core@latest --claude --global`
-  - Codex: `npx @opengsd/gsd-core@latest --codex --global`
-  - Cursor: `npx @opengsd/gsd-core@latest --cursor --global`
-  - Gemini CLI: `npx @opengsd/gsd-core@latest --gemini --global`
-  - Copilot: `npx @opengsd/gsd-core@latest --copilot --global`
-  - alle Tools: `npx @opengsd/gsd-core@latest --all --global`
-  - `--local` statt `--global` installiert nur in dieses Repo.
-- Der Agent installiert GSD nicht selbst, das ist eine neue Installation und braucht die Freigabe des Nutzers (siehe Freigabe).
-
-## Planung
-
-`.planning/` ist die einzige Quelle für Planungsstand (GSD-Struktur):
-- `PROJECT.md`: Kontext, Entscheidungen, Scope
-- `REQUIREMENTS.md`: v1/v2-Anforderungen mit IDs und Zuordnung
-- `ROADMAP.md`: Phasen mit Erfolgskriterien
-- `STATE.md`: aktueller Stand
-- `codebase/`: Codebase-Map (Stack, Architektur, Konventionen, Schwachstellen)
-- `research/`: Recherche zu einem größeren Scope; Input für v2, nicht v1-Scope
-
-Arbeit lässt sich einer Anforderungs-ID zuordnen. Was darüber hinausgeht, kommt als v2 in `REQUIREMENTS.md` und nicht still in die laufende Phase.
+**Abschließen**
+- Der Branch trägt die Issue-Nummer (z. B. `fix/12-login-reset`). Der PR verweist auf das Issue und schließt es mit `Fixes #12`.
+- Geschlossen wird erst, wenn das Akzeptanzkriterium belegt ist (Gate, Test, beobachtetes Verhalten). Der Beleg steht im PR oder im letzten Kommentar.
+- Beim Schließen wird das Status-Label entfernt.
+- Ohne Umsetzung wird nur mit Begründung geschlossen: `gh issue close <n> --reason "not planned" --comment "<Grund>"`.
+- Issues, die eine Entscheidung des Owners brauchen (`question`, `status: wartet auf Freigabe`), schließt nur ein Mensch.
 
 ## Entwicklungsvorgehen
 
-**Spec → Test → Code → Gate.** Jede Änderung beginnt mit einem prüfbaren Akzeptanzkriterium (Anforderung bzw. Erfolgskriterium der Phase), dann der Test, dann der Code, dann das Gate unten.
+**Spec → Test → Code → Gate.** Jede Änderung beginnt mit einem prüfbaren Akzeptanzkriterium (aus dem Issue), dann der Test, dann der Code, dann das Gate unten.
 
 **Testgetrieben:**
 - Bugfix: zuerst ein roter Test, der den Bug reproduziert, dann der Fix.
@@ -143,7 +138,7 @@ Arbeit lässt sich einer Anforderungs-ID zuordnen. Was darüber hinausgeht, komm
 - Datenintegrität gehört in die Datenbank (Fremdschlüssel, Constraints), nicht in handgeschriebene Löschlisten.
 - Bewertung und Terminierung entscheidet der Server, das Frontend zeigt nur an.
 
-**Vertikale Slices.** Jede Phase liefert eine Fähigkeit, die man durchgängig sieht (API + UI + Tests), keine technische Schicht.
+**Vertikale Slices.** Jedes Feature-Issue liefert eine Fähigkeit, die man durchgängig sieht (API + UI + Tests), keine technische Schicht.
 
 **Chirurgische Änderungen.** Nur anfassen, was der Auftrag braucht, Stil des Bestands übernehmen, Unbeteiligtes nicht „verbessern“, sondern erwähnen.
 
@@ -160,6 +155,17 @@ cd frontend && npm ci && npm run lint && npm run typecheck && npm run build && n
 Die Backend-Tests brauchen ein laufendes PostgreSQL (`docker compose -f docker-compose.dev.yml up -d`); die Verbindung kommt aus `WQ_TEST_DB` (Standard `Host=localhost;Port=5432;Username=wordquest;Password=devpassword`), jede Test-Factory legt darauf eine eigene Datenbank an. Ohne lokales .NET-SDK laufen Build und Tests im Container `mcr.microsoft.com/dotnet/sdk:10.0` mit `-e WQ_TEST_DB='Host=host.docker.internal;Port=5432;Username=wordquest;Password=devpassword'`.
 
 UI-Änderungen brauchen zusätzlich einen axe-Check (WCAG 2.2 AA) der berührten Seiten gegen den gebauten Stack, Ergebnis wird festgehalten: `cd frontend && npm run e2e:stack && npm run e2e` (Playwright mit `@axe-core/playwright`, danach `docker compose -f e2e/docker-compose.e2e.yml down -v`). `npm run design:check` deckt den `DESIGN.md`-Lint und -Export ab (siehe Design).
+
+Änderungen an Installation und Betrieb (`setup.sh`, `upgrade.sh`, `restore.sh`, Compose-Dateien, nginx, Release-Paket) brauchen zusätzlich die Smokes aus `scripts/smoke/`. Sie laufen bisher nur lokal, nicht in der CI (Issue [#44](https://github.com/mrhdready/WordQuest/issues/44)):
+
+```bash
+bash scripts/smoke/setup-functions-check.sh   # Funktionen aus setup.sh, ohne Stack
+bash scripts/smoke/setup-smoke.sh             # frische Installation bis zur ersten Lernantwort
+bash scripts/smoke/release-smoke.sh           # Installation, Update und Sicherung aus dem Release-Paket
+bash scripts/smoke/proxy-xff-check.sh         # nginx: X-Forwarded-For, Sicherheits-Header, HTTPS-Umleitung, Mounts
+```
+
+Ohne lokales .NET-SDK laufen Backend-Build und -Tests mit `bash scripts/smoke/backend-test.sh` im SDK-Container gegen ein eigenes PostgreSQL.
 
 ## Lokale Entwicklung
 
@@ -217,4 +223,3 @@ UI-Änderungen brauchen zusätzlich einen axe-Check (WCAG 2.2 AA) der berührten
 ## Pflege dieser Datei
 
 - Neue Regeln kommen hierher, nicht in tool-spezifische Dateien.
-- GSD (`generate-claude-md`) überschreibt diese Datei und `.claude/CLAUDE.md` nicht, solange sie keine `<!-- GSD:…-start -->`-Marker enthalten. Keine solchen Marker einfügen.
