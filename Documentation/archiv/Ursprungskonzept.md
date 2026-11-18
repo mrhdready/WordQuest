@@ -82,6 +82,6 @@ Aufwandsschätzung im SAD: MVP 3 Monate, Beta 6 Monate, Version 1.0 in 9–12 Mo
 | School/Classroom-Datenmodell | `Tenant` (Familie), `User`, `LearnerProfile`, `VocabularySet`, `VocabularyEntry`, `Card`, `ReviewState`, `ReviewLog`, `LearningSession`, `GamificationProfile` |
 | Offline mit Synchronisation | Nicht umgesetzt, für v2 vorgesehen |
 | LDAP, Moodle, IServ, KI | Nicht geplant bzw. nur als Idee |
-| Roadmap 0.1–3.0 | Ersetzt durch `.planning/ROADMAP.md` |
+| Roadmap 0.1–3.0 | Ersetzt durch die GitHub Issues (bis 1.1.0 durch die GSD-Roadmap, siehe `Documentation/gsd_migration.md`) |
 
 Details zu diesen Entscheidungen stehen im konsolidierten Konzept, insbesondere in §0, §1 und §18.

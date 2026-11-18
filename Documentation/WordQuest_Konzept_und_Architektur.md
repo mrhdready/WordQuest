@@ -2,7 +2,7 @@
 
 **Version:** 1.1 (gegen Code abgeglichen)
 **Stand:** 24.09.2026
-**Status:** Konzept- und Architekturgrundlage, abgeglichen mit dem Code (Commit `4ce32da`). Aktueller Umfang, Anforderungen und Roadmap stehen in `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md` und `.planning/ROADMAP.md` — bei Widerspruch gelten diese.
+**Status:** Konzept- und Architekturgrundlage, abgeglichen mit dem Code (Commit `4ce32da`). Offene Anforderungen und Planung stehen in den [GitHub Issues](https://github.com/mrhdready/WordQuest/issues) — bei Widerspruch gelten diese. Hintergrund zu Entscheidungen und Abgrenzungen bis 1.1.0: `Documentation/gsd_migration.md`.
 
 **Markierungen in diesem Dokument:**
 
@@ -49,7 +49,7 @@ Konkret heißt das:
 
 Das kostet im MVP etwa 3–5 % Mehraufwand. Der nachträgliche Einbau von Mandantenfähigkeit in ein gewachsenes Schema kostet dagegen erfahrungsgemäß Wochen und produziert Datenlecks zwischen Mandanten. Das ist der Grund, warum diese Entscheidung *jetzt* getroffen wird und nicht später.
 
-**Stand v1.0:** Eine Familie pro Instanz; mehrere Familien pro Instanz und Schulen sind außer Scope (`.planning/PROJECT.md`). Die Mandantentrennung im Code bleibt trotzdem bestehen.
+**Stand v1.0:** Eine Familie pro Instanz; mehrere Familien pro Instanz und Schulen sind außer Scope (`Documentation/gsd_migration.md`). Die Mandantentrennung im Code bleibt trotzdem bestehen.
 
 **Bewusst nicht im Scope (auch nicht vorbereitet):** LDAP/Active Directory, Moodle, IServ, SCORM, Notenexport, Mehrsprachigkeit über Englisch hinaus. Diese Punkte aus der alten Doku sind Schul-Themen und würden das MVP erdrücken. Sie kommen über die Integrations-Schnittstelle (→ §12) wieder rein, wenn sie gebraucht werden.
 
@@ -87,7 +87,7 @@ Auf einem Familientablet ist „Gerät ist vertrauenswürdig" die richtige Annah
 
 ## 4. Funktionsumfang und Priorisierung
 
-Priorisierung nach MoSCoW, bezogen auf das MVP (= „ein Kind kann damit für die nächste Vokabelarbeit lernen"). Der verbindliche Umfang für v1.0 steht in `.planning/REQUIREMENTS.md`.
+Priorisierung nach MoSCoW, bezogen auf das MVP (= „ein Kind kann damit für die nächste Vokabelarbeit lernen"). Der erreichte Umfang von v1.0 steht in `Documentation/gsd_migration.md`, offene Anforderungen stehen in den GitHub Issues.
 
 ### Must — MVP
 
@@ -110,7 +110,7 @@ Monster-Duell und Buchstaben-Chaos als drittes/viertes Spiel · Text-to-Speech f
 
 ### Could — später (Idee)
 
-Foto-Import des Vokabelhefts (OCR) · Aussprachebewertung · KI-Beispielsätze · Wochenreport „Vokabel-Coach" · Familien-Rangliste (Ranglisten sind laut `.planning/PROJECT.md` als Druck auf Kinder außer Scope)
+Foto-Import des Vokabelhefts (OCR) · Aussprachebewertung · KI-Beispielsätze · Wochenreport „Vokabel-Coach" · Familien-Rangliste (Ranglisten sind laut `Documentation/gsd_migration.md` als Druck auf Kinder außer Scope)
 
 ### Won't (vorerst)
 
@@ -694,7 +694,7 @@ Images: `${WQ_IMAGE_PREFIX}-api` und `${WQ_IMAGE_PREFIX}-web`, Tag `${WQ_VERSION
 
 ## 16. Roadmap
 
-Die gültige Roadmap steht in `.planning/ROADMAP.md`, die Anforderungen in `.planning/REQUIREMENTS.md`. Versionspläne werden nur dort gepflegt, nicht in diesem Dokument.
+Planung und offene Anforderungen stehen in den [GitHub Issues](https://github.com/mrhdready/WordQuest/issues). Versionspläne werden nur dort gepflegt, nicht in diesem Dokument.
 
 Stand v1.0 in einem Satz: Aus dem vorhandenen Lernkern wird eine funktionierende, sichere Basis, die eine andere Familie im Heimnetz betreiben kann (sichere Installation im Heimnetz, Fehlerbehebungen und Integrationstests, versioniertes Release mit Update- und Restore-Skripten). Bis 1.0.1 lief die Installation über HTTP; seit 1.1.0 läuft sie über HTTPS mit einer eigenen Zertifizierungsstelle je Installation (ADR-008).
 
