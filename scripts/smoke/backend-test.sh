@@ -3,9 +3,9 @@
 # eigenes PostgreSQL im Docker-Netz wq-p2. Der Host-Port 5432 bleibt unberuehrt.
 #
 # Aufruf (aus dem Repo-Root):
-#   bash .planning/phases/02-reliable-learning-clean-family-data/gate/backend-test.sh
-#   bash .planning/phases/02-reliable-learning-clean-family-data/gate/backend-test.sh 'FullyQualifiedName~SessionEndpointTests'
-#   bash .planning/phases/02-reliable-learning-clean-family-data/gate/backend-test.sh down   # Container und Netz entfernen
+#   bash scripts/smoke/backend-test.sh
+#   bash scripts/smoke/backend-test.sh 'FullyQualifiedName~SessionEndpointTests'
+#   bash scripts/smoke/backend-test.sh down   # Container und Netz entfernen
 set -euo pipefail
 
 NETWORK=wq-p2

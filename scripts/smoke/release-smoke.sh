@@ -14,11 +14,11 @@
 # Nur Bash-3.2-Mittel, weil der Smoke unter macOS mit /bin/bash 3.2 laeuft
 # (verbotene Mittel: 03.1-05-PLAN.md, Flagged Assumptions).
 #
-#   bash .planning/phases/03-installable-1-0-0-release/smoke/release-smoke.sh
+#   bash scripts/smoke/release-smoke.sh
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
 # Quellbaum fuer Build und Paket; installiert wird daneben aus dem Paket.
 SRC="$WORK/src"

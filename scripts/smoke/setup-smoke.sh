@@ -5,11 +5,11 @@
 # Laeuft in einer Arbeitskopie des Arbeitsbaums gegen frisch gebaute Images,
 # eigener Compose-Projektname und Port, raeumt am Ende alles wieder ab.
 #
-#   bash .planning/phases/01-safe-home-network-install/smoke/setup-smoke.sh
+#   bash scripts/smoke/setup-smoke.sh
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
 
 export COMPOSE_PROJECT_NAME=wq-smoke
@@ -32,7 +32,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "== Funktionen von setup.sh"
-bash "$ROOT/.planning/phases/01-safe-home-network-install/smoke/setup-functions-check.sh" >"$WORK.functions.log" 2>&1 \
+bash "$ROOT/scripts/smoke/setup-functions-check.sh" >"$WORK.functions.log" 2>&1 \
   || { cat "$WORK.functions.log"; rm -f "$WORK.functions.log"; fail "Funktionspruefung von setup.sh rot."; }
 cat "$WORK.functions.log"
 [[ "$(tail -n 1 "$WORK.functions.log")" == "FUNKTIONEN OK" ]] || fail "Funktionspruefung endet nicht mit FUNKTIONEN OK."

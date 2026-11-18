@@ -5,11 +5,11 @@
 # Startmeldung bei belegtem Port. setup.sh selbst laeuft nicht; geladen werden
 # nur seine Funktionen in Spalte 0. Nur Bash-3.2-Mittel (macOS).
 #
-#   bash .planning/phases/01-safe-home-network-install/smoke/setup-functions-check.sh
+#   bash scripts/smoke/setup-functions-check.sh
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 T="$(mktemp -d)"
 LISTENER_PID=""
 CONTAINER="wq-funktionen-$$"

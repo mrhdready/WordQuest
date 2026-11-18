@@ -12,7 +12,7 @@
 # (FIX-01, T-fpi-12).
 #
 # Aufruf (aus dem Repo-Root):
-#   bash .planning/phases/02-reliable-learning-clean-family-data/gate/proxy-xff-check.sh
+#   bash scripts/smoke/proxy-xff-check.sh
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
