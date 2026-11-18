@@ -6,5 +6,5 @@ Alle Projektregeln stehen anbieterneutral in `AGENTS.md` im Repo-Root:
 
 ## Ergänzungen für Claude Code
 
-- Planung läuft über GSD (`.planning/`). Einstiege: `/gsd-quick` für kleine Fixes und Doku, `/gsd-debug` für Fehlersuche, `/gsd-plan-phase` / `/gsd-execute-phase` für Roadmap-Phasen, `/gsd-progress` für den Stand.
+- Offene Arbeit steht in GitHub Issues (`AGENTS.md` → Issues). Für Issues und PRs `gh` nutzen. GSD-Befehle (`/gsd-*`) nicht verwenden: das Projekt hat kein `.planning/` mehr.
 - Diese Datei bleibt schlank. Neue Regeln gehören in `AGENTS.md`, damit jeder Agent sie bekommt.
